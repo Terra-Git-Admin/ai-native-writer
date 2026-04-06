@@ -1,0 +1,761 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from "react";
+
+// ─── Types ───
+
+type Mode = "edit" | "draft" | "feedback";
+
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+type HistoryEntry =
+  | { type: "mode-change"; mode: Mode; timestamp: number }
+  | { type: "message"; role: "user" | "assistant"; content: string; mode: Mode };
+
+const MODE_LABELS: Record<Mode, string> = {
+  edit: "Edit Selection",
+  draft: "Story Creation",
+  feedback: "Document Feedback",
+};
+
+interface ParsedChange {
+  id: number;
+  location: string;
+  original: string;
+  suggested: string;
+}
+
+function stripTagsForDisplay(text: string): string {
+  return text
+    .replace(/\[\/(?:H\d|OL|UL|P|HR)\]/g, "")
+    .split("\n")
+    .map((l) => l.replace(/^\[(?:H\d|OL|UL|P|HR)\]\s*/, ""))
+    .filter((l) => l.trim())
+    .join("\n");
+}
+
+function parseChanges(text: string): ParsedChange[] | null {
+  const changeBlocks = text.split(/\[CHANGE \d+\]/i).slice(1);
+  if (changeBlocks.length === 0) return null;
+
+  return changeBlocks
+    .map((block, i) => {
+      const location =
+        block.match(/Location:\s*"?([^"\n]+)"?/i)?.[1]?.trim() || "";
+      const original =
+        block.match(/Original:\s*([\s\S]*?)(?=\nSuggested:|$)/i)?.[1]?.trim() ||
+        "";
+      const suggested =
+        block.match(/Suggested:\s*([\s\S]*?)$/i)?.[1]?.trim() || "";
+      return { id: i + 1, location, original, suggested };
+    })
+    .filter((c) => c.suggested);
+}
+
+// ─── Props ───
+
+interface AIChatSidebarProps {
+  documentId: string;
+  selection: {
+    text: string;
+    taggedText: string;
+    from: number;
+    to: number;
+    surroundingContext?: string;
+  } | null;
+  editorIsEmpty: boolean;
+  fullDocumentText: string;
+  modelId: string;
+  thinking: boolean;
+  onApplyEdit: (taggedAIResponse: string) => void;
+  onRejectEdit: () => void;
+  onApplyDraft: (content: string) => void;
+  onApplyChange: (original: string, suggested: string) => void;
+  onSetModel: (modelId: string) => void;
+  onSetThinking: (enabled: boolean) => void;
+  onSetTitle: (title: string) => void;
+  onClose: () => void;
+}
+
+export default function AIChatSidebar({
+  documentId,
+  selection,
+  editorIsEmpty,
+  fullDocumentText,
+  modelId,
+  thinking,
+  onApplyEdit,
+  onRejectEdit,
+  onApplyDraft,
+  onApplyChange,
+  onSetModel,
+  onSetThinking,
+  onSetTitle,
+  onClose,
+}: AIChatSidebarProps) {
+  // Detect mode
+  const mode: Mode = selection ? "edit" : editorIsEmpty ? "draft" : "feedback";
+
+  // messages = current AI conversation context (reset per mode change)
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // history = full display history (persisted to server, survives refresh)
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [input, setInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [draftApplied, setDraftApplied] = useState(false); // only for draft mode auto-apply
+  const [changes, setChanges] = useState<ParsedChange[] | null>(null);
+  const [editApplied, setEditApplied] = useState(false);
+  const [feedbackApplied, setFeedbackApplied] = useState(false);
+  const [sendOnEnter, setSendOnEnter] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevModeRef = useRef<Mode | null>(null);
+
+  // Persist a history entry to the server
+  const persistEntry = useCallback(
+    (entry: HistoryEntry) => {
+      fetch("/api/ai/chat-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentId,
+          entryType: entry.type === "mode-change" ? "mode-change" : "message",
+          role: entry.type === "message" ? entry.role : null,
+          content: entry.type === "message" ? entry.content : null,
+          mode: entry.mode,
+        }),
+      }).catch(() => {}); // fire and forget
+    },
+    [documentId]
+  );
+
+  // Load history from server on mount
+  useEffect(() => {
+    fetch(`/api/ai/chat-history?documentId=${documentId}`)
+      .then((r) => r.json())
+      .then((entries: { entryType: string; role: string | null; content: string | null; mode: string; createdAt: string }[]) => {
+        if (!Array.isArray(entries)) return;
+        const loaded: HistoryEntry[] = entries.map((e) =>
+          e.entryType === "mode-change"
+            ? { type: "mode-change" as const, mode: e.mode as Mode, timestamp: new Date(e.createdAt).getTime() }
+            : { type: "message" as const, role: e.role as "user" | "assistant", content: e.content || "", mode: e.mode as Mode }
+        );
+        setHistory(loaded);
+        setHistoryLoaded(true);
+      })
+      .catch(() => setHistoryLoaded(true));
+  }, [documentId]);
+
+  // Scroll to bottom after history loads
+  useEffect(() => {
+    if (historyLoaded && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [historyLoaded]);
+
+  // On mode change: reset AI context, persist mode divider
+  useEffect(() => {
+    if (prevModeRef.current !== null && prevModeRef.current !== mode) {
+      const entry: HistoryEntry = {
+        type: "mode-change",
+        mode,
+        timestamp: Date.now(),
+      };
+      setHistory((prev) => [...prev, entry]);
+      persistEntry(entry);
+    }
+    prevModeRef.current = mode;
+
+    // Reset current conversation state (not history)
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setDraftApplied(false);
+    setChanges(null);
+    setEditApplied(false);
+    setFeedbackApplied(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
+
+    // Auto-set model: always use gemini-2.5-pro; thinking only for fresh story draft
+    onSetModel("gemini-2.5-pro");
+    onSetThinking(mode === "draft");
+  }, [selection, editorIsEmpty]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isStreaming]);
+
+  const sendMessages = useCallback(
+    async (msgs: ChatMessage[]) => {
+      setIsStreaming(true);
+      setStreamingText("");
+      setError(null);
+
+      try {
+        const res = await fetch("/api/ai/edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: msgs,
+            mode,
+            modelId,
+            thinking,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "AI request failed");
+        }
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+
+        // For draft mode: the AI sends "0" or "1" as the very first line.
+        // 0 = document draft (don't stream to chat, apply to doc at end)
+        // 1 = conversation (stream normally to chat)
+        // We detect this from the first chunk and route accordingly.
+        let draftSignal: "0" | "1" | null = null; // null = not yet detected
+        let draftShowPlaceholder = false;
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            accumulated += chunk;
+
+            // In draft mode, detect the signal from the first line
+            if (mode === "draft" && draftSignal === null && accumulated.includes("\n")) {
+              const firstLine = accumulated.split("\n")[0].trim();
+              if (firstLine === "0") {
+                draftSignal = "0";
+                draftShowPlaceholder = true;
+                // Keep only the user's last message + a "Drafting..." placeholder.
+                // This clears the previous "Should I go ahead?" message that would
+                // otherwise remain visible and confuse the user.
+                setMessages((prev) => {
+                  const lastUser = [...prev].reverse().find((m) => m.role === "user");
+                  return [
+                    ...(lastUser ? [lastUser] : []),
+                    { role: "assistant", content: "Drafting your story..." },
+                  ];
+                });
+              } else if (firstLine === "1") {
+                draftSignal = "1";
+              }
+            }
+
+            // Update streaming display text (unless draft signal 0)
+            if (!draftShowPlaceholder) {
+              const displayContent = mode === "draft" && draftSignal === "1"
+                ? accumulated.replace(/^1\n/, "")
+                : accumulated;
+              setStreamingText(displayContent);
+            }
+
+            // Also update messages for AI context (not rendered directly)
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                updated[lastIdx] = { role: "assistant", content: accumulated };
+              }
+              return updated;
+            });
+          }
+        }
+
+        // Strip the signal line from accumulated content
+        let cleanAccumulated = accumulated;
+        if (mode === "draft" && (draftSignal === "0" || draftSignal === "1")) {
+          cleanAccumulated = accumulated.replace(/^[01]\n/, "");
+        }
+
+        // Draft mode with signal 0: apply to document
+        if (mode === "draft" && draftSignal === "0") {
+          onApplyDraft(cleanAccumulated);
+          setDraftApplied(true);
+
+          // Replace placeholder with confirmation
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+              updated[lastIdx] = { role: "assistant", content: "Draft has been written to the document." };
+            }
+            return updated;
+          });
+
+          // Extract title
+          const h1Match = cleanAccumulated.match(/^\[H1\]\s+(.+)/m);
+          const firstLine = cleanAccumulated.split("\n").find((l) => l.trim());
+          const title = h1Match
+            ? h1Match[1]
+            : firstLine?.replace(/^\[(?:H\d|P)\]\s+/, "").slice(0, 60) || "";
+          if (title) onSetTitle(title);
+
+          // Reset model defaults
+          onSetModel("gemini-2.5-flash");
+          onSetThinking(false);
+        }
+
+        // Use clean content for everything below
+        accumulated = cleanAccumulated;
+
+        // Add assistant response to display history and persist
+        // For signal-0 drafts, save a short note (content is in the doc)
+        if (accumulated) {
+          const historyContent =
+            mode === "draft" && draftSignal === "0"
+              ? "Draft has been written to the document."
+              : accumulated;
+          const assistantEntry: HistoryEntry = {
+            type: "message",
+            role: "assistant",
+            content: historyContent,
+            mode,
+          };
+          setHistory((prev) => [...prev, assistantEntry]);
+          persistEntry(assistantEntry);
+        }
+
+        // Check for [CHANGE] blocks in feedback mode
+        if (mode === "feedback" && !accumulated.startsWith("[CLARIFY]")) {
+          const parsed = parseChanges(accumulated);
+          if (parsed && parsed.length > 0) {
+            setChanges(parsed);
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      } finally {
+        setIsStreaming(false);
+        setStreamingText("");
+      }
+    },
+    [mode, modelId, thinking]
+  );
+
+  const handleSubmit = useCallback(() => {
+    if (!input.trim() || isStreaming) return;
+    const userContent = buildUserMessage(input);
+    const userMsg: ChatMessage = { role: "user", content: userContent };
+    // Empty placeholder — rendered as "Thinking..." in the UI but NOT sent to AI
+    const assistantMsg: ChatMessage = { role: "assistant", content: "" };
+
+    const newMessages = [...messages, userMsg, assistantMsg];
+    setMessages(newMessages);
+    setInput("");
+    setEditApplied(false);
+
+    // Add user message to display history and persist
+    const userEntry: HistoryEntry = {
+      type: "message",
+      role: "user",
+      content: input,
+      mode,
+    };
+    setHistory((prev) => [...prev, userEntry]);
+    persistEntry(userEntry);
+
+    // Send all messages — filter out the empty placeholder so it's not sent to AI
+    sendMessages(newMessages.filter((m) => m.content));
+  }, [input, isStreaming, messages, sendMessages, mode]);
+
+  function buildUserMessage(userInput: string): string {
+    // First message gets context baked in
+    if (messages.length === 0) {
+      if (mode === "edit" && selection) {
+        return `## Full Document (for context only — do NOT reproduce)\n${fullDocumentText}\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
+      }
+      if (mode === "feedback") {
+        return `## Full Document\n${fullDocumentText}\n\n## Feedback\n${userInput}`;
+      }
+      if (mode === "draft") {
+        return userInput;
+      }
+    }
+    // Follow-up messages are raw
+    return userInput;
+  }
+
+  // ─── Last assistant message analysis ───
+  const lastAssistantMsg = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && m.content);
+  const lastContent = lastAssistantMsg?.content || "";
+  const isClarifying = lastContent.startsWith("[CLARIFY]");
+  const hasTaggedContent =
+    mode === "edit" &&
+    !isClarifying &&
+    lastContent.length > 0 &&
+    /^\[(?:H\d|OL|UL|P)]/m.test(lastContent);
+  // ─── Apply handlers ───
+  const handleApplyEdit = () => {
+    if (!lastContent) return;
+    onApplyEdit(lastContent);
+    setEditApplied(true);
+  };
+
+  const handleRejectEdit = () => {
+    onRejectEdit();
+    setEditApplied(true);
+  };
+
+
+  const handleApplyAllChanges = async () => {
+    if (!changes) return;
+    // Apply all changes in reverse order (so earlier positions aren't shifted)
+    const all = [...changes].reverse();
+    for (const c of all) {
+      onApplyChange(c.original, c.suggested);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    setFeedbackApplied(true);
+  };
+
+  const handleRejectAllChanges = () => {
+    setChanges(null);
+  };
+
+
+  // ─── Render helpers ───
+
+  const modeLabel =
+    mode === "edit"
+      ? "Edit Selection"
+      : mode === "draft"
+        ? "Create Story"
+        : "Document Feedback";
+
+  const placeholder =
+    mode === "edit"
+      ? "Describe how to edit the selected text..."
+      : mode === "draft"
+        ? "Describe the story you want to create..."
+        : "What would you like to change about this document?";
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <div>
+          <h3 className="font-semibold text-indigo-700">AI Assistant</h3>
+          <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+            {modeLabel}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 text-lg"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* Messages area */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Empty state */}
+        {history.length === 0 && messages.length === 0 && !isStreaming && (
+          <div className="py-6 text-center text-sm text-gray-500">
+            {mode === "edit" && <p>Describe how to edit the selected text.</p>}
+            {mode === "draft" && (
+              <p>
+                Tell the AI about your story idea, or just say
+                &ldquo;hello&rdquo; and it will guide you.
+              </p>
+            )}
+            {mode === "feedback" && (
+              <p>
+                Describe what you want to change about this document. The AI
+                will suggest specific edits.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Full history (persisted across mode changes) */}
+        {history.map((entry, i) => {
+          if (entry.type === "mode-change") {
+            return (
+              <div key={`mc-${i}`} className="flex items-center gap-2 py-2">
+                <div className="flex-1 h-px bg-orange-300" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-500 whitespace-nowrap">
+                  {MODE_LABELS[entry.mode]}
+                </span>
+                <div className="flex-1 h-px bg-orange-300" />
+              </div>
+            );
+          }
+          // Message entry
+          return (
+            <div
+              key={`h-${i}`}
+              className={
+                entry.role === "user" ? "flex justify-end" : "flex justify-start"
+              }
+            >
+              <div
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  entry.role === "user"
+                    ? "bg-indigo-600 text-white"
+                    : "bg-white border border-gray-200 text-gray-800"
+                }`}
+              >
+                {entry.role === "assistant" ? (
+                  <AssistantMessage
+                    content={entry.content}
+                    mode={entry.mode}
+                    isLast={false}
+                    isStreaming={false}
+                  />
+                ) : (
+                  <div className="whitespace-pre-wrap">{entry.content}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Current streaming content */}
+        {isStreaming && streamingText && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-white border border-gray-200 text-gray-800">
+              <AssistantMessage
+                content={streamingText}
+                mode={mode}
+                isLast={true}
+                isStreaming={true}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Waiting indicator (no streaming content yet) */}
+        {isStreaming && !streamingText && (
+          <div className="flex items-center gap-2 text-sm text-indigo-600 py-2">
+            <span className="flex gap-1">
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+          </div>
+        )}
+
+        {/* Flow A: Before/After diff */}
+        {mode === "edit" && hasTaggedContent && !isStreaming && !editApplied && (
+          <div className="space-y-3 pt-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-1">
+                Before
+              </p>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {selection?.text}
+              </div>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600 mb-1">
+                After
+              </p>
+              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-gray-800 whitespace-pre-wrap">
+                {stripTagsForDisplay(lastContent)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Flow B: Draft is auto-applied via signal 0 — no manual button needed */}
+
+        {/* Flow C: Change cards (Apply All / Reject All buttons are sticky below) */}
+        {mode === "feedback" && changes && !isStreaming && !feedbackApplied && (
+          <div className="space-y-3 pt-2">
+            {changes.map((change) => (
+              <div
+                key={change.id}
+                className="rounded-lg border border-gray-200 bg-white p-3 space-y-2"
+              >
+                <p className="text-[10px] font-semibold text-gray-500 uppercase">
+                  Change {change.id}
+                  {change.location && (
+                    <span className="ml-1 font-normal normal-case text-gray-400">
+                      — &ldquo;{change.location.slice(0, 40)}...&rdquo;
+                    </span>
+                  )}
+                </p>
+                {change.original && (
+                  <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
+                    {change.original}
+                  </div>
+                )}
+                <div className="rounded border border-green-200 bg-green-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
+                  {stripTagsForDisplay(change.suggested)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+
+      {/* Sticky Apply / Reject buttons for edit mode */}
+      {mode === "edit" && hasTaggedContent && !isStreaming && !editApplied && (
+        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
+          <button
+            onClick={handleRejectEdit}
+            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
+          >
+            Reject
+          </button>
+          <button
+            onClick={handleApplyEdit}
+            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+          >
+            Apply to document
+          </button>
+        </div>
+      )}
+
+      {/* Sticky Apply All / Reject All buttons for feedback mode */}
+      {mode === "feedback" && changes && !feedbackApplied && !isStreaming && (
+        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
+          <button
+            onClick={handleRejectAllChanges}
+            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
+          >
+            Reject all
+          </button>
+          <button
+            onClick={handleApplyAllChanges}
+            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+          >
+            Apply all ({changes.length})
+          </button>
+        </div>
+      )}
+
+      {/* Input — always visible, disabled during streaming */}
+      <div className="border-t border-gray-200 p-3 space-y-2">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={placeholder}
+            rows={3}
+            disabled={isStreaming}
+            className={`w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
+              isStreaming
+                ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                : "border-gray-300 bg-white"
+            }`}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (sendOnEnter && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  handleSubmit();
+                } else if (!sendOnEnter && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }
+            }}
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={isStreaming || !input.trim()}
+            className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+          >
+            {isStreaming ? "Generating..." : "Send"}
+          </button>
+          <div className="flex justify-center">
+            <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
+              <button
+                onClick={() => setSendOnEnter(false)}
+                className={`px-3 py-1 transition-colors ${
+                  !sendOnEnter
+                    ? "bg-green-100 text-green-700 font-medium"
+                    : "bg-white text-gray-400 hover:text-gray-500"
+                }`}
+              >
+                ⌘+Enter
+              </button>
+              <button
+                onClick={() => setSendOnEnter(true)}
+                className={`px-3 py-1 transition-colors border-l border-gray-200 ${
+                  sendOnEnter
+                    ? "bg-green-100 text-green-700 font-medium"
+                    : "bg-white text-gray-400 hover:text-gray-500"
+                }`}
+              >
+                Enter
+              </button>
+            </div>
+          </div>
+        </div>
+    </div>
+  );
+}
+
+// ─── Assistant message renderer ───
+
+function AssistantMessage({
+  content,
+  mode,
+  isLast,
+  isStreaming,
+}: {
+  content: string;
+  mode: Mode;
+  isLast: boolean;
+  isStreaming: boolean;
+}) {
+  // Strip special prefixes for display
+  let displayContent = content;
+
+  if (content.startsWith("[CLARIFY]")) {
+    displayContent = content.replace(/^\[CLARIFY\]\s*/, "");
+  } else if (mode === "edit" && isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
+    // Don't show raw tagged content in chat for current edit — it's in the diff view
+    displayContent = "";
+  } else if (mode === "edit" && !isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
+    // History entry — show clean AFTER content (tags stripped)
+    displayContent = stripTagsForDisplay(content);
+  } else if (content.includes("[CHANGE")) {
+    if (isLast) {
+      // Current message — cards are shown below, hide raw text
+      displayContent = "";
+    } else {
+      // History — show the actual suggested (applied) content
+      const parsed = parseChanges(content);
+      if (parsed && parsed.length > 0) {
+        displayContent = parsed
+          .map((c) => `Change ${c.id}:\n${stripTagsForDisplay(c.suggested)}`)
+          .join("\n\n");
+      } else {
+        const changeCount = (content.match(/\[CHANGE \d+\]/gi) || []).length;
+        displayContent = `Suggested ${changeCount} change${changeCount !== 1 ? "s" : ""} to the document.`;
+      }
+    }
+  }
+
+  if (!displayContent) return null;
+
+  return (
+    <div className="whitespace-pre-wrap">
+      {displayContent}
+      {isStreaming && (
+        <span className="inline-block ml-1 h-3 w-1.5 bg-indigo-500 animate-pulse" />
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Tiptap editor styles */
+.tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #adb5bd;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Comment highlight — persistent yellow background on commented text */
+.comment-highlight {
+  background-color: rgba(255, 212, 0, 0.25);
+  border-bottom: 2px solid rgba(255, 180, 0, 0.4);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-bottom-color 0.2s ease;
+}
+
+/* Active comment highlighting is handled via a dynamic <style> tag injected by Editor.tsx.
+   When a comment is clicked in the sidebar:
+   - All .comment-highlight spans get dimmed
+   - The matching [data-comment-id="xxx"] span gets bright orange */
+
+/* AI highlight */
+.ai-highlight-pending {
+  background-color: rgba(99, 102, 241, 0.15);
+  border-bottom: 2px dashed #6366f1;
+}
+
+/* Prose styles for editor — document style guide */
+.prose h1 {
+  font-size: 2em;
+  font-weight: 700;
+  color: #ea580c; /* orange-600 */
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+}
+
+.prose h2 {
+  font-size: 1.5em;
+  font-weight: 700; /* bold */
+  color: #1f2937; /* gray-800 */
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+}
+
+.prose h3 {
+  font-size: 1.25em;
+  font-weight: 600; /* semibold */
+  color: #374151; /* gray-700 */
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+}
+
+.tiptap {
+  color: #374151; /* dark gray body text */
+}
+
+.prose blockquote {
+  border-left: 3px solid #d1d5db;
+  padding-left: 1em;
+  color: #6b7280;
+  margin: 0.5em 0;
+}
+
+.prose ul {
+  list-style-type: disc;
+  padding-left: 1.5em;
+}
+
+.prose ol {
+  list-style-type: decimal;
+  padding-left: 1.5em;
+}
+
+.prose hr {
+  border-top: 1px solid #e5e7eb;
+  margin: 1em 0;
+}

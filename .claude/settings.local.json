@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx drizzle-kit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s http://localhost:3000/login)",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \".tables\")",
+      "Bash(kill 37427)",
+      "Bash(curl -s -o /dev/null -w \"Login page: %{http_code}\\\\n\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"Auth callback: %{http_code}\\\\n\" http://localhost:3000/api/auth/providers)",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \"SELECT id, email, name, role FROM users;\")",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \"DROP TABLE IF EXISTS ai_settings;\")",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \"SELECT id, length\\(content\\), substr\\(content, 1, 100\\) FROM prompts WHERE id='draft';\")",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \"SELECT instr\\(content, 'HOOK'\\) FROM prompts WHERE id='draft';\")",
+      "Bash(curl -s -b \"authjs.session-token=dummy\" http://localhost:3000/api/prompts)",
+      "Bash(sqlite3 /Users/vivekgoyal/Documents/ai-native-writer/data/writer.db \"DELETE FROM prompts;\")",
+      "Bash(npm list:*)",
+      "Bash(node -e \"const ts = require\\('@tiptap/extension-text-style'\\); console.log\\(Object.keys\\(ts\\)\\)\")"
+    ]
+  }
+}

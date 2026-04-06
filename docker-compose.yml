@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3020:3000"
+    volumes:
+      - ai-native-writer-db:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+
+volumes:
+  ai-native-writer-db:
+    external: true
