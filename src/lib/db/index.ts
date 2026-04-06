@@ -13,7 +13,7 @@ let _instance: DB | null = null;
 
 export function getDb(): DB {
   if (!_instance) {
-    const dbPath = path.join(process.cwd(), "data", "writer.db");
+    const dbPath = process.env.DATABASE_PATH || path.join(process.cwd(), "data", "writer.db");
     const sqlite = new Database(dbPath);
     sqlite.pragma("journal_mode = WAL");
     _instance = drizzle(sqlite, { schema });
