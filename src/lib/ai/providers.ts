@@ -17,6 +17,9 @@ export const AI_MODELS: AIModel[] = [
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4", provider: "anthropic" },
   { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Thinking)", provider: "anthropic", thinking: true },
   // Google
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", provider: "google" },
+  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (Thinking)", provider: "google", thinking: true },
+  { id: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite", provider: "google" },
   { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash", provider: "google" },
   { id: "gemini-2.5-flash-lite-preview-06-17", label: "Gemini 2.5 Flash Lite", provider: "google" },
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro", provider: "google" },

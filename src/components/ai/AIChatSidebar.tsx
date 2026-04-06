@@ -112,7 +112,9 @@ export default function AIChatSidebar({
   const [changes, setChanges] = useState<ParsedChange[] | null>(null);
   const [editApplied, setEditApplied] = useState(false);
   const [feedbackApplied, setFeedbackApplied] = useState(false);
-  const [sendOnEnter, setSendOnEnter] = useState(false);
+  const [sendOnEnter, setSendOnEnter] = useState(() => {
+    try { return localStorage.getItem("ai-send-on-enter") === "true"; } catch { return false; }
+  });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevModeRef = useRef<Mode | null>(null);
@@ -182,9 +184,9 @@ export default function AIChatSidebar({
     setFeedbackApplied(false);
     setTimeout(() => inputRef.current?.focus(), 50);
 
-    // Auto-set model: always use gemini-2.5-pro; thinking only for fresh story draft
-    onSetModel("gemini-2.5-pro");
-    onSetThinking(mode === "draft");
+    // Auto-set model: always use gemini-3.1-pro; never auto-enable thinking
+    onSetModel("gemini-3.1-pro-preview");
+    onSetThinking(false);
   }, [selection, editorIsEmpty]);
 
   // Auto-scroll
@@ -306,7 +308,7 @@ export default function AIChatSidebar({
           if (title) onSetTitle(title);
 
           // Reset model defaults
-          onSetModel("gemini-2.5-flash");
+          onSetModel("gemini-3.1-flash-lite-preview");
           onSetThinking(false);
         }
 
@@ -680,7 +682,7 @@ export default function AIChatSidebar({
           <div className="flex justify-center">
             <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
               <button
-                onClick={() => setSendOnEnter(false)}
+                onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
                 className={`px-3 py-1 transition-colors ${
                   !sendOnEnter
                     ? "bg-green-100 text-green-700 font-medium"
@@ -690,7 +692,7 @@ export default function AIChatSidebar({
                 ⌘+Enter
               </button>
               <button
-                onClick={() => setSendOnEnter(true)}
+                onClick={() => { setSendOnEnter(true); localStorage.setItem("ai-send-on-enter", "true"); }}
                 className={`px-3 py-1 transition-colors border-l border-gray-200 ${
                   sendOnEnter
                     ? "bg-green-100 text-green-700 font-medium"
