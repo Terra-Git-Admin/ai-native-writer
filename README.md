@@ -37,6 +37,15 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-<!-- after doing npm run build -->
-cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public && cp .env.local .next/standalone/.env.local
+<!-- Deoployment steps -->
+# 1. Pull latest code
+git pull
 
+# 2. Install any new dependencies (if package.json changed)
+npm install
+
+# 3. Build + prep standalone in one command
+./deploy.sh
+
+# 4. Restart the server (kill old one first with Ctrl+C)
+node .next/standalone/server.js
