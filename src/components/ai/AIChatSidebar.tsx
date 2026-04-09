@@ -23,16 +23,18 @@ const MODE_LABELS: Record<Mode, string> = {
   chat: "Chat",
 };
 
+const IMPORT_CONVERT_ACTION = {
+  label: "Import & convert this document",
+  prompt:
+    "Please read this document and convert it into the standard series format. Map each section to the correct heading (Series Overview, Characters, Episode Plots, Reference Episodes). Where content exists, convert it to the correct format. Where a section is missing or blank, leave it blank — do not invent anything. Preserve all research and original story material verbatim in a Research & Original Story section at the bottom.",
+};
+
 const CHAT_QUICK_ACTIONS_EMPTY = [
   {
     label: "Create a new story",
     prompt: "I want to create a new story. Help me get started.",
   },
-  {
-    label: "Import & convert an existing document",
-    prompt:
-      "I have an existing story document I'd like to bring into this format. I'll paste it in — please help me convert it to the correct structure.",
-  },
+  IMPORT_CONVERT_ACTION,
   {
     label: "Start from a story idea",
     prompt:
@@ -41,11 +43,7 @@ const CHAT_QUICK_ACTIONS_EMPTY = [
 ];
 
 const CHAT_QUICK_ACTIONS_EXISTING = [
-  {
-    label: "Format the document",
-    prompt:
-      "Please format and restructure this document according to the correct style.",
-  },
+  IMPORT_CONVERT_ACTION,
   {
     label: "Add a reference episode",
     prompt:

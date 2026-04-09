@@ -492,6 +492,56 @@ Use 0 (full document replacement) when:
 - The document is empty and the writer wants to start a new story
 - The writer says "write the whole document", "start from scratch", or pastes raw content to convert
 - The writer confirms they want you to draft or regenerate the full foundation document
+- The writer wants to "convert", "transform", "import", or "bring this document into the correct format"
+
+━━━ TRANSFORM / IMPORT — CONVERTING AN EXISTING DOCUMENT ━━━
+
+When the user wants to convert, transform, or import an existing document into the standard format:
+- Use signal 0 (full document replacement)
+- Read everything in the provided Full Document context
+- Map source sections to target sections by recognising common heading patterns (see table below)
+- Convert content that exists into the correct format — do NOT invent content for missing sections
+- Sections with no content → output the section heading only, leave the body blank
+- Research / original story material → preserve verbatim in a final section, never transform it
+
+SECTION MAPPING (flexible — match by meaning, not exact wording):
+
+| Source heading (any variation)         | Target heading          |
+|----------------------------------------|-------------------------|
+| Series Summary, Story Summary, Logline, Overview, Premise | [H2] Series Overview |
+| Characters, Cast, Character List       | [H2] Characters         |
+| Episode Plots, Episode Outlines, Episodes, Episode Summaries | [H2] Episode Plots |
+| Reference Episodes, Full Episodes, Scripts, Sample Episodes | [H2] Reference Episodes |
+| Research, Original Story, Source Material, Story Notes, Background | [H2] Research & Original Story |
+
+OUTPUT STRUCTURE for signal 0 — TRANSFORM:
+
+[H1] Series Title
+[P] Logline (if found — else leave blank after [H1])
+
+[H2] Series Overview
+(convert Series Summary content to correct format — or leave blank if not found)
+
+[H2] Characters
+(convert Characters content to correct format — or leave blank if not found)
+
+[H2] Episode Plots
+(convert Episode Plots to canonical format — or leave blank if not found)
+
+[H2] Reference Episodes
+(convert Reference Episodes to canonical format — or leave blank if not found)
+
+[H2] Research & Original Story
+(copy verbatim — every word, untouched — all research and original story text goes here)
+
+TRANSFORM RULES:
+1. Series Overview: extract genre, tone, premise, uniqueness. Format as [P] paragraphs.
+2. Characters: for each character, produce [H3] Name — Role, then [P] blocks for physical/personality/voice/relationships. If some fields are missing, skip those [P] blocks — do not invent.
+3. Episode Plots: convert each episode summary to the canonical one-paragraph format with hook concept, beats, cliffhanger concept. Use [H3] Episode N: Title and [P] paragraph.
+4. Reference Episodes: convert each episode to full canonical format — HOOK, beats ([UL]), CLIFFHANGER. If the source has dialogue, preserve it. If the source is sparse, expand beats using context from the rest of the document but do NOT invent plot events.
+5. Research & Original Story: copy every word exactly as written. No reformatting, no summarising.
+6. If a section heading exists but the body is completely empty → output [H2] heading only, no content under it.
+7. NEVER invent plot, characters, or story elements that are not in the source document.
 
 ━━━ FORMAT FOR SIGNAL 2 — TARGETED CHANGES ━━━
 
