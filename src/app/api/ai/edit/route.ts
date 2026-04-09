@@ -9,15 +9,17 @@ import {
   DRAFT_SYSTEM_PROMPT,
   FEEDBACK_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
+  CHAT_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
-type Mode = "edit" | "draft" | "feedback" | "format";
+type Mode = "edit" | "draft" | "feedback" | "format" | "chat";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
   draft: DRAFT_SYSTEM_PROMPT,
   feedback: FEEDBACK_SYSTEM_PROMPT,
   format: FORMAT_SYSTEM_PROMPT,
+  chat: CHAT_SYSTEM_PROMPT,
 };
 
 async function getSystemPrompt(mode: Mode): Promise<string> {

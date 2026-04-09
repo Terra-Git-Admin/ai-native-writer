@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 // ─── Types ───
 
-type Mode = "edit" | "draft" | "feedback";
+type Mode = "edit" | "draft" | "feedback" | "format" | "chat";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -19,7 +19,47 @@ const MODE_LABELS: Record<Mode, string> = {
   edit: "Edit Selection",
   draft: "Story Creation",
   feedback: "Document Feedback",
+  format: "Format Document",
+  chat: "Chat",
 };
+
+const CHAT_QUICK_ACTIONS_EMPTY = [
+  {
+    label: "Create a new story",
+    prompt: "I want to create a new story. Help me get started.",
+  },
+  {
+    label: "Import & convert an existing document",
+    prompt:
+      "I have an existing story document I'd like to bring into this format. I'll paste it in — please help me convert it to the correct structure.",
+  },
+  {
+    label: "Start from a story idea",
+    prompt:
+      "I have a story idea. Let me describe it and you can help me develop it into a full series.",
+  },
+];
+
+const CHAT_QUICK_ACTIONS_EXISTING = [
+  {
+    label: "Format the document",
+    prompt:
+      "Please format and restructure this document according to the correct style.",
+  },
+  {
+    label: "Add a reference episode",
+    prompt:
+      "I want to add a new reference episode. Help me write it in the correct format.",
+  },
+  {
+    label: "Update the episode plots",
+    prompt: "I want to review and update the episode plots section.",
+  },
+  {
+    label: "Improve the dialogue",
+    prompt: "Help me improve the dialogue across the episodes.",
+  },
+];
 
 interface ParsedChange {
   id: number;
@@ -96,8 +136,8 @@ export default function AIChatSidebar({
   onSetTitle,
   onClose,
 }: AIChatSidebarProps) {
-  // Detect mode
-  const mode: Mode = selection ? "edit" : editorIsEmpty ? "draft" : "feedback";
+  // Detect mode: selection → edit; otherwise → chat (conversational, intent-driven)
+  const mode: Mode = selection ? "edit" : "chat";
 
   // messages = current AI conversation context (reset per mode change)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -187,7 +227,7 @@ export default function AIChatSidebar({
     // Auto-set model: always use gemini-3.1-pro; never auto-enable thinking
     onSetModel("gemini-3.1-pro-preview");
     onSetThinking(false);
-  }, [selection, editorIsEmpty]);
+  }, [selection]);
 
   // Auto-scroll
   useEffect(() => {
@@ -223,12 +263,9 @@ export default function AIChatSidebar({
         const decoder = new TextDecoder();
         let accumulated = "";
 
-        // For draft mode: the AI sends "0" or "1" as the very first line.
-        // 0 = document draft (don't stream to chat, apply to doc at end)
-        // 1 = conversation (stream normally to chat)
-        // We detect this from the first chunk and route accordingly.
-        let draftSignal: "0" | "1" | null = null; // null = not yet detected
-        let draftShowPlaceholder = false;
+        // Chat mode: first-line signal. 0 = full doc, 1 = conversation, 2 = targeted changes.
+        let chatSignal: "0" | "1" | "2" | null = null;
+        let chatShowPlaceholder = false;
 
         if (reader) {
           while (true) {
@@ -237,32 +274,40 @@ export default function AIChatSidebar({
             const chunk = decoder.decode(value, { stream: true });
             accumulated += chunk;
 
-            // In draft mode, detect the signal from the first line
-            if (mode === "draft" && draftSignal === null && accumulated.includes("\n")) {
+            // In chat mode, detect the signal from the first line
+            if (mode === "chat" && chatSignal === null && accumulated.includes("\n")) {
               const firstLine = accumulated.split("\n")[0].trim();
               if (firstLine === "0") {
-                draftSignal = "0";
-                draftShowPlaceholder = true;
-                // Keep only the user's last message + a "Drafting..." placeholder.
-                // This clears the previous "Should I go ahead?" message that would
-                // otherwise remain visible and confuse the user.
+                chatSignal = "0";
+                chatShowPlaceholder = true;
                 setMessages((prev) => {
                   const lastUser = [...prev].reverse().find((m) => m.role === "user");
                   return [
                     ...(lastUser ? [lastUser] : []),
-                    { role: "assistant", content: "Drafting your story..." },
+                    { role: "assistant", content: "Writing to document..." },
                   ];
                 });
               } else if (firstLine === "1") {
-                draftSignal = "1";
+                chatSignal = "1";
+              } else if (firstLine === "2") {
+                chatSignal = "2";
+                chatShowPlaceholder = true;
+                setMessages((prev) => {
+                  const lastUser = [...prev].reverse().find((m) => m.role === "user");
+                  return [
+                    ...(lastUser ? [lastUser] : []),
+                    { role: "assistant", content: "Generating changes..." },
+                  ];
+                });
               }
             }
 
-            // Update streaming display text (unless draft signal 0)
-            if (!draftShowPlaceholder) {
-              const displayContent = mode === "draft" && draftSignal === "1"
-                ? accumulated.replace(/^1\n/, "")
-                : accumulated;
+            // Update streaming display text (skip when showing a placeholder)
+            if (!chatShowPlaceholder) {
+              const displayContent =
+                mode === "chat" && chatSignal === "1"
+                  ? accumulated.replace(/^1\n/, "")
+                  : accumulated;
               setStreamingText(displayContent);
             }
 
@@ -280,47 +325,53 @@ export default function AIChatSidebar({
 
         // Strip the signal line from accumulated content
         let cleanAccumulated = accumulated;
-        if (mode === "draft" && (draftSignal === "0" || draftSignal === "1")) {
-          cleanAccumulated = accumulated.replace(/^[01]\n/, "");
+        if (mode === "chat" && chatSignal !== null) {
+          cleanAccumulated = accumulated.replace(/^[012]\n/, "");
         }
 
-        // Draft mode with signal 0: apply to document
-        if (mode === "draft" && draftSignal === "0") {
+        // Chat mode with signal 0: apply full document to editor
+        if (mode === "chat" && chatSignal === "0") {
           onApplyDraft(cleanAccumulated);
           setDraftApplied(true);
 
-          // Replace placeholder with confirmation
           setMessages((prev) => {
             const updated = [...prev];
             const lastIdx = updated.length - 1;
             if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-              updated[lastIdx] = { role: "assistant", content: "Draft has been written to the document." };
+              updated[lastIdx] = { role: "assistant", content: "Document has been written." };
             }
             return updated;
           });
 
-          // Extract title
           const h1Match = cleanAccumulated.match(/^\[H1\]\s+(.+)/m);
-          const firstLine = cleanAccumulated.split("\n").find((l) => l.trim());
-          const title = h1Match
-            ? h1Match[1]
-            : firstLine?.replace(/^\[(?:H\d|P)\]\s+/, "").slice(0, 60) || "";
+          const title = h1Match ? h1Match[1] : "";
           if (title) onSetTitle(title);
+        }
 
-          // Reset model defaults
-          onSetModel("gemini-3.1-flash-lite-preview");
-          onSetThinking(false);
+        // Chat mode with signal 2: parse targeted changes into change cards
+        if (mode === "chat" && chatSignal === "2") {
+          const parsed = parseChanges(cleanAccumulated);
+          if (parsed && parsed.length > 0) {
+            setChanges(parsed);
+          }
+          setMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+              updated[lastIdx] = { role: "assistant", content: cleanAccumulated };
+            }
+            return updated;
+          });
         }
 
         // Use clean content for everything below
         accumulated = cleanAccumulated;
 
-        // Add assistant response to display history and persist
-        // For signal-0 drafts, save a short note (content is in the doc)
+        // Persist assistant response to history
         if (accumulated) {
           const historyContent =
-            mode === "draft" && draftSignal === "0"
-              ? "Draft has been written to the document."
+            mode === "chat" && chatSignal === "0"
+              ? "Document has been written."
               : accumulated;
           const assistantEntry: HistoryEntry = {
             type: "message",
@@ -330,14 +381,6 @@ export default function AIChatSidebar({
           };
           setHistory((prev) => [...prev, assistantEntry]);
           persistEntry(assistantEntry);
-        }
-
-        // Check for [CHANGE] blocks in feedback mode
-        if (mode === "feedback" && !accumulated.startsWith("[CLARIFY]")) {
-          const parsed = parseChanges(accumulated);
-          if (parsed && parsed.length > 0) {
-            setChanges(parsed);
-          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
@@ -381,11 +424,12 @@ export default function AIChatSidebar({
       if (mode === "edit" && selection) {
         return `## Full Document (for context only — do NOT reproduce)\n${fullDocumentText}\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
       }
-      if (mode === "feedback") {
-        return `## Full Document\n${fullDocumentText}\n\n## Feedback\n${userInput}`;
-      }
-      if (mode === "draft") {
-        return userInput;
+      if (mode === "chat") {
+        // Include the full document as context on the first message (empty doc = no context block)
+        const docContext = fullDocumentText.trim()
+          ? `## Full Document (for context)\n${fullDocumentText}\n\n`
+          : "";
+        return `${docContext}## Message\n${userInput}`;
       }
     }
     // Follow-up messages are raw
@@ -434,19 +478,12 @@ export default function AIChatSidebar({
 
   // ─── Render helpers ───
 
-  const modeLabel =
-    mode === "edit"
-      ? "Edit Selection"
-      : mode === "draft"
-        ? "Create Story"
-        : "Document Feedback";
+  const modeLabel = mode === "edit" ? "Edit Selection" : "Chat";
 
   const placeholder =
     mode === "edit"
       ? "Describe how to edit the selected text..."
-      : mode === "draft"
-        ? "Describe the story you want to create..."
-        : "What would you like to change about this document?";
+      : "What would you like to do? (e.g. 'add an episode', 'tighten dialogue in ep 3')";
 
   return (
     <div className="flex h-full flex-col">
@@ -470,19 +507,29 @@ export default function AIChatSidebar({
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
-          <div className="py-6 text-center text-sm text-gray-500">
-            {mode === "edit" && <p>Describe how to edit the selected text.</p>}
-            {mode === "draft" && (
-              <p>
-                Tell the AI about your story idea, or just say
-                &ldquo;hello&rdquo; and it will guide you.
-              </p>
+          <div className="py-6 text-sm text-gray-500">
+            {mode === "edit" && (
+              <p className="text-center">Describe how to edit the selected text.</p>
             )}
-            {mode === "feedback" && (
-              <p>
-                Describe what you want to change about this document. The AI
-                will suggest specific edits.
-              </p>
+            {mode === "chat" && (
+              <div className="flex flex-col gap-3">
+                <p className="text-center text-gray-400">
+                  {editorIsEmpty ? "What would you like to do?" : "What would you like to work on?"}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(editorIsEmpty ? CHAT_QUICK_ACTIONS_EMPTY : CHAT_QUICK_ACTIONS_EXISTING).map(
+                    (action) => (
+                      <button
+                        key={action.label}
+                        onClick={() => setInput(action.prompt)}
+                        className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
+                      >
+                        {action.label}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -577,10 +624,8 @@ export default function AIChatSidebar({
           </div>
         )}
 
-        {/* Flow B: Draft is auto-applied via signal 0 — no manual button needed */}
-
-        {/* Flow C: Change cards (Apply All / Reject All buttons are sticky below) */}
-        {mode === "feedback" && changes && !isStreaming && !feedbackApplied && (
+        {/* Chat: Change cards (Apply All / Reject All buttons are sticky below) */}
+        {mode === "chat" && changes && !isStreaming && !feedbackApplied && (
           <div className="space-y-3 pt-2">
             {changes.map((change) => (
               <div
@@ -628,8 +673,8 @@ export default function AIChatSidebar({
         </div>
       )}
 
-      {/* Sticky Apply All / Reject All buttons for feedback mode */}
-      {mode === "feedback" && changes && !feedbackApplied && !isStreaming && (
+      {/* Sticky Apply All / Reject All buttons for chat mode */}
+      {mode === "chat" && changes && !feedbackApplied && !isStreaming && (
         <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
           <button
             onClick={handleRejectAllChanges}
