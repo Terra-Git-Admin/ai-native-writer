@@ -1,5 +1,5 @@
 import { handlers } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // When BYPASS_AUTH=true, return a fake session for the /session endpoint
 // so the client-side useSession() hook works during local dev.
@@ -14,7 +14,7 @@ const BYPASS_SESSION = {
   expires: new Date(Date.now() + 86400 * 1000).toISOString(),
 };
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   if (process.env.BYPASS_AUTH === "true") {
     const url = new URL(req.url);
     if (url.pathname.endsWith("/session")) {
@@ -26,6 +26,6 @@ export async function GET(req: Request) {
   return handlers.GET(req);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   return handlers.POST(req);
 }
