@@ -101,6 +101,22 @@ export const handlers = {
   POST: ((req: any) => lazy().handlers.POST(req)) as AuthExports["handlers"]["POST"],
 };
 
-export const auth = ((...args: any[]) => lazy().auth(...args)) as AuthExports["auth"];
+// Bypass session for local development — set BYPASS_AUTH=true in .env.local
+const BYPASS_SESSION = {
+  user: {
+    id: "dev-bypass-user",
+    email: process.env.ADMIN_EMAIL || "vikas@terra.com",
+    name: "Dev User",
+    role: "admin" as const,
+  },
+  expires: new Date(Date.now() + 86400 * 1000).toISOString(),
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const auth = ((...args: any[]) => {
+  if (process.env.BYPASS_AUTH === "true") return Promise.resolve(BYPASS_SESSION);
+  return lazy().auth(...args);
+}) as AuthExports["auth"];
+
 export const signIn = ((...args: any[]) => lazy().signIn(...args)) as AuthExports["signIn"];
 export const signOut = ((...args: any[]) => lazy().signOut(...args)) as AuthExports["signOut"];

@@ -8,7 +8,11 @@ import {
   DRAFT_SYSTEM_PROMPT,
   FEEDBACK_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
+  CHAT_SYSTEM_PROMPT,
   DOCUMENT_STYLE_GUIDE,
+  CANONICAL_REF_EPISODE_FORMAT,
+  EPISODE_PLOTS_FORMAT,
+  MICRODRAMA_SCRIPTWRITER_KNOWLEDGE,
 } from "@/lib/ai/prompts";
 
 let seeded = false;
@@ -16,9 +20,13 @@ let seeded = false;
 const DEFAULTS = [
   { id: "style_guide", label: "Style Guide", content: DOCUMENT_STYLE_GUIDE },
   { id: "edit", label: "Select & Edit", content: EDIT_SYSTEM_PROMPT },
-  { id: "draft", label: "Story Creation (Blank Doc)", content: DRAFT_SYSTEM_PROMPT },
+  { id: "draft", label: "Series Creation (Blank Doc)", content: DRAFT_SYSTEM_PROMPT },
   { id: "feedback", label: "Full-Doc Feedback", content: FEEDBACK_SYSTEM_PROMPT },
   { id: "format", label: "Format Document", content: FORMAT_SYSTEM_PROMPT },
+  { id: "chat", label: "Chat Mode", content: CHAT_SYSTEM_PROMPT },
+  { id: "ref_episode_format", label: "Reference Episode Format Spec", content: CANONICAL_REF_EPISODE_FORMAT },
+  { id: "episode_plots_format", label: "Episode Plots Format Spec", content: EPISODE_PLOTS_FORMAT },
+  { id: "scriptwriter_knowledge", label: "Microdrama Craft Knowledge", content: MICRODRAMA_SCRIPTWRITER_KNOWLEDGE },
 ];
 
 // GET /api/prompts — list all prompts (readable by everyone)
