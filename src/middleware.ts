@@ -4,6 +4,11 @@ import type { NextRequest } from "next/server";
 // Simple middleware that checks for session cookie
 // The actual auth validation happens in API routes via auth()
 export function middleware(request: NextRequest) {
+  // Bypass auth for local development
+  if (process.env.BYPASS_AUTH === "true") {
+    return NextResponse.next();
+  }
+
   const sessionCookie =
     request.cookies.get("authjs.session-token") ||
     request.cookies.get("__Secure-authjs.session-token");
