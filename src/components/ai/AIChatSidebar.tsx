@@ -57,6 +57,11 @@ const CHAT_QUICK_ACTIONS_EXISTING = [
     label: "Improve the dialogue",
     prompt: "Help me improve the dialogue across the episodes.",
   },
+  {
+    label: "Generate dialogue outline",
+    prompt:
+      "Generate a dialogue outline from all the reference episodes — extract every dialogue line, group by character voice, and build a relationship matrix showing how each pair of characters speak to each other.",
+  },
 ];
 
 interface ParsedChange {
@@ -150,6 +155,9 @@ export default function AIChatSidebar({
   const [changes, setChanges] = useState<ParsedChange[] | null>(null);
   const [editApplied, setEditApplied] = useState(false);
   const [feedbackApplied, setFeedbackApplied] = useState(false);
+  const [reviewMode, setReviewMode] = useState<"bulk" | "stepwise" | null>(null);
+  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
+  const [skipWarning, setSkipWarning] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(() => {
     try { return localStorage.getItem("ai-send-on-enter") === "true"; } catch { return false; }
   });
@@ -401,6 +409,7 @@ export default function AIChatSidebar({
     setMessages(newMessages);
     setInput("");
     setEditApplied(false);
+    setFeedbackApplied(false);
 
     // Add user message to display history and persist
     const userEntry: HistoryEntry = {
@@ -417,20 +426,19 @@ export default function AIChatSidebar({
   }, [input, isStreaming, messages, sendMessages, mode]);
 
   function buildUserMessage(userInput: string): string {
-    // First message gets context baked in
-    if (messages.length === 0) {
-      if (mode === "edit" && selection) {
+    if (mode === "edit" && selection) {
+      if (messages.length === 0) {
         return `## Full Document (for context only — do NOT reproduce)\n${fullDocumentText}\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
       }
-      if (mode === "chat") {
-        // Include the full document as context on the first message (empty doc = no context block)
-        const docContext = fullDocumentText.trim()
-          ? `## Full Document (for context)\n${fullDocumentText}\n\n`
-          : "";
-        return `${docContext}## Message\n${userInput}`;
-      }
+      return userInput;
     }
-    // Follow-up messages are raw
+    if (mode === "chat") {
+      // Always include the full document so the AI has current content on every message
+      const docContext = fullDocumentText.trim()
+        ? `## Full Document (for context)\n${fullDocumentText}\n\n`
+        : "";
+      return `${docContext}## Message\n${userInput}`;
+    }
     return userInput;
   }
 
@@ -473,6 +481,33 @@ export default function AIChatSidebar({
     setChanges(null);
   };
 
+  // Reset review state whenever a new set of changes arrives
+  useEffect(() => {
+    setReviewMode(null);
+    setCurrentChangeIndex(0);
+    setSkipWarning(false);
+  }, [changes]);
+
+  const handleAcceptStepChange = () => {
+    if (!changes) return;
+    onApplyChange(changes[currentChangeIndex].original, changes[currentChangeIndex].suggested);
+    if (currentChangeIndex + 1 >= changes.length) {
+      setFeedbackApplied(true);
+    } else {
+      setCurrentChangeIndex((prev) => prev + 1);
+      setSkipWarning(false);
+    }
+  };
+
+  const handleSkipStepChange = () => {
+    if (!changes) return;
+    const remaining = changes.length - currentChangeIndex - 1;
+    if (remaining > 0 && !skipWarning) {
+      setSkipWarning(true);
+      return;
+    }
+    setFeedbackApplied(true);
+  };
 
   // ─── Render helpers ───
 
@@ -622,8 +657,62 @@ export default function AIChatSidebar({
           </div>
         )}
 
-        {/* Chat: Change cards (Apply All / Reject All buttons are sticky below) */}
-        {mode === "chat" && changes && !isStreaming && !feedbackApplied && (
+        {/* Chat: Review mode selector */}
+        {mode === "chat" && changes && !isStreaming && !feedbackApplied && reviewMode === null && changes.length > 1 && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 mt-2">
+            <p className="text-sm font-medium text-gray-700">
+              {changes.length} changes ready. How would you like to review?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setReviewMode("stepwise")}
+                className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
+              >
+                Episode by episode
+              </button>
+              <button
+                onClick={() => setReviewMode("bulk")}
+                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                All at once
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Chat: Stepwise — one change at a time */}
+        {mode === "chat" && changes && !isStreaming && !feedbackApplied && reviewMode === "stepwise" && (
+          <div className="space-y-3 pt-2">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+              Change {currentChangeIndex + 1} of {changes.length}
+            </p>
+            <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase">
+                {changes[currentChangeIndex].location && (
+                  <span className="font-normal normal-case text-gray-400">
+                    &ldquo;{changes[currentChangeIndex].location.slice(0, 60)}&rdquo;
+                  </span>
+                )}
+              </p>
+              {changes[currentChangeIndex].original && (
+                <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
+                  {changes[currentChangeIndex].original}
+                </div>
+              )}
+              <div className="rounded border border-green-200 bg-green-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
+                {stripTagsForDisplay(changes[currentChangeIndex].suggested)}
+              </div>
+            </div>
+            {skipWarning && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {changes.length - currentChangeIndex - 1} remaining change(s) will be dropped. Click &ldquo;Drop rest&rdquo; to confirm.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat: Bulk — all changes at once */}
+        {mode === "chat" && changes && !isStreaming && !feedbackApplied && (reviewMode === "bulk" || changes.length === 1) && (
           <div className="space-y-3 pt-2">
             {changes.map((change) => (
               <div
@@ -671,8 +760,26 @@ export default function AIChatSidebar({
         </div>
       )}
 
-      {/* Sticky Apply All / Reject All buttons for chat mode */}
-      {mode === "chat" && changes && !feedbackApplied && !isStreaming && (
+      {/* Sticky buttons: stepwise mode */}
+      {mode === "chat" && changes && !feedbackApplied && !isStreaming && reviewMode === "stepwise" && (
+        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
+          <button
+            onClick={handleSkipStepChange}
+            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
+          >
+            {skipWarning ? "Drop rest" : "Skip"}
+          </button>
+          <button
+            onClick={handleAcceptStepChange}
+            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+          >
+            Accept
+          </button>
+        </div>
+      )}
+
+      {/* Sticky buttons: bulk mode */}
+      {mode === "chat" && changes && !feedbackApplied && !isStreaming && (reviewMode === "bulk" || changes.length === 1) && (
         <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
           <button
             onClick={handleRejectAllChanges}
