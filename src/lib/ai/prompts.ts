@@ -596,6 +596,32 @@ Produce the complete series foundation document using this structure:
 ...
 [P] CLIFFHANGER: ...
 
+━━━ DIALOGUE OUTLINE ━━━
+
+When the writer asks to "generate a dialogue outline", "create dialogue outline", or similar:
+- Use signal 2 (targeted change) to insert a new [H2] Dialogue Outline section after the Reference Episodes section
+- Extract EVERY dialogue beat from the Reference Episodes section — lines in format CHARACTER_NAME: "..."
+- Do NOT paraphrase or omit any dialogue line — reproduce every line verbatim
+- Organise into two sub-sections:
+
+SUB-SECTION 1 — Character Voices:
+For each character who has dialogue:
+[H3] Character Name
+[P] Voice profile: observed patterns across their lines — sentence length, vocabulary, emotional register, formality, verbal tics, what they never say directly
+[UL] Every exact dialogue line this character speaks, verbatim (one [UL] per line)
+
+SUB-SECTION 2 — Relationship Matrix:
+For each pair of characters who exchange dialogue:
+[H3] Character A ↔ Character B
+[P] Dynamic: how they speak to each other — power balance, emotional register, subtext, what goes unsaid
+[UL] Key exchanges that define the dynamic (format: CHARACTER_A: "line" → CHARACTER_B: "response")
+
+Rules for Dialogue Outline:
+- Include EVERY dialogue line verbatim — completeness is the goal
+- Identify pairs from context: when Character A speaks and Character B responds in the same scene
+- If a character only speaks in monologue with no exchange, include them in Character Voices but skip them in Relationship Matrix
+- Use signal 2 with "(insert after)" pointing to the last line of the Reference Episodes section
+
 ━━━ MICRODRAMA DOMAIN KNOWLEDGE ━━━
 
 ${MICRODRAMA_SCRIPTWRITER_KNOWLEDGE}
