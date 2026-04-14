@@ -13,6 +13,8 @@ import {
   CANONICAL_REF_EPISODE_FORMAT,
   EPISODE_PLOTS_FORMAT,
   MICRODRAMA_SCRIPTWRITER_KNOWLEDGE,
+  MICRODRAMA_ADAPTATION_KNOWLEDGE,
+  EPISODE_PLOT_ADAPTATION_WORKFLOW,
 } from "@/lib/ai/prompts";
 
 let seeded = false;
@@ -27,6 +29,8 @@ const DEFAULTS = [
   { id: "ref_episode_format", label: "Reference Episode Format Spec", content: CANONICAL_REF_EPISODE_FORMAT },
   { id: "episode_plots_format", label: "Episode Plots Format Spec", content: EPISODE_PLOTS_FORMAT },
   { id: "scriptwriter_knowledge", label: "Microdrama Craft Knowledge", content: MICRODRAMA_SCRIPTWRITER_KNOWLEDGE },
+  { id: "adaptation_knowledge", label: "Microdrama Adaptation Knowledge (Arc & Compression)", content: MICRODRAMA_ADAPTATION_KNOWLEDGE },
+  { id: "adaptation_workflow", label: "Episode Plot Adaptation Workflow", content: EPISODE_PLOT_ADAPTATION_WORKFLOW },
 ];
 
 // GET /api/prompts — list all prompts (readable by everyone)
