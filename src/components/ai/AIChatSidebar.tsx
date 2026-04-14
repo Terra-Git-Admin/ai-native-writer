@@ -45,6 +45,11 @@ const CHAT_QUICK_ACTIONS_EMPTY = [
 const CHAT_QUICK_ACTIONS_EXISTING = [
   IMPORT_CONVERT_ACTION,
   {
+    label: "Start episode plot adaptation",
+    prompt:
+      "Start episode plot adaptation. Please analyse the Research & Original Story section and begin.",
+  },
+  {
     label: "Add a reference episode",
     prompt:
       "I want to add a new reference episode. Help me write it in the correct format.",
