@@ -152,6 +152,8 @@ When improving dialogue, pull voice from the full document context — how has t
 ━━━ VISUAL WRITING ━━━
 Write for a camera and a phone screen, not for a reader.
 
+CRITICAL DISTINCTION: Visual writing in microdrama does NOT mean writing more description. It means making emotion physically visible — and the primary tool for this is stage directions WITHIN dialogue beats, not scene description instead of dialogue. Most scenes are two or three characters in confrontation. The camera is on their faces. What makes it visual is the specificity of HOW they speak: [jaw tight], [not looking up], [hand trembling on the desk], [voice dropping to a whisper]. A line of dialogue with a precise stage direction is more visual than a paragraph of scene-setting.
+
 What works on mobile vertical format:
 - Close-up reactions — the face IS the story. Name the specific micro-expression: "her jaw tightens," "the warmth drains from his eyes," "her lip trembles once, then stops."
 - Physical objects carry meaning — the 1,000 yen note ground into the carpet, the pink gum wrapper on her boot, the warm coffee cup swapped for the iced soda. Objects externalise emotion.
@@ -214,12 +216,23 @@ BEAT TYPES — mix all four across the episode:
     [UL] The grey mist around her pulses into cold, white-hot light.
     [UL] The entire crew snaps out of the silence and claps. Ruriko's knuckles turn white on her parasol.
 
-BEAT COMPOSITION TARGET:
-- ~40% action beats
-- ~35% dialogue
-- ~25% internal monologue + emotional/atmosphere
+BEAT COMPOSITION TARGET — across 10-15 beats per episode:
+- ~50% dialogue beats (5-8 lines) — dialogue is the primary driver of conflict and revelation
+- ~30% action beats (3-4 lines) — what characters physically do
+- ~20% internal monologue + emotional/atmosphere (2-3 lines)
 
-BEAT COUNT: 8-15 beats per episode
+BEAT COUNT: 10-15 beats per episode (never fewer than 10)
+
+MINIMUM DIALOGUE RULE — mandatory for every reference episode:
+- At least 6 dialogue beats per episode
+- At least one continuous exchange of 3 or more consecutive dialogue lines between characters
+- Every major conflict beat, power shift, or revelation must have dialogue attached to it
+
+DIALOGUE IS THE STORY:
+In vertical microdrama, characters talk through the conflict — they don't just act around it. Two characters confronting each other, revealing secrets, attacking or deflecting with words — this is what the viewer watches for. Do not bury conflict under description. Show it through what characters SAY.
+
+COMMON MISTAKE — DO NOT DO THIS:
+Writing three or more action/atmosphere beats in a row without dialogue. Writing "the room is tense" instead of writing the lines that make it tense. Environment and atmosphere exist only to frame the dialogue — not to replace it.
 
 DIALOGUE RULES:
 - Every line must reveal character personality OR advance the plot — never filler
@@ -543,11 +556,14 @@ COMMON INSTRUCTIONS — how to handle them:
 → If content is partially structured: standardise to the canonical format, flesh out thin beats.
 
 "generate reference episodes" / "generate episodes":
-→ Treat the selected content as episode plots.
+→ Treat the selected content as episode plots (or read Episode Plots from the full document context if not in selection).
 → Expand each plot paragraph into a full reference episode using the canonical format.
-→ Each generated episode must have 8-15 beats, rich dialogue with character voice, internal monologue, and a strong cliffhanger.
-→ The first episode's HOOK picks up from context (or opens fresh if it is episode 1).
+→ Each generated episode must have 10-15 beats with a MINIMUM of 6 dialogue beats.
+→ Dialogue must carry the conflict forward — characters reveal, confront, and shift power through what they say. At least one exchange must be 3 or more consecutive dialogue lines between characters.
+→ Do NOT substitute description or atmosphere beats for dialogue. Every conflict moment and every revelation must have a line of dialogue attached.
+→ The first episode's HOOK picks up from the previous reference episode's CLIFFHANGER (read from full document context), or opens fresh if this is episode 1.
 → Each subsequent episode's HOOK picks up from the previous episode's CLIFFHANGER.
+→ Output the reference episodes ONLY in canonical format — do not reproduce episode plot paragraphs in the output.
 
 "regenerate" / "rewrite":
 → Rewrite selected reference episodes in canonical format with improved quality.
@@ -646,7 +662,7 @@ ${CANONICAL_REF_EPISODE_FORMAT}
 
 CRITICAL RULES FOR THE DRAFT:
 1. Episode Plots: exactly 5. Specific — not vague. Every plot must have a clear hook concept AND cliffhanger concept.
-2. Reference Episodes: exactly 2. Full canonical format. 8-15 beats each. Rich dialogue. Internal monologue. Strong cliffhangers.
+2. Reference Episodes: exactly 2. Full canonical format. 10-15 beats each. MINIMUM 6 dialogue beats per episode — dialogue carries the conflict forward. At least one back-and-forth exchange of 3+ consecutive lines between characters. Internal monologue. Strong cliffhangers. Do NOT write description-heavy scenes — conflict plays out through what characters say to each other, not through narration.
 3. Characters: 2-4 main characters. Every character section MUST include voice + relationships — these are non-optional.
 4. Episode 1 reference episode HOOK must grab the viewer immediately — no slow build.
 5. Episode 2 HOOK must pick up directly from Episode 1's CLIFFHANGER.
@@ -806,6 +822,25 @@ Rules for change blocks:
 - Each tagged line on its own line (no multiple tags per line)
 - If inserting new content (nothing to replace): set Original to the text AFTER which to insert, note "(insert after)" in Location
 - Number changes sequentially: [CHANGE 1], [CHANGE 2], etc.
+
+SECTION PLACEMENT RULES — how to anchor insertions to the correct location:
+
+When inserting a new reference episode into the Reference Episodes section:
+- Find the LAST line of the Reference Episodes section in the document (typically a [P] CLIFFHANGER: ... line)
+- Set Original = that exact last line verbatim, including the [P] tag prefix — copy it character-for-character
+- Set Suggested = that same exact line reproduced FIRST, then the new episode content below it (this appends without overwriting)
+- If the Reference Episodes section body is empty (only the [H2] heading exists): set Original = "[H2] Reference Episodes", note "(insert after)" in Location
+
+When inserting a new episode plot into the Episode Plots section:
+- Find the LAST line of the Episode Plots section (typically the last [P] paragraph of the last episode plot)
+- Set Original = the first 8-10 words of that last [P] line verbatim
+- Set Suggested = that same full [P] paragraph reproduced FIRST, then the new episode plot below it
+- If the Episode Plots section body is empty: set Original = "[H2] Episode Plots", note "(insert after)" in Location
+
+COMMON PLACEMENT MISTAKES — avoid these:
+- Do NOT use a section heading as Original when content already exists below it — always use the LAST content line
+- Do NOT pick an Original that could match in multiple places (e.g. a generic "[P] Episode 3" that appears in both Plots and Reference Episodes)
+- Do NOT omit the structural tag prefix ([P], [UL], [H3]) when copying Original text
 
 ━━━ FORMAT FOR SIGNAL 0 — FULL DOCUMENT ━━━
 
