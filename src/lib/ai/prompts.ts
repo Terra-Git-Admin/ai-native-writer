@@ -187,178 +187,119 @@ export const CANONICAL_REF_EPISODE_FORMAT = `
 
 STRUCTURE:
 [H3] Episode N: Title     ← under [H2] Reference Episodes
-[UL] first beat           ← episode starts immediately — NO HOOK label
+[UL] first beat           ← NO HOOK label — episode starts immediately
 [UL] beat
 [UL] beat
 ...
-[UL] last beat            ← episode ends on the freeze — NO CLIFFHANGER label
+[UL] last beat            ← NO CLIFFHANGER label — episode ends on the freeze
 
-There is no HOOK label. There is no CLIFFHANGER label.
-The episode begins. The episode ends. The first beat IS the opening. The last beat IS the freeze.
-
-━━━ THREE BEAT TYPES — USE THE EXACT SYNTAX BELOW ━━━
+━━━ THREE BEAT TYPES — USE THESE EXACT FORMATS ━━━
 
 ── TYPE A: VISUAL / ACTION ──
-Scene-setting, physical action, scene transitions, reaction shots.
+For scene-setting, physical action, transitions, and silent reaction shots.
 Format: [UL] (Visual: description in third-person present tense.)
 
-Scene pickup from previous episode:
-[UL] (Visual: Picks up immediately from Episode 30. NICOLAI and VIGO share a hardened, resolute look.)
-
-Scene establishing shot:
-[UL] (Visual: Dimly lit lower deck corridor. LEVI stands near the railing, gazing out into the darkness.)
-
-Scene transition — name the cut explicitly:
-[UL] (Visual: Smash cut to the cavernous, dimly lit Cargo Hold. Massive wooden crates are stacked high.)
-[UL] (Visual: Cut to the sisters' cabin.)
-[UL] (Visual: Quick cut to Andrew's study. LEVI is aggressively pacing.)
+Scene establishing / pickup:
+[UL] (Visual: Picks up immediately from Episode N. [one line: where we are, who is here].)
+[UL] (Visual: [Location]. [Who is present. What is the immediate physical situation].)
 
 Physical action:
-[UL] (Visual: Irene raises the gun. Her hands are shaking violently. She thumbs back the hammer with a sharp CLICK.)
-[UL] (Visual: Nina quickly clamps her hand over Irene's mouth, giving her a desperate, wide-eyed shushing gesture.)
+[UL] (Visual: [Character] [does something specific and visible]. [Physical consequence].)
 
-Silent reaction — face only, no words:
-[UL] (Visual: All color drains from Victoria's face. The classical music fades to a high-pitched ringing in her ears.)
+Silent reaction — no words, just the face or body:
+[UL] (Visual: [Character]'s expression shifts. [Specific physical detail of what that looks like].)
 
-Insert shot for a significant object:
-[UL] Insert of a massive wooden crate in the center of the cargo hold.
+Scene transition — name the cut:
+[UL] (Visual: Smash cut to [new location]. [Brief establish].)
+[UL] (Visual: Cut to [location].)
 
-Offscreen chaos — world feels bigger than the frame:
-[UL] (Visual: From the Cargo Hold down the hall, chaos erupts. Flashlight beams cut frantically through the darkness.)
+Insert shot — a significant object gets its own beat:
+[UL] Insert of [the specific object and what makes it significant].
+
+Offscreen sound or voice:
+[UL] [CharacterName] (O.S.): "line"
+[UL] [CharacterName] (O.S., shouting): "line"
 
 ── TYPE B: DIALOGUE ──
-Spoken lines. Stage direction is embedded inside the character attribution.
-Format A (direction before line): [UL] CharacterName (stage direction): "spoken line"
-Format B (direction after colon): [UL] CharacterName: (stage direction) "spoken line"
-Format C (no direction needed): [UL] CharacterName: "spoken line"
+Spoken lines. Stage direction is embedded inside the attribution — not outside it.
+Format A: [UL] CharacterName (stage direction): "spoken line"
+Format B: [UL] CharacterName: (stage direction) "spoken line"
+Format C: [UL] CharacterName: "spoken line"    ← when no direction is needed
 
-Offscreen voice: [UL] CharacterName (O.S.): "line"
-Offscreen with context: [UL] CharacterName (O.S., shouting): "line"
-Over radio/comms: [UL] CharacterName (V.O., over radio): "line"
+Over radio or comms: [UL] CharacterName (V.O., over radio): "line"
 
-Examples:
-[UL] Nicolai (Murmurs quietly, thinking): A dozen guards… hmm..
-[UL] Vigo (Shaking his head): That's too many. Even for you.
-[UL] Nina: (Urgent whisper) Put it down! Are you out of your mind?!
-[UL] Levi: (Eyes cold) I don't care if the bloody Captain shows up.
-[UL] Victoria: (Furious, stepping forward) You are pointing a gun at your own niece?!
-[UL] Borg (O.S., shouting): We've lost power!
-[UL] Nicolai (V.O., over radio, voice uneasy): Nina… are you there?!
+Stage directions must be character-specific physical actions or precise emotional states — not generic labels:
+  WRONG: [UL] Mia: (sadly) "I trusted you."
+  RIGHT: [UL] Mia: (voice going very quiet) "I trusted you."
+  WRONG: [UL] Daniel: (angrily) "Get out."
+  RIGHT: [UL] Daniel: (jaw tight, not looking at her) "Get out."
+
+Every dialogue line must do at least one of these — if it does none, cut it:
+  — Reveal something about who this character is
+  — Shift the power or emotional balance in the scene
+  — Advance the plot toward the episode's closing moment
+
+No line exists to fill silence, confirm what we already know, or repeat what was just said.
 
 ── TYPE C: V.O. ──
-A character's internal thought or narration — what the camera cannot show.
+A character's internal thought — what cannot be shown on screen.
 Format: [UL] CharacterName (V.O.): thought
-No quotes. No asterisks. No INTERNAL MONOLOGUE prefix. Just the thought.
+No quotes. No asterisks. No INTERNAL MONOLOGUE prefix.
 
-Examples:
-[UL] Irene (V.O.): You took my world away from me.
-[UL] Nicolai (V.O.): Pitch black. Just the way I like it.
-[UL] Levi (V.O.): The cargo... it's a breach.
-[UL] Victoria (V.O.): A trap. They're walking right into an ambush.
-
-In solo scenes (one character, no one to speak to): V.O. is the primary beat type — it replaces dialogue.
-In multi-character scenes: use V.O. sparingly — 2 to 3 beats maximum per episode.
+When to use V.O.:
+— In solo scenes where a character has no one to speak to: V.O. is the primary beat type
+— In multi-character scenes: use sparingly (2–3 per episode maximum) for thoughts the character would never say aloud
+— Never use V.O. to explain what is visually obvious, or to restate what was just said in dialogue
 
 ━━━ BEAT COUNT AND COMPOSITION ━━━
 
 Target: 15–22 beats per episode.
 
-~65% Dialogue (Type B) — conflict, revelation, and power shifts happen through what characters SAY.
-~20% Visual/Action (Type A) — scene moves, physical action, transitions between locations.
-~15% V.O. (Type C) — internal reactions, solo narration.
+Dialogue (Type B): the majority of beats — conflict, revelation, and emotional shifts happen through what characters say to each other.
+Visual/Action (Type A): used to move scenes forward, show physical action, and mark transitions.
+V.O. (Type C): used sparingly except in solo scenes.
 
-Dialogue comes in BURSTS — 3 to 8 consecutive dialogue lines before a Visual beat interrupts.
-Never alternate: one dialogue line → one action beat → one dialogue line. Let conversations run.
-
-━━━ DIALOGUE RULES ━━━
-
-Every line is one sentence. Maximum 15 words. In tense scenes: 3–8 words only.
-
-Stage directions are character-specific — not generic emotion labels:
-  WRONG: [UL] Victoria: (emotionally) "You used my family!"
-  RIGHT: [UL] Victoria: (tears of rage welling up) "You used my family!"
-  WRONG: [UL] Levi: (calmly) "Such a brave little liar."
-  RIGHT: [UL] Levi: (chuckling darkly) "Such a brave little liar."
-
-Characters do not explain — they attack, deflect, question, and reveal under pressure.
-  WRONG: Nina explains that she is an undercover MI6 agent assigned to the ship.
-  RIGHT:
-    [UL] Vigo: (staring at her) Just who the hell are you?
-    [UL] (Visual: Nina slowly stands up. The fragile servant girl persona vanishes. Her posture shifts into razor-sharp military authority.)
-    [UL] Nina: Agent Nina Crawford. MI6.
-
-Questions drive scenes forward — a question forces the other character to reveal something.
-
-━━━ EXCHANGE PATTERN — THE CORE UNIT OF A SCENE ━━━
-
-Every major scene is built on a PRESSURE EXCHANGE between two characters:
-1. Attack or question — one character opens
-2. Deflect or counter — the other doesn't accept the frame
-3. Escalate — pressure increases, more direct, higher stakes
-4. Reveal — something true comes out under pressure
-5. Shift — power or emotional position changes
-
-Multi-character scenes still focus two people at a time — others react silently or offscreen.
-
-━━━ PARALLEL SCENE PATTERN ━━━
-
-When two plot lines are active simultaneously, cut between them within the same episode.
-Use explicit named transitions. Creates two ticking clocks the viewer feels simultaneously.
-
-[UL] (Visual: Quick cut to Andrew's study. LEVI is pacing. The torn ledger lies on the desk.)
-[UL] Andrew: Someone was snooping in the cargo hold?!
-[UL] Levi: That page didn't tear itself.
-[UL] (Visual: Quick cut back to the sisters' cabin. NICOLAI is pacing anxiously.)
-[UL] Nicolai: Levi isn't a fool. He knows someone was down there tonight.
+Dialogue runs in consecutive exchanges — several lines back and forth before a Visual beat interrupts.
+Do not break up conversations with action beats after every single line.
 
 ━━━ EPISODE OPENING ━━━
 
-First beat is always a Visual beat — one of:
-  (A) Pickup: [UL] (Visual: Picks up immediately from Episode N. [brief scene establish].)
-  (B) Establishing: [UL] (Visual: [Location]. [Who is here and what is the immediate pressure].)
+First beat: always a Visual beat.
+  — If continuing from the previous episode: [UL] (Visual: Picks up immediately from Episode N. [establish scene].)
+  — If starting a new scene: [UL] (Visual: [Location and immediate situation in one sharp image].)
 
-Second beat is always V.O. or dialogue — never two consecutive description-only beats.
-Never open with backstory, explanation, or any form of recap.
+Second beat: always V.O. or dialogue — never two Visual beats in a row at the start.
+Never open with backstory, explanation, or recap.
 
 ━━━ EPISODE CLOSING ━━━
 
-Last beat is always an unresolved freeze — a moment that makes watching the next episode feel involuntary.
-It is a Visual beat, a dialogue line, or both in sequence. It is never labelled.
-
-Revelation freeze:
-  [UL] Nina: Agent Nina Crawford. MI6.
-
-Physical danger freeze:
-  [UL] (Visual: A dozen mercenaries step out of the shadows, rifles all aimed at Nicolai's head.)
-
-Simultaneous reveal — split screen:
-  [UL] (Visual: Split screen. ELINA in the cabin, eyes filled with determination. LEVI in the study, exhaling smoke with a wicked grin.)
-  [UL] Elina / Levi: (Simultaneously) The Captain's Ball.
+Last beat: an unresolved moment that makes the next episode feel necessary.
+It is a Visual beat, a dialogue line, or both — never labelled.
+The question it leaves must be unanswerable at the moment of cut.
 
 ━━━ BEFORE WRITING — READ THE FULL DOCUMENT FIRST ━━━
 
-Before writing any reference episode, read these sections in the document:
+Before writing a single beat, read:
 
-1. CHARACTERS SECTION — for every character appearing in this episode:
-   Read their dialogue voice (what they talk about, what they avoid saying, their rhythm and verbal tics),
-   their physical mannerisms (stage directions must match their established behaviour),
-   and their relationships with every other character in this episode.
+1. CHARACTERS SECTION — for every character who appears in this episode:
+   Their dialogue voice: what they talk about, what they avoid saying, their rhythm and verbal tics.
+   Their physical mannerisms: stage directions must match their established behaviour.
+   Their relationships with every other character in this episode.
 
-2. RESEARCH & ORIGINAL STORY — the source material this series is adapted from.
+2. RESEARCH & ORIGINAL STORY — the source material.
    Understand what plot moments and emotional beats this episode is responsible for delivering.
 
 3. EPISODE PLOTS — the plot paragraph for this specific episode.
    Every major beat named in the plot must appear somewhere in the reference episode.
 
-4. ALL EXISTING REFERENCE EPISODES (read every one, in order):
+4. ALL EXISTING REFERENCE EPISODES — read every one already written, in order:
    The final beat of the previous episode is where this episode opens.
-   Check how each character has spoken in prior episodes — match their voice exactly, do not drift.
-   Check what has already been revealed — never repeat information the viewer already has,
-   never contradict what has already happened.
+   Check how each character has spoken so far — match their established voice exactly, do not drift.
+   Check what has already been revealed — never repeat what the viewer already knows, never contradict what has happened.
 
-CHARACTER VOICE CHECK (mandatory before finalising):
-Cover the character name on every dialogue line. You must be able to identify who said it
-from the words and rhythm alone. If you cannot — rewrite the line.
+CHARACTER VOICE CHECK — mandatory before finalising any dialogue:
+Cover the character name on every line. You must know who said it from the words and rhythm alone.
+If you cannot identify the speaker — rewrite the line.
 `;
 
 // ─── Episode Plots Format (shared) ───
