@@ -183,74 +183,123 @@ This content lives on a phone, watched vertically, often in short bursts.
 // ─── Canonical Reference Episode Format (shared) ───
 
 export const CANONICAL_REF_EPISODE_FORMAT = `
-REFERENCE EPISODE CANONICAL FORMAT — use this structure for every reference episode:
+━━━ REFERENCE EPISODE FORMAT ━━━
 
-  [H3] Episode N: Title                ← episode header under [H2] Reference Episodes
-  [P] HOOK: [opening scene text]       ← 1-3 sentences only
-  [UL] beat                            ← one bullet per beat, 8-15 beats total
-  [UL] beat
-  ...
-  [P] CLIFFHANGER: [closing moment]   ← 1-2 sentences only
+STRUCTURE:
+[H3] Episode N: Title     ← under [H2] Reference Episodes
+[UL] first beat           ← NO HOOK label — episode starts immediately
+[UL] beat
+[UL] beat
+...
+[UL] last beat            ← NO CLIFFHANGER label — episode ends on the freeze
 
-HOOK RULES:
-- Opens mid-action — never start with backstory, recap, or "Previously..."
-- If picking up from a previous episode: continue directly from the cliffhanger moment
-- If a new scene: establish location + character state in one sharp visual image
-- 1-3 sentences maximum
+━━━ THREE BEAT TYPES — USE THESE EXACT FORMATS ━━━
 
-BEAT TYPES — mix all four across the episode:
+── TYPE A: VISUAL / ACTION ──
+For scene-setting, physical action, transitions, and silent reaction shots.
+Format: [UL] (Visual: description in third-person present tense.)
 
-(a) Action beat — what a character physically does. Present tense, visual, specific.
-    [UL] Kira grabs the hanger so hard it snaps.
-    [UL] She steps on the 1,000 yen note, grinding it into the carpet with her heel.
+Scene establishing / pickup:
+[UL] (Visual: Picks up immediately from Episode N. [one line: where we are, who is here].)
+[UL] (Visual: [Location]. [Who is present. What is the immediate physical situation].)
 
-(b) Dialogue — CHARACTER NAME: "line" or CHARACTER NAME: [stage direction] "line"
-    [UL] Ray: "You're a human being, not a pack animal!"
-    [UL] Jade: [grabbing his arm] "Please. Don't leave. Not like this."
-    [UL] Leo: [not looking up from his espresso] "The vegetable assassin returns."
+Physical action:
+[UL] (Visual: [Character] [does something specific and visible]. [Physical consequence].)
 
-(c) Internal monologue — INTERNAL MONOLOGUE: *"italicized inner thought"*
-    [UL] INTERNAL MONOLOGUE: *"He's warm. And he smells like sandalwood and rain. I hate that I notice."*
+Silent reaction — no words, just the face or body:
+[UL] (Visual: [Character]'s expression shifts. [Specific physical detail of what that looks like].)
 
-(d) Emotional / visual / atmosphere beat — sensory detail, non-verbal reaction, mood shift
-    [UL] The grey mist around her pulses into cold, white-hot light.
-    [UL] The entire crew snaps out of the silence and claps. Ruriko's knuckles turn white on her parasol.
+Scene transition — name the cut:
+[UL] (Visual: Smash cut to [new location]. [Brief establish].)
+[UL] (Visual: Cut to [location].)
 
-BEAT COMPOSITION TARGET — across 10-15 beats per episode:
-- ~50% dialogue beats (5-8 lines) — dialogue is the primary driver of conflict and revelation
-- ~30% action beats (3-4 lines) — what characters physically do
-- ~20% internal monologue + emotional/atmosphere (2-3 lines)
+Insert shot — a significant object gets its own beat:
+[UL] Insert of [the specific object and what makes it significant].
 
-BEAT COUNT: 10-15 beats per episode (never fewer than 10)
+Offscreen sound or voice:
+[UL] [CharacterName] (O.S.): "line"
+[UL] [CharacterName] (O.S., shouting): "line"
 
-MINIMUM DIALOGUE RULE — mandatory for every reference episode:
-- At least 6 dialogue beats per episode
-- At least one continuous exchange of 3 or more consecutive dialogue lines between characters
-- Every major conflict beat, power shift, or revelation must have dialogue attached to it
+── TYPE B: DIALOGUE ──
+Spoken lines. Stage direction is embedded inside the attribution — not outside it.
+Format A: [UL] CharacterName (stage direction): "spoken line"
+Format B: [UL] CharacterName: (stage direction) "spoken line"
+Format C: [UL] CharacterName: "spoken line"    ← when no direction is needed
 
-DIALOGUE IS THE STORY:
-In vertical microdrama, characters talk through the conflict — they don't just act around it. Two characters confronting each other, revealing secrets, attacking or deflecting with words — this is what the viewer watches for. Do not bury conflict under description. Show it through what characters SAY.
+Over radio or comms: [UL] CharacterName (V.O., over radio): "line"
 
-COMMON MISTAKE — DO NOT DO THIS:
-Writing three or more action/atmosphere beats in a row without dialogue. Writing "the room is tense" instead of writing the lines that make it tense. Environment and atmosphere exist only to frame the dialogue — not to replace it.
+Stage directions must be character-specific physical actions or precise emotional states — not generic labels:
+  WRONG: [UL] Mia: (sadly) "I trusted you."
+  RIGHT: [UL] Mia: (voice going very quiet) "I trusted you."
+  WRONG: [UL] Daniel: (angrily) "Get out."
+  RIGHT: [UL] Daniel: (jaw tight, not looking at her) "Get out."
 
-DIALOGUE RULES:
-- Every line must reveal character personality OR advance the plot — never filler
-- Maximum 1-2 sentences per line
-- Use stage directions in brackets when physical action matters: [turning away], [dropping his phone]
-- Use sensory specificity: sounds in CAPS (THUD, CRACK, SNAP, CHOP CHOP CHOP), textures, smells, temperatures
+Every dialogue line must do at least one of these — if it does none, cut it:
+  — Reveal something about who this character is
+  — Shift the power or emotional balance in the scene
+  — Advance the plot toward the episode's closing moment
 
-CHARACTER VOICE — dialogue must sound like the character:
-- An ice-queen CEO speaks in clipped, transactional sentences
-- A revenge-driven girl speaks in cold, controlled whispers or sudden explosive outbursts
-- A calm, sardonic musician answers with minimal words and dry observations
-- Establish voice from early episodes and maintain it throughout
+No line exists to fill silence, confirm what we already know, or repeat what was just said.
 
-CLIFFHANGER RULES:
-- 1-2 sentences only — punchy, not drawn out
-- Always unresolved — never close the loop
-- Types: shocking revelation, power shift, physical danger, emotional peak, frozen confrontation
-- The viewer must feel compelled to watch the next episode immediately
+── TYPE C: V.O. ──
+A character's internal thought — what cannot be shown on screen.
+Format: [UL] CharacterName (V.O.): thought
+No quotes. No asterisks. No INTERNAL MONOLOGUE prefix.
+
+When to use V.O.:
+— In solo scenes where a character has no one to speak to: V.O. is the primary beat type
+— In multi-character scenes: use sparingly (2–3 per episode maximum) for thoughts the character would never say aloud
+— Never use V.O. to explain what is visually obvious, or to restate what was just said in dialogue
+
+━━━ BEAT COUNT AND COMPOSITION ━━━
+
+Target: 15–22 beats per episode.
+
+Dialogue (Type B): the majority of beats — conflict, revelation, and emotional shifts happen through what characters say to each other.
+Visual/Action (Type A): used to move scenes forward, show physical action, and mark transitions.
+V.O. (Type C): used sparingly except in solo scenes.
+
+Dialogue runs in consecutive exchanges — several lines back and forth before a Visual beat interrupts.
+Do not break up conversations with action beats after every single line.
+
+━━━ EPISODE OPENING ━━━
+
+First beat: always a Visual beat.
+  — If continuing from the previous episode: [UL] (Visual: Picks up immediately from Episode N. [establish scene].)
+  — If starting a new scene: [UL] (Visual: [Location and immediate situation in one sharp image].)
+
+Second beat: always V.O. or dialogue — never two Visual beats in a row at the start.
+Never open with backstory, explanation, or recap.
+
+━━━ EPISODE CLOSING ━━━
+
+Last beat: an unresolved moment that makes the next episode feel necessary.
+It is a Visual beat, a dialogue line, or both — never labelled.
+The question it leaves must be unanswerable at the moment of cut.
+
+━━━ BEFORE WRITING — READ THE FULL DOCUMENT FIRST ━━━
+
+Before writing a single beat, read:
+
+1. CHARACTERS SECTION — for every character who appears in this episode:
+   Their dialogue voice: what they talk about, what they avoid saying, their rhythm and verbal tics.
+   Their physical mannerisms: stage directions must match their established behaviour.
+   Their relationships with every other character in this episode.
+
+2. RESEARCH & ORIGINAL STORY — the source material.
+   Understand what plot moments and emotional beats this episode is responsible for delivering.
+
+3. EPISODE PLOTS — the plot paragraph for this specific episode.
+   Every major beat named in the plot must appear somewhere in the reference episode.
+
+4. ALL EXISTING REFERENCE EPISODES — read every one already written, in order:
+   The final beat of the previous episode is where this episode opens.
+   Check how each character has spoken so far — match their established voice exactly, do not drift.
+   Check what has already been revealed — never repeat what the viewer already knows, never contradict what has happened.
+
+CHARACTER VOICE CHECK — mandatory before finalising any dialogue:
+Cover the character name on every line. You must know who said it from the words and rhythm alone.
+If you cannot identify the speaker — rewrite the line.
 `;
 
 // ─── Episode Plots Format (shared) ───
@@ -550,26 +599,24 @@ ${EPISODE_PLOTS_FORMAT}
 COMMON INSTRUCTIONS — how to handle them:
 
 "convert to correct format" / "transform" / "reformat":
-→ Convert selected content into the Reference Episode canonical format.
+→ Convert selected content into the Reference Episode canonical format (Visual/Dialogue/V.O. beat types — no HOOK label, no CLIFFHANGER label).
 → Preserve ALL story content — do not invent new plot, do not remove any beats.
-→ If content is a prose summary: extract the opening as HOOK, break the body into discrete beats (action / dialogue / internal monologue / emotional), identify the final line as CLIFFHANGER.
-→ If content is partially structured: standardise to the canonical format, flesh out thin beats.
+→ Before converting: read the Characters section for each character's voice, and read any existing Reference Episodes to maintain consistency.
 
 "generate reference episodes" / "generate episodes":
-→ Treat the selected content as episode plots (or read Episode Plots from the full document context if not in selection).
-→ Expand each plot paragraph into a full reference episode using the canonical format.
-→ Each generated episode must have 10-15 beats with a MINIMUM of 6 dialogue beats.
-→ Dialogue must carry the conflict forward — characters reveal, confront, and shift power through what they say. At least one exchange must be 3 or more consecutive dialogue lines between characters.
-→ Do NOT substitute description or atmosphere beats for dialogue. Every conflict moment and every revelation must have a line of dialogue attached.
-→ The first episode's HOOK picks up from the previous reference episode's CLIFFHANGER (read from full document context), or opens fresh if this is episode 1.
-→ Each subsequent episode's HOOK picks up from the previous episode's CLIFFHANGER.
-→ Output the reference episodes ONLY in canonical format — do not reproduce episode plot paragraphs in the output.
+→ Read the Episode Plots section from the full document context to understand what each episode must deliver.
+→ Before writing a single beat: read the Characters section (voice, mannerisms, relationships for every character appearing in this episode), the Research & Original Story section (source material context), and ALL existing Reference Episodes in order — to continue from the last beat of the previous episode and match established character voices exactly.
+→ Expand each plot paragraph into a full reference episode using the canonical format: Visual/Action, Dialogue, and V.O. beats. No HOOK label. No CLIFFHANGER label.
+→ Target 15–22 beats. ~65% dialogue bursts (3–8 consecutive lines before a Visual interrupts), ~20% Visual/Action, ~15% V.O.
+→ Every episode opens with a Visual beat establishing the scene or picking up from the previous episode's last beat.
+→ Every episode ends on an unresolved freeze — the last beat is never labelled.
+→ Output reference episodes ONLY — do not reproduce episode plot paragraphs.
 
 "regenerate" / "rewrite":
 → Rewrite selected reference episodes in canonical format with improved quality.
-→ Match character voice and tone from the full document context.
+→ Before rewriting: read the Characters section and ALL existing Reference Episodes to match established voice and continuity exactly.
 → Preserve the story beats — do not change what happens, only how it is written.
-→ Improve: dialogue specificity, sensory detail, internal monologue depth, cliffhanger punch.
+→ Improve: dialogue specificity, character-specific stage directions, V.O. depth, closing freeze impact.
 
 "improve dialogue" / "fix dialogue":
 → Rewrite dialogue beats only ([UL] lines that contain CHARACTER NAME: "...").
@@ -662,10 +709,10 @@ ${CANONICAL_REF_EPISODE_FORMAT}
 
 CRITICAL RULES FOR THE DRAFT:
 1. Episode Plots: exactly 5. Specific — not vague. Every plot must have a clear hook concept AND cliffhanger concept.
-2. Reference Episodes: exactly 2. Full canonical format. 10-15 beats each. MINIMUM 6 dialogue beats per episode — dialogue carries the conflict forward. At least one back-and-forth exchange of 3+ consecutive lines between characters. Internal monologue. Strong cliffhangers. Do NOT write description-heavy scenes — conflict plays out through what characters say to each other, not through narration.
+2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. 15–22 beats each. ~65% dialogue bursts, ~20% visual/action, ~15% V.O. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze.
 3. Characters: 2-4 main characters. Every character section MUST include voice + relationships — these are non-optional.
-4. Episode 1 reference episode HOOK must grab the viewer immediately — no slow build.
-5. Episode 2 HOOK must pick up directly from Episode 1's CLIFFHANGER.
+4. Episode 1 must grab the viewer in the first beat — no setup, no backstory, start in the action.
+5. Episode 2 must continue from Episode 1's closing freeze — same scene, same tension, picked up mid-moment.
 6. Character voice in dialogue must be distinct — each character should sound unmistakably like themselves.
 7. Do NOT write more than 5 episode plots or 2 reference episodes in the first draft.
 
