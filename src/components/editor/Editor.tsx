@@ -191,6 +191,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
     "saved"
   );
+  const saveStatusRef = useRef<"saved" | "saving" | "unsaved">("saved");
+  useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
+  // Tracks when our last save completed (client time). Used by the poll to
+  // distinguish stale server responses from genuine updates by other users.
+  const lastSavedAtRef = useRef(0);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const editor = useEditor({
@@ -635,6 +640,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        lastSavedAtRef.current = Date.now();
         setSaveStatus("saved");
       } catch {
         setSaveStatus("unsaved");
@@ -658,9 +664,17 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
         // Only update if server content differs (avoids cursor jumps for owner)
         if (JSON.stringify(serverContent) !== JSON.stringify(localContent)) {
-          // For reviewers: always update (they're read-only)
-          // For owners: only update if they have no unsaved changes
-          if (!isOwner || saveStatus === "saved") {
+          // For reviewers: always update (they're read-only).
+          // For owners: only update if (a) no unsaved changes, AND (b) the server
+          // version is genuinely newer than our last save — i.e. another user wrote
+          // to the document after us (e.g. a reviewer adding a comment mark).
+          // The 500ms buffer covers server-client clock skew.
+          const serverUpdatedAt = data.updatedAt
+            ? new Date(data.updatedAt).getTime()
+            : 0;
+          const isGenuinelyNewer =
+            serverUpdatedAt > lastSavedAtRef.current - 500;
+          if (!isOwner || (saveStatusRef.current === "saved" && isGenuinelyNewer)) {
             const { from } = editor.state.selection;
             editor.commands.setContent(serverContent, { emitUpdate: false });
             // Restore cursor position
@@ -680,7 +694,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [editor, documentId, isOwner, saveStatus]);
+  }, [editor, documentId, isOwner]);
 
   // Keyboard shortcut for manual save
   useEffect(() => {
@@ -765,6 +779,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const triggerSave = useCallback(() => {
     if (!editor) return;
+    setSaveStatus("unsaved");
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
       saveDocument(editor.getJSON());
