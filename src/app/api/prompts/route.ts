@@ -14,6 +14,12 @@ import {
   EPISODE_PLOTS_FORMAT,
   MICRODRAMA_SCRIPTWRITER_KNOWLEDGE,
   MICRODRAMA_ADAPTATION_KNOWLEDGE,
+  MICRODRAMA_EPISODE_TOOLKIT,
+  MICRODRAMA_STORY_ENGINE,
+  MICRODRAMA_SERIES_ENGINE,
+  MICRODRAMA_CHARACTER_ENGINE,
+  MICRODRAMA_GENRE_CONTRACT,
+  PLOT_INTEGRITY_AUDIT,
   EPISODE_PLOT_ADAPTATION_WORKFLOW,
 } from "@/lib/ai/prompts";
 
@@ -30,7 +36,13 @@ const DEFAULTS = [
   { id: "episode_plots_format", label: "Episode Plots Format Spec", content: EPISODE_PLOTS_FORMAT },
   { id: "scriptwriter_knowledge", label: "Microdrama Craft Knowledge", content: MICRODRAMA_SCRIPTWRITER_KNOWLEDGE },
   { id: "adaptation_knowledge", label: "Microdrama Adaptation Knowledge (Arc & Compression)", content: MICRODRAMA_ADAPTATION_KNOWLEDGE },
+  { id: "episode_toolkit", label: "Microdrama Episode Toolkit (Beat Economy, 4-Part Shape, Value Shift, Beat Types, Chain Logic)", content: MICRODRAMA_EPISODE_TOOLKIT },
+  { id: "story_engine", label: "Microdrama Story Engine (Forbidden Question, Relationship Heartbeat, Emotional Temperature, A/B/C Beat Counts, Information Drip)", content: MICRODRAMA_STORY_ENGINE },
+  { id: "series_engine", label: "Microdrama Series Engine (Series Spine, Escalation Ladders, Character Arc, Villain Curve, Session Structure)", content: MICRODRAMA_SERIES_ENGINE },
+  { id: "plot_integrity_audit", label: "Plot Integrity Audit (Why Chain + Scene Logic + Character Introduction)", content: PLOT_INTEGRITY_AUDIT },
   { id: "adaptation_workflow", label: "Episode Plot Adaptation Workflow", content: EPISODE_PLOT_ADAPTATION_WORKFLOW },
+  { id: "character_engine", label: "Microdrama Character Engine (Engine / Wall / Witness / Nuke)", content: MICRODRAMA_CHARACTER_ENGINE },
+  { id: "genre_contract", label: "Microdrama Genre Contract (Shock / Hurt / Release by Genre)", content: MICRODRAMA_GENRE_CONTRACT },
 ];
 
 // GET /api/prompts — list all prompts (readable by everyone)

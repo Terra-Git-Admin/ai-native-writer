@@ -38,11 +38,13 @@ const FONT_COLORS = [
 function ToolbarButton({
   onClick,
   isActive,
+  disabled,
   children,
   title,
 }: {
   onClick: () => void;
   isActive?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
   title: string;
 }) {
@@ -51,8 +53,11 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       title={title}
+      disabled={disabled}
       className={`rounded px-2 py-1 text-sm font-medium transition-colors ${
-        isActive
+        disabled
+          ? "cursor-not-allowed opacity-35 text-gray-400"
+          : isActive
           ? "bg-gray-200 text-gray-900"
           : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
       }`}
@@ -292,12 +297,14 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
       {/* Undo / Redo */}
       <ToolbarButton
         onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
         title="Undo (Cmd+Z)"
       >
         Undo
       </ToolbarButton>
       <ToolbarButton
         onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
         title="Redo (Cmd+Shift+Z)"
       >
         Redo

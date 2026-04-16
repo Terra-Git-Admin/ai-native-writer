@@ -59,6 +59,104 @@ Examples of when to clarify:
 - "make it better" (what aspect? more detail? more concise? different tone?)
 `;
 
+// ─── Scene Construction Toolkit (shared) ───
+
+export const MICRODRAMA_EPISODE_TOOLKIT = `
+━━━ MICRODRAMA EPISODE TOOLKIT ━━━
+
+The fundamental unit of microdrama is the BEAT, not the scene. An episode is 60–90 seconds — 8 to 15 beats. Each beat costs 6–12 seconds of screen time. All construction frameworks are calibrated to this constraint.
+
+━━━ JOLT CADENCE ━━━
+
+Minimum 2 emotional spikes per 90-second episode. This is the floor, not the ceiling.
+
+A JOLT is any moment where the viewer's emotional state shifts abruptly — a revelation, betrayal, collision, reversal, physical or emotional shock. It does not need to be loud. A whispered admission can jolt as hard as a slap.
+
+THE 40-SECOND RULE: one jolt in the first 40 seconds, one jolt in the second 40 seconds. If either half of the episode has no jolt — the viewer's attention drifts.
+
+JOLT PLACEMENT CHECK: For each episode, name the two jolts and their approximate word position. If either is missing or both land in the same zone — redistribute or add one.
+
+━━━ THE BEAT ECONOMY ━━━
+
+Every beat must do at least 2 of these 3:
+1. Reveal character — who this person is under pressure, fear, or desire
+2. Advance plot — something changes about the situation or relationships
+3. Build tension — the stakes or uncertainty increase
+
+A beat doing only 1 of 3 is weak. A beat doing 0 is cut without exception.
+
+THE CHECK: Before finalising an episode, count the beats. For each one, name what it does. Any beat that only advances plot without revealing character or building tension — rewrite until it does both.
+
+━━━ THE 4-PART EPISODE SHAPE ━━━
+
+Every episode has this shape — not 3 acts, but one compressed story unit:
+
+HOOK (1–2 beats): The episode's central question opens. Viewer decides to stay or leave. Must catch the emotional momentum from the prior FREEZE — deliver the immediate aftermath of that cliffhanger while immediately opening the new episode's question.
+
+ESCALATION (5–9 beats): The central question is complicated, never answered. YES-BUT / NO-AND progressions. Each beat makes the situation more charged or more uncertain. Nothing resolves.
+
+PEAK (1–2 beats): Maximum tension for this episode. A reversal beat, a revelation beat, or a confrontation freeze.
+
+FREEZE (1 beat): The episode's final beat. The central question is left unresolved. The cliffhanger type is chosen deliberately from the Cliffhanger Taxonomy — variety tracked across the series.
+
+━━━ EPISODE VALUE SHIFT ━━━
+
+Every episode must move a dominant dramatic value. Values: love/hate, trust/suspicion, power/powerlessness, hope/despair, loyalty/betrayal, safety/danger, connection/isolation.
+
+THE CHECK: Name the dominant value at the HOOK. Name it at the FREEZE. If they are the same — the episode changed nothing. Rewrite.
+
+The shift does not need to be complete. An episode can move from hope → fractured hope. The direction of change matters, not the destination.
+
+━━━ YES, BUT / NO, AND — AT BEAT LEVEL ━━━
+
+Apply within the episode at the level of individual beats:
+
+YES, BUT: A character succeeds — but a new complication is immediately created.
+NO, AND: A character fails — and the situation worsens.
+
+NEVER a plain YES or NO within an episode. Every answer opens a new complication. This applies beat by beat, not just at episode level.
+
+At series level: the protagonist's deepest want resolves as YES-BUT or NO-AND at every episode boundary until the finale, which delivers the first plain resolution.
+
+━━━ BEAT TYPES ━━━
+
+Six functional types — vary deliberately across each episode:
+
+REVELATION BEAT: New information surfaces that changes how the viewer understands the situation. Every episode needs at minimum one. The best revelations retroactively reframe prior episodes.
+
+REVERSAL BEAT: The most powerful beat type. Both a revelation AND a situation change in the same moment — what seemed true is revealed to be its opposite while the situation simultaneously changes.
+  Weak: We learn she was lying about her identity. The conversation continues.
+  Strong: We learn she was lying — AND in that same beat she uses the lie to take control of the room.
+Plan one at a pacing checkpoint every 5 episodes.
+
+CONFRONTATION BEAT: Direct collision between two wills. Neither backs down. Ends with one party forced to a new position, or suspended into the FREEZE.
+
+DECISION BEAT: A character commits to an irrevocable choice. The weight comes from what they give up by choosing. Most powerful when the viewer can see the cost.
+
+CONNECTION BEAT: Genuine emotional bond — closeness, understanding, or vulnerability. Use sparingly: maximum 2 per episode. Its rarity is its power. A connection beat in a world of constant confrontation hits harder than any fight.
+
+ESCALATION BEAT: Pushes existing tension higher without resolving anything. The situation becomes more dangerous, more uncertain, or more loaded.
+
+━━━ THE CHAIN LOGIC ━━━
+
+The HOOK of this episode picks up from the FREEZE of the prior episode. The viewer is already in emotional motion — the HOOK must catch that motion, not reset it.
+
+The HOOK does two things simultaneously:
+1. Delivers the immediate emotional aftermath of the prior FREEZE (not the answer — the continuation)
+2. Opens the new episode's central question
+
+━━━ THE OBLIGATORY EXCHANGE ━━━
+
+Every major relationship has one exchange the series is building toward — the confrontation, confession, or admission that has been circling for episodes. In 90 seconds this is 1–2 beats, not a long scene.
+
+Identify it before writing the series:
+— What is the thing neither character has said directly, but both know?
+— What external pressure will force it into the open?
+— What episode? (Typically: series midpoint or final act, not before ep 20.)
+
+Every episode between these two characters before the obligatory exchange is setup. Every episode after is consequence. Without knowing the exchange in advance, prior episodes have no direction.
+`;
+
 // ─── Microdrama Scriptwriter Knowledge (shared) ───
 
 export const MICRODRAMA_SCRIPTWRITER_KNOWLEDGE = `
@@ -92,26 +190,108 @@ Never open with:
 - A character thinking or reflecting without immediate stakes
 - "Previously on..." style recap
 
-━━━ CLIFFHANGER PSYCHOLOGY ━━━
+━━━ CLIFFHANGER TAXONOMY ━━━
 A cliffhanger works when the viewer cannot predict the outcome AND emotionally cannot accept not knowing.
+Always name the cliffhanger type when proposing an episode — this enables variety tracking across the series.
 
-The 5 cliffhanger types:
-1. Revelation cliffhanger — a character learns something that reframes everything before it.
-   "She chose Oliver. The youngest. The only biological son. The true heir."
-2. Confrontation freeze — two characters face off at peak tension, outcome unknown.
-   Kira slams her hand against the door next to Mary's head. "You want to play the villain? Sit down. Class is in session."
-3. Power reversal — the character who had control suddenly loses it, or vice versa.
-   The giant red X illuminates the stage. "Disqualified."
-4. Physical danger — a character is in immediate peril, fate unknown.
-   Kira's boot hits slick mud. A sickening SNAP. She screams as her ankle gives way.
-5. Emotional peak decision — a character makes a shocking choice or reaches a breaking point.
-   Kira picks up the gum wrapper and crushes it. "I'm not giving up. I'm going to make him beg for mercy."
+THE 12 CLIFFHANGER TYPES — know all of them. Use them with deliberate variety.
 
-Cliffhanger rules:
-- 1-2 sentences. Punchy. Not drawn out.
-- Never resolve the tension — always leave something unanswered or at stake.
-- The best cliffhangers make the viewer feel the episode ended at exactly the wrong moment.
-- Avoid weak cliffhangers: a character "decides something" vaguely, or someone "arrives" with no stakes.
+TYPE 1 — INFORMATION BOMB
+A revelation that retroactively reframes the meaning of everything the viewer thought they understood. Not just new information — a fact that changes how we interpret all prior events.
+Example: "She chose Oliver. The youngest. The only biological son. The true heir." Every prior scene with the mother now reads differently.
+When: After a period of false security. Maximum impact when the audience felt certain they understood.
+
+TYPE 2 — IDENTITY FRACTURE
+A character is revealed to be someone fundamentally different from who we believed. Undercover agent. Impostor. Secret family connection. Hidden past. False name.
+Example: The quiet new employee who has been befriending the protagonist opens their desk drawer — a photo of the protagonist pinned next to a list of names. One circled.
+When: After building trust over multiple episodes. The longer the trust, the more devastating the fracture.
+
+TYPE 3 — BETRAYAL
+A trusted character makes a specific, irreversible choice against someone they appeared to protect. Not a misunderstanding — a deliberate act.
+Example: The door locks from the outside. The protagonist realises their closest ally made the call.
+When: Never in the first 5 episodes — requires established trust. Most powerful in phases 2–3.
+
+TYPE 4 — CONVERGENCE
+Two storylines running in parallel are about to collide. Episode ends just before the collision — both trajectories are visible heading toward the same point.
+Example: A-story character is rushing to the address. B-story is already there in crisis. Episode cuts as A-story's hand is on the door handle.
+When: After both storylines have built enough weight independently. Their intersection creates pressure neither could carry alone.
+
+TYPE 5 — THRESHOLD MOMENT
+A character stands at the point of no return. They haven't crossed it yet. Episode ends before the choice. The viewer knows what they are about to do — and that it cannot be undone.
+Example: Her hand rests on the phone. One call ends everything she has. Episode cuts before she dials.
+When: When a character has reached the logical culmination of their arc. The tension is not whether they will — it is whether they can live with it.
+
+TYPE 6 — CONFRONTATION FREEZE
+Two characters face off at maximum tension. Outcome suspended. Neither will back down.
+Example: Kira slams her hand against the wall next to Mary's head. "You want to play the villain? Sit down. Class is in session."
+When: Can appear throughout the series — but never in consecutive episodes.
+
+TYPE 7 — POWER INVERSION
+The person who held all the power suddenly has none — or vice versa. The dynamic that governed the relationship reverses completely.
+Example: The executive delivers her ultimatum. The protagonist opens a folder. "Before you finish that sentence — page three."
+When: After an extended period where the imbalance felt permanent. The longer it seemed fixed, the more dramatic the flip.
+
+TYPE 8 — TICKING CLOCK ACTIVATED
+A countdown or hard deadline is introduced. The episode ends with the clock running — all subsequent episodes are now urgently time-pressured.
+Example: "You have 48 hours." The car door closes. The engine fades.
+When: When the story needs external momentum injected. Powerful as a phase 2 escalation device.
+
+TYPE 9 — ABSENCE REVELATION
+Something or someone that should be present is gone — and their absence means something irreversible has happened.
+Example: She arrives at the meeting point. The chair is empty. His coat still hangs on the hook. His coffee still steams.
+When: For maximum dread. The viewer's imagination fills the absence — often worse than anything shown directly.
+
+TYPE 10 — PHYSICAL JEOPARDY
+A character is in immediate physical danger, fate unknown.
+Example: Kira's boot hits slick mud. A sickening SNAP. She screams as her ankle gives way.
+Use sparingly: the most literal type. Effective only when the viewer is deeply invested. Overuse creates numbness.
+
+TYPE 11 — EMOTIONAL RUPTURE
+A relationship breaks or forms in a way that cannot be undone — not a fight, but a fundamental shift in the bond's nature. Consequence unresolved.
+Example: He says the thing that cannot be unsaid. She doesn't cry. She nods once, and turns away.
+When: After careful setup of the relationship. The rupture must feel both inevitable and shocking simultaneously.
+
+TYPE 12 — THE WRONG CHOICE (DRAMATIC IRONY)
+The viewer watches a character make a catastrophic mistake in real time. The viewer knows the consequence. The character does not. Episode cuts before the consequence lands.
+Example: She sends the message without re-reading it. We see the recipient's name. The viewer's stomach drops.
+When: When dramatic irony has been deliberately built — the viewer must know just enough more than the character to feel the dread before they do.
+
+━━━ CLIFFHANGER VARIETY RULES ━━━
+— Never use the same type in consecutive episodes. Repetition numbs.
+— By episode 10: at least 5 different types used.
+— By episode 20: at least 8 different types used.
+— In any 10-episode block: no single type more than 3 times.
+— Alternate EXTERNAL types (Physical Jeopardy, Ticking Clock, Convergence, Confrontation Freeze) with INTERNAL types (Emotional Rupture, Identity Fracture, Threshold Moment, Betrayal) to maintain tonal range.
+
+PHASE DISTRIBUTION (recommended):
+Phase 1 (eps 1–8): Lead with Information Bomb, Confrontation Freeze, Betrayal — establishes who has power and why it's unstable.
+Phase 2 (eps 9–20): Introduce Convergence, Ticking Clock, Identity Fracture, Threshold Moment — complexity and urgency.
+Phase 3 (eps 21–33): Favour Emotional Rupture, Wrong Choice, Identity Fracture — maximum personal cost.
+Phase 4 (eps 34–45): Favour Convergence, Confrontation Freeze, Absence Revelation, Threshold Moment — drives to resolution.
+
+CLIFFHANGER RULES:
+— 1–2 sentences. Punchy. Not drawn out.
+— Never resolve the tension — always leave something unanswered or at stake.
+— The best cliffhangers make the viewer feel the episode ended at exactly the wrong moment.
+— Avoid weak cliffhangers: a character "decides something" vaguely, or someone "arrives" with no stakes attached.
+
+━━━ THE TAIL HOOK ━━━
+
+The most common cliffhanger mistake: ending on a line of dialogue. Dialogue can be absorbed and processed. What the viewer cannot stop thinking about is a physical action already beginning — the consequence in motion, cut before the outcome.
+
+RULE: Cut on the consequence beginning, not on the dialogue that precipitates it.
+
+The cut happens at the MOMENT OF ACTION — not before, not after:
+— The pen touching the paper (not "she decides to sign it")
+— The thumb pressing send (not "she realises she has to send the message")
+— The door beginning to open from outside (not "they hear the lock turning")
+— The trigger beginning to travel (not the gunshot)
+
+What the viewer's brain does: fills in the consequence. Imagination is always worse — and more personal — than anything you show.
+
+PRE-LAP AUDIO: The most effective exits add a sound under black. The last visual cuts — but the audio of what's coming has already started. A voice. A door. A sound the viewer cannot immediately place. The brain cannot stop without knowing what it is.
+
+THE CHECK: Read the last three lines of your episode. If the final beat is a line of dialogue — find the physical action that follows that line, and cut there instead.
 
 ━━━ DIALOGUE CRAFT ━━━
 Bad microdrama dialogue: characters explain what they feel, what they want, or what happened.
@@ -178,6 +358,103 @@ This content lives on a phone, watched vertically, often in short bursts.
 - Dialogue must work with partial audio — many viewers watch without full sound. Physical action and visual beats carry equal weight to dialogue.
 - Episodes are watched back-to-back — maintain momentum between episodes. The end of one episode should make watching the next feel involuntary.
 - No slow burns in the first 10 episodes — establish the central conflict and the key relationship dynamic within the first 3 episodes. The viewer needs to be invested before they'll tolerate a slower beat.
+`;
+
+// ─── Character Engine (shared) ───
+
+export const MICRODRAMA_CHARACTER_ENGINE = `
+━━━ MICRODRAMA CHARACTER ENGINE ━━━
+
+Design characters by function first, then flesh. Every character must occupy one of these roles — or serve no function in the story.
+
+ENGINE
+The character who makes choices the story cannot walk back. When they act, the situation changes permanently. Usually the protagonist, but not always.
+THE TEST: Name the three irreversible choices the Engine makes across the series. If you cannot, the character is reactive, not driving. Rewrite until they are the source of the story's momentum.
+
+WALL
+The price tag with a face. When the Wall speaks or acts, concrete things change — money, access, status, safety, opportunity. The Wall doesn't need to be a villain. They are the cost of what the Engine wants made visible and personal.
+THE TEST: Name exactly what the Wall controls that the Engine needs or fears. If the answer is vague ("power", "authority"), make it specific. The Wall is only effective when they hold something the viewer understands is real.
+
+WITNESS
+The audience's group chat made flesh. The Witness picks a side, says the unsayable, and gives the scene air to breathe after the collision. They verbalise what the viewer is feeling but no one in the scene will admit.
+The absence of a Witness is one of the most common reasons shows feel like "a loop of misery" — when every character is locked in conflict and no one ever speaks the emotional truth plainly, the viewer loses their anchor.
+THE TEST: Name one thing the Witness says that no other character in the scene could say. If you cannot — give them a line that cuts through the subtext and speaks what everyone knows but cannot say.
+THE LIMIT: The Witness must also have their own stake. A character who only observes and comments has no arc. They must want something too — and their witness function should put that want at risk.
+
+NUKE
+The truth that keeps almost exploding. The Nuke is a character (or a secret a character holds) whose full revelation would end the current dynamic permanently. Used strategically — almost exploding multiple times before the actual detonation. Each near-explosion raises the stakes.
+THE TEST: Name the one thing the Nuke knows or is that, if revealed, would change everything. Name the episode at which it detonates. Every episode before that is a near-miss — plan them.
+
+━━━ HOW TO USE THE FRAMEWORK ━━━
+
+Step 1: Assign each major character a primary function (Engine / Wall / Witness / Nuke). A character can serve secondary functions but must have a clear primary one.
+Step 2: Check for the Witness gap. If you have Engine, Wall, and Nuke but no Witness — add one, or give an existing character the Witness function. Shows without a Witness lose emotional texture.
+Step 3: This is a DIAGNOSTIC CHECK, not a full character design brief. Characters are people first. The framework tells you what function they serve in the story's mechanics; it does not replace psychological depth, specific backstory, or distinct voice.
+
+━━━ CHARACTERS AS PEOPLE ━━━
+
+The functional framework catches structural gaps. But the details that make viewers stay are the ones the framework cannot name: the specific way a character says something under pressure, the object they keep touching when nervous, the phrase they always use when hiding something, the one relationship where their guard drops.
+
+Before finalising any character, identify:
+— Their specific verbal tic or speech pattern (one concrete example)
+— The one thing they want that they can never ask for directly
+— How they behave in private vs. in public — what mask do they wear, and when does it slip?
+— The object, place, or person that exposes their wound without words
+`;
+
+// ─── Genre Contract (shared) ───
+
+export const MICRODRAMA_GENRE_CONTRACT = `
+━━━ MICRODRAMA GENRE CONTRACT ━━━
+
+Before episode 1, name the emotional promise of your series. Every genre has a primary emotional product — the feeling the viewer is paying for. Knowing it shapes every episode.
+
+━━━ THE THREE-BEAT EMOTIONAL ARC ━━━
+
+SHOCK: The disruption. Something happens that should not be possible in this character's world. Breaks the expected order.
+HURT: The sustained emotional cost. The wound the shock opens. The thing the viewer aches with the characters through.
+RELEASE: The payoff. The moment where the hurt resolves — or crystallises into final loss. Not necessarily happy. But the emotional debt must be paid.
+
+Every episode delivers a micro-version of this arc. The series delivers the full arc.
+
+━━━ GENRE EMOTIONAL CONTRACTS ━━━
+
+ROMANCE
+Primary product: the exquisite hurt of almost.
+Shock: unexpected collision — they should not want each other, but do.
+Hurt: sustained nearness with a wall between them — every episode asks "will they?" and doesn't answer.
+Release: a public or irrevocable choice that settles the question one way or another.
+Contract violation: If the release feels arbitrary, or the hurt isn't sustained through specific episodes of almost-but-not-quite, the viewer doesn't feel they earned the resolution.
+
+REVENGE
+Primary product: the pleasure of watching power invert.
+Shock: the original humiliation — must be felt as genuinely unjust and personal.
+Hurt: sustained underestimation — every episode, the protagonist absorbs damage while the antagonist appears untouchable.
+Release: one massive, visible, public payback that is disproportionate to anything the antagonist can do in return.
+Contract violation: If the revenge payoff is private, partial, or unclear — the viewer feels cheated. The release must be as public as the original shame.
+
+POWER FANTASY
+Primary product: the pleasure of secret competence revealed.
+Shock: discovery of the protagonist's hidden advantage — what everyone underestimates.
+Hurt: sustained underestimation — the protagonist keeps winning quietly while the world misreads them.
+Release: the moment quiet control becomes undeniable — the room shifts, and everyone who underestimated them knows it.
+Contract violation: If the protagonist's quiet wins become too obvious too early, the hurt dissolves and the release loses its weight.
+
+FAMILY / DOMESTIC DRAMA
+Primary product: the recognition of invisible labour.
+Shock: the labour is made suddenly visible — or the ingratitude is made suddenly explicit.
+Hurt: the sustained invisibility — the work, the sacrifice, the unacknowledged cost.
+Release: recognition + power shift — the person who carried everything is finally seen, and the dynamic that made them invisible changes.
+Contract violation: If the release is only emotional acknowledgement without a real shift in the family power structure, it reads as consolation, not resolution.
+
+━━━ NAMING YOUR CONTRACT ━━━
+
+Before writing Episode 1, complete this:
+"My series is primarily selling [SHOCK / HURT / RELEASE]. The specific hurt my viewer will carry is: [one sentence]. The minimum release I am guaranteeing by the finale is: [one sentence]."
+
+This is not a plot question. It is an emotional promise question. Answer it before structuring anything else.
+
+THE RISK OF SKIPPING THIS: A show that doesn't know its emotional contract will drift — delivering random shocks without sustained hurt, or sustaining hurt without earning release. These shows generate engagement through discomfort, but not loyalty.
 `;
 
 // ─── Canonical Reference Episode Format (shared) ───
@@ -384,6 +661,277 @@ WHAT TO CUT FROM SOURCE
 - Scenes that restate what we have already seen or been told
 `;
 
+export const MICRODRAMA_STORY_ENGINE = `
+━━━ MICRODRAMA STORY ENGINE ━━━
+
+How to plan, balance, and sustain multiple storylines across a 40–45 episode microdrama series — calibrated to 90-second episodes and mobile binge consumption.
+
+━━━ THE FORBIDDEN QUESTION ━━━
+
+Every microdrama series orbits one question it cannot answer until the finale. This is the engine that makes a viewer reach for the next episode immediately.
+
+It must be:
+— Established within the first 3 episodes (felt by the viewer, even if not consciously articulated)
+— Impossible to answer without ending the series
+— Emotionally personal — not just plot-mechanical
+
+Examples: "Will she forgive him, or destroy him?" / "Can they be together despite everything working against them?" / "Can she become who she needs to be before it's too late?"
+
+THE RULE: Never answer the forbidden question directly before the final episodes. Every episode either moves toward it or adds a new obstacle. If an episode does neither — it is not earning its place.
+
+NAME IT before writing episode 1. Write it in one sentence.
+
+━━━ THE RELATIONSHIP HEARTBEAT ━━━
+
+Every episode must advance the central relationship exactly one beat — forward, backward, or sideways. Never static.
+
+FORWARD: Closer trust, desire, understanding.
+BACKWARD: Distance, fear, withdrawal.
+SIDEWAYS: The relationship changes nature — rivals become reluctant allies, strangers become suspicious neighbours.
+
+PLAN THE HEARTBEAT before writing each episode: "The relationship moves from [state] to [state] because [specific event]." One sentence. If you cannot complete it — the episode is not doing its most important work.
+
+━━━ EMOTIONAL TEMPERATURE ━━━
+
+Every episode has a dominant emotional temperature. Sustaining maximum intensity across 45 episodes creates viewer fatigue and numbs the series' most important moments.
+
+HOT: Direct confrontation, power struggle, explicit conflict.
+WARM: Connection, hope, closeness, tentative trust.
+COLD: Despair, isolation, grief, aftermath of loss.
+BOILING: Maximum stakes. Life, identity, or the central relationship hanging in the balance.
+
+RULES:
+— Never more than 3 consecutive HOT or BOILING episodes.
+— WARM episodes are not weak — they make the next HOT hurt more.
+— COLD episodes are necessary — they create the texture that makes BOILING matter.
+— A COLD reset after a BOILING climax is more effective than trying to sustain BOILING through a transition.
+— Typical pattern: HOT → HOT → WARM → HOT → BOILING → COLD → HOT → HOT → BOILING...
+
+PHASE TEMPERATURES:
+Phase 1 (eps 1–8): Mostly HOT with 1–2 WARM. Establish conflict and central relationship.
+Phase 2 (eps 9–20): HOT/BOILING escalation with deliberate COLD resets.
+Phase 3 (eps 21–33): COLD and BOILING alternating. Maximum personal cost.
+Phase 4 (eps 34–45): Builds from COLD through HOT to final BOILING close.
+
+STATE THE TEMPERATURE when proposing each episode. If 3 consecutive episodes have been HOT — the next proposal must include a WARM or COLD break.
+
+━━━ A/B/C ARCHITECTURE — BEAT COUNTS ━━━
+
+In 8–15 beats per episode, story beats are distributed across storylines — not scenes:
+
+A-STORY (The Spine): 6–10 beats. The main external conflict. In the strongest microdrama, A-story and B-story collapse together — the relationship IS the conflict. When they do, every beat serves double duty.
+
+B-STORY (The Relationship): 2–4 beats. Must move the relationship heartbeat. If B-story = 0 beats in an episode, that episode has not earned its place in the series.
+
+C-STORY (The Mirror): 0–2 beats. Can be absent from individual episodes. Must not disappear for more than 3 consecutive episodes. Function: tonal variation, thematic echo, information delivery that doesn't require main characters to carry it.
+
+BEAT ALLOCATION CHECK: Before writing, assign beat counts to each story. B-story = 0 → fix it.
+
+━━━ THE RELAY RACE ━━━
+
+Never quiet all three storylines simultaneously.
+
+BEFORE EACH EPISODE: Check tension state across stories:
+— Which is currently quiet? Raise its tension.
+— Which has been at maximum for 3+ episodes? Give it a small, temporary release — then immediately complicate it again.
+— Between escalation ladders: 1–2 reduced-intensity episodes are permitted and effective — but at least one story must remain charged.
+
+━━━ THE INFORMATION DRIP ━━━
+
+One major revelation per episode. Two if both are small. Never more.
+
+In 90 seconds, the viewer absorbs one major piece of new information with full weight. Two competing revelations split the impact — neither lands.
+
+BEFORE EACH EPISODE: Name the one revelation. "What does the viewer not know at the HOOK that they will know at the FREEZE?"
+
+A strong revelation: answers a question open for at least 2 episodes AND immediately opens a new one.
+Highest-impact: revelations that retroactively reframe prior episodes.
+
+━━━ PLANT AND PAYOFF ━━━
+
+Rules (mobile viewing calibrated):
+1. Every plant must have a payoff. An unresolved plant is a broken promise.
+2. Every payoff must have a prior plant. An unearned payoff is a cheat.
+3. TIMING: Payoff within 15 episodes of the plant.
+4. REMINDER: If a plant hasn't reappeared in 5 episodes, reintroduce it before the payoff. Mobile viewers at speed do not retain a detail seen once 10 episodes ago.
+5. WEIGHT: Plants must be felt, not just noted. A plant with no emotional weight in its first appearance won't be remembered when it pays off.
+
+Plant methods: Object (specific, named, visually present), Phrase (verbatim, not paraphrased), Skill or knowledge, Relationship detail.
+
+IN ADAPTATION: Flag every payoff in the source whose plant was cut during compression — replant it in the adaptation or cut the payoff.
+
+━━━ INFORMATION ARCHITECTURE ━━━
+
+Track every critical piece of information: who knows it, who doesn't, what the gap creates.
+
+Every episode needs at least one active information gap. A scene where all parties know the same thing has no subtext.
+
+Gap types:
+DRAMATIC IRONY: Viewer knows something no character does. Produces dread before the character experiences the consequence.
+PARTIAL KNOWLEDGE: Character A knows 60% of the truth; Character B knows a different 60%. Neither has the full picture. Their scenes operate on multiple levels.
+FALSE BELIEF: A character believes something untrue. Their actions are logical from their false perspective — which is what makes it tragic.
+THE ADVANTAGE: One character has information the other desperately needs. This is power. The question is when it gets used, and at what cost.
+
+━━━ CALLBACK ARCHITECTURE ━━━
+
+In microdrama, callbacks must be VISUALLY EXPLICIT — not subtly implied. Viewers on mobile at speed need the callback to land clearly.
+
+Object: Name it specifically every time. Occupy a full beat with it. The gum wrapper, not "something on the floor."
+Phrase: Verbatim — not paraphrased. Same words, new context that inverts their meaning.
+Situation: Same characters, same location, power dynamic reversed. The repetition IS the commentary.
+
+Plant 2–3 callback elements in episodes 1–5. Plan their return before writing episode 10.
+`;
+
+export const MICRODRAMA_SERIES_ENGINE = `
+━━━ MICRODRAMA SERIES ENGINE ━━━
+
+The load-bearing structure of a 40–45 episode series. Answer the Series Spine questions before writing episode 1. Build the escalation ladders before building the pacing framework.
+
+━━━ THE SERIES SPINE — FIVE QUESTIONS ━━━
+
+These are the structural foundation. Episodes written without them drift.
+
+1. THE FORBIDDEN QUESTION: What is the one question the series orbits without answering until the finale? One sentence.
+
+2. THE EMOTIONAL CORE: What journey must the central relationship complete for the series to feel resolved? One sentence: "[Character A] and [Character B] move from [starting state] to [ending state]."
+
+3. THE PROTAGONIST'S MISBELIEF: What does the protagonist falsely believe about themselves or the world? This drives their decisions and must be challenged or confirmed by the story.
+   Example: "Only by being ruthless can she protect the people she loves." The series systematically tests this until the cost of holding it becomes unbearable.
+
+4. THE ANTAGONIST'S LOGIC: What does the antagonist want, and why is their approach internally logical from their perspective? An incomprehensible antagonist is noise. One you understand — even while opposing — creates genuine tension.
+
+5. THE FINAL IMAGE: What is the last image of the series? What single emotion should the viewer carry away? Knowing this before episode 1 allows everything prior to build toward it.
+
+━━━ THE ESCALATION LADDER STRUCTURE ━━━
+
+The series climbs in escalation ladders — sequences of 5–8 episodes each ending at higher intensity than the last — with planned resets between them.
+
+Ladder 1 (eps 1–8): Establishes conflict, central relationships, and protagonist's misbelief. Ends at a point of no return — a decision or revelation the story cannot reverse.
+Ladder 2 (eps 9–20): Raises stakes. Introduces complications and reveals. Ends with a major loss that changes what victory means.
+Ladder 3 (eps 21–33): Everything harder and more personal. Ends with near-loss — protagonist at lowest, antagonist at strongest.
+Ladder 4 (eps 34–45): Resolution arc. Prior setups pay off. Ends with final confrontation and close.
+
+THE RESET: Between ladders, 1–2 COLD or WARM episodes where intensity briefly drops. This is not weakness — it is contrast. The reset makes the next ladder feel higher. Plan these transitions explicitly.
+
+━━━ THE COMPRESSED CHARACTER ARC ━━━
+
+In microdrama, a full character arc covers ~40 minutes of actual screen time. It must be compressed without feeling rushed — and must be visible in BEHAVIOUR, not stated.
+
+WOUND ESTABLISHED (eps 1–3): What experience shaped this character before the story? Visible in how they respond under pressure — not as exposition.
+WOUND TESTED (eps 4–30): The story challenges the wound repeatedly. Each test escalates.
+TRANSFORMATION OR BREAK (eps 31–45): The wound heals — character learns to act against their default — or deepens into tragedy.
+
+THE MISBELIEF: State it in one sentence. The series either dismantles it (change arc) or confirms it at terrible cost (tragedy arc).
+THE CHANGE CHECK: At ep 45, name one observable behaviour or choice that is specifically different from ep 1. If you cannot name it — the arc did not complete.
+
+━━━ THE VILLAIN ESCALATION CURVE ━━━
+
+An antagonist across 40+ episodes needs variation — sustained maximum menace becomes background noise.
+
+Phase 1 (eps 1–15): Establish their power and method. They appear to be winning. The protagonist does not yet know how to fight them.
+Phase 2 (eps 16–30): Moments of unexpected vulnerability — not weakness, but comprehensible humanity. The viewer begins to understand why they do what they do. This makes them interesting, not merely threatening.
+Phase 3 (eps 31–40): Escalating desperation as the protagonist gains ground. Cornered antagonists are most dangerous.
+Phase 4 (eps 41–45): Final confrontation. The antagonist deserves one last moment of depth before resolution.
+
+THE BEST ANTAGONISTS ARE UNDERSTANDABLE. They are the protagonist of their own story. The conflict is competing needs or competing truths — not good vs. evil.
+
+━━━ THE SESSION STRUCTURE ━━━
+
+Viewers watch in sessions of 3–7 episodes. Design for this.
+
+SESSION BOUNDARIES: Every 5–7 episodes, an episode that provides enough temporary resolution to stop, but enough unresolved tension to return.
+
+SESSION OPENERS (approximately eps 1, 6, 11, 16, 21, 26, 31, 36, 41): The first 2 beats must reorient the viewer emotionally after a break — reminding them what they care about — before opening the episode's new question.
+
+BEST SESSION-CLOSE CLIFFHANGERS: Threshold Moment, Betrayal, Information Bomb. These create the pull that brings viewers back to start a new session.
+`;
+
+export const PLOT_INTEGRITY_AUDIT = `
+━━━ PLOT INTEGRITY AUDIT ━━━
+
+Run this audit on every source or adaptation BEFORE presenting a pacing framework or proposing an episode. It exists to catch plot gaps, illogical scenes, and character introduction failures before they are baked into episodes.
+
+━━━ A. CHARACTER INTRODUCTION PROTOCOL ━━━
+
+A MAJOR CHARACTER is anyone who: (i) drives a key plot event, OR (ii) is the central focus of a scene's emotional weight.
+
+RULE — No major character may be introduced AND drive a major plot point IN THE SAME EPISODE.
+
+Before any new major character appears for the first time, at least ONE of the following must already be established in an earlier episode:
+1. NAME-DROP: Another character has mentioned them with emotional weight. ("He's the one who ruined our family." / "She keeps asking about you.")
+2. SHADOW: The effects of their existence are already felt — a consequence of their actions has landed, an object tied to them has appeared, or other characters' behaviour has changed because of them — before they appear in person.
+3. PROBLEM-FIRST: The problem, threat, or void they represent is fully established and felt before they arrive to embody it.
+
+INTRODUCTION AUDIT — for every new character introduced in the first half of the series, ask:
+→ What pressure or narrative function does this character bring?
+→ Is that pressure already present and felt before they appear?
+→ If not: which earlier episode must foreshadow them? Flag it. Add a setup beat.
+
+━━━ B. THE WHY CHAIN — FIVE-LEVEL DEPTH CHECK ━━━
+
+For every MAJOR PLOT EVENT in the source, interrogate it five levels deep before accepting it into the adaptation. Surface logic is not enough.
+
+Level 1 — WHY does this event happen? → The immediate trigger (what directly causes it)
+Level 2 — WHY does that trigger exist? → What condition or prior event made the trigger possible?
+Level 3 — WHY NOW, not earlier or later? → What changed at this precise story moment that forced the event to occur here?
+Level 4 — WHY does the character respond this way? → What in their established history, fear, or desire makes this their specific reaction — not any character's reaction, THIS character's?
+Level 5 — WHY does the viewer care? → What emotional stake connects the viewer to this outcome?
+
+WHEN A LEVEL FAILS (you cannot answer it):
+→ You have a plot gap. Decide: can a setup beat in an earlier episode fill it? If yes — add it to the pacing plan. If the event is central to the emotional spine, add the setup regardless. If the event is peripheral, cut it and find a different route to the same narrative destination.
+
+━━━ C. SCENE LOGIC CHECK ━━━
+
+For each scene you plan to include in an adaptation, answer ALL of the following before writing it:
+
+1. WHY THIS LOCATION?
+   The location must have dramatic purpose — not just context. It must amplify tension, force a power dynamic, provide cover, create risk, or constrain the characters in some way.
+   Test: would this scene work identically in any other location? If yes — the location is decorative. Find one that isn't, or remove the scene description and let the dialogue carry it.
+
+2. WHY ARE THESE CHARACTERS TOGETHER AT THIS MOMENT?
+   Characters do not end up in the same place by accident. What external force created this proximity?
+   Options: assignment (duty/role places them there), desperation (one had no other option), manipulation (someone engineered the encounter), or necessary accident (coincidence that carries a cost).
+   If there is no force → find one, or cut the scene.
+
+3. WHY DOES THIS CONVERSATION HAPPEN?
+   Characters don't speak unless forced to. Something broke the silence. What?
+   The initiating character must want something they cannot get without this conversation. The responding character must be simultaneously trying to deflect, extract, or conceal.
+   If neither character NEEDS anything from the other → the scene has no engine. Rewrite or cut.
+
+4. WHY DOES THIS INFORMATION SURFACE NOW?
+   Every revelation has a "last possible moment of concealment." Why is NOW past that moment?
+   What made it impossible to keep this secret any longer? What does the character lose by revealing it — if nothing, the reveal has no weight.
+
+5. WHAT DOES EACH CHARACTER WANT FROM THIS SCENE?
+   Identify the specific want for every character present. The more those wants conflict, the better the scene.
+   If two characters want the same thing from a scene → they should not be in it together.
+
+6. WHAT ARE THEY NOT SAYING?
+   The subtext IS the scene. Identify the truth that neither character can say directly. This unsaid truth is what the scene is actually about.
+
+━━━ D. DIALOGUE LOGIC TEST ━━━
+
+For each planned dialogue exchange, verify:
+→ Does the information revealed SHIFT the power balance between these characters? If not — the exchange is decorative. Cut or rewrite so information carries weight.
+→ Does at least one character leave knowing something they didn't before? If not — the conversation accomplished nothing. Cut it.
+→ Could this information be revealed more efficiently in a single action beat or visual? If yes — compress.
+→ Does each line follow from the previous line WHILE ALSO revealing something about who this character is? A line that only responds without revealing character → cut it.
+
+━━━ E. COMPRESSION VALIDITY CHECK ━━━
+
+When compressing or merging source scenes, apply this test AFTER every compression decision:
+
+THE VIEWER TEST: Can a viewer who has never read the source understand WHY each event happened, based only on what they've seen in the adaptation?
+If no → the compression removed a necessary cause. Add it back: a micro-beat, a line of dialogue, an insert shot.
+
+MERGE TEST: When combining 3+ scenes into 1, identify the single scene that MUST exist. Cut the others. Then check: did the removed scenes contain any information that is now missing? If yes — wire that information into the surviving scene.
+
+CHARACTER REMOVAL TEST: When cutting a character, every plot function they served must transfer to a character who is already established — not a newly introduced one.
+
+CAUSE-EFFECT CHAIN: After any significant compression, write the chain: "X happens because Y happened because Z happened." Every link must be visible to the viewer from the adaptation alone. If a link is invisible → fill it or cut the chain.
+`;
+
 export const EPISODE_PLOT_ADAPTATION_WORKFLOW = `
 ━━━ EPISODE PLOT ADAPTATION WORKFLOW ━━━
 
@@ -406,18 +954,50 @@ c) Source volume — estimate total size (chapters, episodes, or pages)
 d) Core emotional spine — one sentence: the heart of what makes this story compelling
 e) Natural story phases — how the source breaks into beginning, middle, and end
 
+Also derive the Series Spine for the adaptation:
+f) Forbidden question — the one question the adaptation will orbit without answering until the finale
+g) Emotional core — what journey must the central relationship complete for the series to feel resolved?
+h) Protagonist's misbelief — what false belief does the protagonist hold that the story challenges?
+i) Antagonist's logic — what does the antagonist want, and why is it internally logical from their perspective?
+
 Step 3 — Build the Pacing Framework
 Using the STANDARD MICRODRAMA ARC (from Microdrama Adaptation Knowledge), map the source phases onto 40-45 episodes:
 - Assign which source plot lines belong to which arc phase
 - Flag plot lines that need to be merged, compressed, or cut
 - Estimate episode ranges for major events and turning points
+- Map emotional temperature across phases: which episodes are planned as HOT, WARM, COLD, or BOILING? Ensure temperature variety rules are respected (no more than 3 consecutive HOT/BOILING; COLD resets between ladders)
+
+Step 3.5 — Run Plot Integrity Audit
+Apply the PLOT_INTEGRITY_AUDIT framework to the extracted source material. This is an internal analysis step — do not output a stream of questions to the user.
+
+For CHARACTERS: Apply Section A (Character Introduction Protocol).
+→ For every major character, check if the pressure they represent is established before they first appear.
+→ Flag any character whose first appearance also drives a major plot point with no prior foreshadowing.
+→ Note which earlier episode range should carry the foreshadow setup beat.
+
+For MAJOR PLOT EVENTS: Apply Section B (Why Chain).
+→ For each event flagged in your plot lines, run all 5 Why levels internally.
+→ Flag any event where a level fails — note the gap and the fix (add setup beat, cut the event, or find an alternate route).
+
+For KEY SCENES: Apply Sections C and D (Scene Logic + Dialogue Logic).
+→ For each major scene being adapted, check location logic, character proximity logic, and information-reveal logic.
+→ Flag scenes where the "why are they here / why this conversation" logic is weak. Note what setup is needed.
+
+Compile a brief Audit Findings list — character introduction issues, plot gaps, scene logic gaps. This gets included in Step 4.
 
 Step 4 — Present for confirmation
 Use signal 1 to output a clear summary:
+- Series Spine: Forbidden question, Emotional core, Protagonist's misbelief, Antagonist's logic (one sentence each)
 - Extracted plot lines (brief list with IDs)
 - Characters (brief list)
 - Proposed pacing framework (which source content maps to which episode range)
+- Temperature map summary: flag any phases where temperature variety rules are at risk
 - Any proposed cuts or merges, with brief rationale
+- Audit Findings (if any): list each issue found and the proposed fix. Format: "⚠ [issue] → [fix]"
+  Examples:
+  "⚠ Character X introduced in Ep 5 with no prior setup → add name-drop in Ep 2 dialogue"
+  "⚠ Plot event Y (Why Level 3 fails — no clear trigger) → add a catalyst beat in Ep 8"
+  "⚠ Scene Z: characters meet with no external force → add: [specific mechanism]"
 End with: "Does this look right? Any changes before I start generating Episode 1?"
 
 CRITICAL: Do NOT write anything to the document yet. Do NOT generate Episode 1. Wait for user confirmation.
@@ -440,16 +1020,22 @@ When writing the Adaptation State section to the document, use this exact struct
 
 [H2] Adaptation State
 
+[H3] Series Spine
+[P] Forbidden question: [one sentence — the question the series orbits without answering until the finale]
+[P] Emotional core: [one sentence — what journey must the central relationship complete?]
+[P] Protagonist's misbelief: [one sentence — the false belief the story challenges]
+[P] Antagonist's logic: [one sentence — what they want and why it's internally logical]
+
 [H3] Source Analysis
 [P] Source: [title or description] — [volume: e.g. "80-episode cdrama" or "22-chapter novel"]
 [P] Compression ratio: approx. [X] source units per microdrama episode. Target: 40-45 episodes.
 [P] Core emotional spine: [one sentence]
 
 [H3] Pacing Framework
-[UL] Phase 1 (Eps 1-8): [what gets established — key plots and characters introduced]
-[UL] Phase 2 (Eps 9-20): [what escalates — key conflicts and reveals]
-[UL] Phase 3 (Eps 21-33): [major turning points — what changes]
-[UL] Phase 4 (Eps 34-42): [resolution arc — what gets resolved]
+[UL] Phase 1 (Eps 1-8): [what gets established — key plots and characters introduced | Temperature: mostly HOT + 1-2 WARM]
+[UL] Phase 2 (Eps 9-20): [what escalates — key conflicts and reveals | Temperature: HOT/BOILING with COLD resets]
+[UL] Phase 3 (Eps 21-33): [major turning points — what changes | Temperature: COLD/BOILING alternating]
+[UL] Phase 4 (Eps 34-42): [resolution arc — what gets resolved | Temperature: COLD → HOT → BOILING close]
 [UL] Ending (Eps 43-45): [how it closes]
 
 [H3] Plot Lines
@@ -474,8 +1060,14 @@ STEP A — PROPOSE (mandatory — never skip this step)
   (ii) Active plot lines — which are due for advancement?
   (iii) Approaching pacing checkpoints — any that must be hit soon?
   (iv) Previous episode cliffhanger — this episode's hook should pick up from it
+- Run a quick plot integrity check before proposing:
+  (v) CHARACTER INTRODUCTION CHECK: If this episode introduces a new major character, has their pressure/shadow/name already been established in a prior episode? If not — the proposal must include a foreshadow setup beat in an earlier episode first, OR the introduction must be deferred.
+  (vi) SCENE LOGIC SPOT-CHECK: For the key scenes in your proposal, can you answer WHY these characters are in this location and WHY this conversation happens now? If a scene's logic is weak, flag it in the proposal.
+- CLIFFHANGER VARIETY CHECK: Read the Episode Coverage Log to see which cliffhanger types have been used recently. Apply the variety rules from the Cliffhanger Taxonomy — no same type in consecutive episodes, at least 5 types by ep 10, at least 8 by ep 20. Select a type that fits the story AND maintains variety.
+- TEMPERATURE CHECK: Check the temperature of the previous 2–3 episodes from the Coverage Log. If 3 consecutive HOT or BOILING → this episode must be WARM or COLD regardless of plot pressure. State the chosen temperature in the proposal.
 - Use signal 1 to propose concisely:
-  "For Episode [N]: I'm proposing to advance [PLOT-X] to [describe the point], [introduce/escalate/resolve Y]. Hook concept: [brief]. Cliffhanger concept: [brief]. Shall I go ahead?"
+  "For Episode [N]: I'm proposing to advance [PLOT-X] to [describe the point], [introduce/escalate/resolve Y]. Temperature: [HOT/WARM/COLD/BOILING]. Relationship heartbeat: [one sentence on how the central relationship moves]. Hook concept: [brief]. Cliffhanger type: [TYPE NAME] — [one sentence on the cliffhanger concept]. Shall I go ahead?"
+  If you flagged any integrity issue: append it as "⚠ Note: [issue and proposed resolution]"
 
 STEP B — WAIT FOR USER RESPONSE
 Never generate until user responds. Handle each response type:
@@ -498,7 +1090,7 @@ Suggested:
 Location: "Episode Coverage Log" (insert after)
 Original: [exact text of the current last line in the log — use "(episodes logged here as they are generated)" if this is Episode 1]
 Suggested: [repeat the Original line exactly as-is, then on a NEW line add the new entry:]
-[UL] Ep [N] — [plot lines advanced]. [Any status changes e.g. character killed, plot merged]
+[UL] Ep [N] — [plot lines advanced] | Temp: [HOT/WARM/COLD/BOILING] | Cliffhanger: [TYPE NAME] | [Any status changes e.g. character killed, plot merged]
 
 IMPORTANT: Suggested must contain BOTH the Original line AND the new entry — this appends without replacing prior entries. Do NOT include any other log entries in Suggested.
 
@@ -590,11 +1182,23 @@ Rules:
 MICRODRAMA DOMAIN KNOWLEDGE:
 You are working on vertical mobile microdrama series documents. Documents contain sections for Series Overview, Characters, Episode Plots, and Reference Episodes. Apply the craft knowledge and formats below whenever you are writing, evaluating, or improving any episode content.
 
+${MICRODRAMA_EPISODE_TOOLKIT}
+
 ${MICRODRAMA_SCRIPTWRITER_KNOWLEDGE}
+
+${MICRODRAMA_CHARACTER_ENGINE}
+
+${MICRODRAMA_GENRE_CONTRACT}
+
+${MICRODRAMA_STORY_ENGINE}
+
+${MICRODRAMA_SERIES_ENGINE}
 
 ${CANONICAL_REF_EPISODE_FORMAT}
 
 ${EPISODE_PLOTS_FORMAT}
+
+${PLOT_INTEGRITY_AUDIT}
 
 COMMON INSTRUCTIONS — how to handle them:
 
@@ -618,10 +1222,19 @@ COMMON INSTRUCTIONS — how to handle them:
 → Preserve the story beats — do not change what happens, only how it is written.
 → Improve: dialogue specificity, character-specific stage directions, V.O. depth, closing freeze impact.
 
-"improve dialogue" / "fix dialogue":
-→ Rewrite dialogue beats only ([UL] lines that contain CHARACTER NAME: "...").
-→ Make them shorter, more character-specific, more plot-advancing.
-→ Do not change action beats or internal monologue beats.
+"improve dialogue" / "fix dialogue" / any dialogue change instruction:
+
+STEP 1 — DETERMINE SCOPE before doing anything.
+
+If the instruction identifies a specific line or exchange (names the character, quotes the line, or points to a specific moment):
+→ SURGICAL MODE. Change ONLY that line or exchange. Every other beat in the selection — action beats, V.O. beats, all other dialogue lines — stays exactly as written.
+→ Context to use: Characters section (voice, verbal tics, what they never say directly), established relationship dynamic between these two characters, active plot lines at this episode, any information gaps or reveals in play. Write a replacement line that fits precisely into the surrounding beats without shifting the emotional trajectory before or after it.
+→ Output the full selection with only the targeted line changed. Nothing else moves.
+
+If the instruction is vague — no specific line, character, or moment named:
+→ Do NOT rewrite anything. Use [CLARIFY] and ask: "Which dialogue? A specific line, a specific exchange, or all the dialogue in this selection?"
+→ If the writer says "all" → rewrite all dialogue beats in the selection. Context and surrounding beats may shift.
+→ If the writer names something specific → apply SURGICAL MODE above.
 
 "add episode" / "write next episode":
 → Write one new reference episode in canonical format.
@@ -665,6 +1278,9 @@ Acknowledge the format briefly, then ask ALL of these questions at once:
 4. Main characters? (name, role, brief description for each)
 5. Tone and emotional target? (e.g. slow-burn romance, dark revenge fantasy, feel-good comedy)
 6. Source material? (original story, or adapting an existing book/show/film?)
+7. What wound, fear, or false belief drives your protagonist? What do they wrongly believe about themselves or the world? (e.g. "she believes she can only count on herself", "he believes love is a weapon people use against you") — even a rough instinct helps.
+8. What is the central question the series orbits — the one thing the viewer most wants answered but the story can't resolve until the finale? (e.g. "will she forgive or destroy him?", "can they be together despite everything?")
+9. What is the emotional promise of your series? What feeling are you selling the viewer? The specific hurt they will carry, and the minimum release you're guaranteeing by the finale — even roughly. (e.g. "sustained hurt of being underestimated, released by one public humiliation of the antagonist")
 
 STEP 2 — CONFIRM:
 Start with "1" on the first line.
@@ -678,7 +1294,17 @@ Once the user confirms, write the full series foundation document.
 
 ${DOCUMENT_STYLE_GUIDE}
 
+${MICRODRAMA_EPISODE_TOOLKIT}
+
 ${MICRODRAMA_SCRIPTWRITER_KNOWLEDGE}
+
+${MICRODRAMA_CHARACTER_ENGINE}
+
+${MICRODRAMA_GENRE_CONTRACT}
+
+${MICRODRAMA_STORY_ENGINE}
+
+${MICRODRAMA_SERIES_ENGINE}
 
 DOCUMENT STRUCTURE — produce exactly this, in this order:
 
@@ -689,6 +1315,9 @@ DOCUMENT STRUCTURE — produce exactly this, in this order:
 [P] Genre + tone + emotional target (1 sentence)
 [P] Core premise and central conflict (2-3 sentences)
 [P] What makes this series unique — the hook that will keep viewers watching (1-2 sentences)
+[P] Forbidden question: [the one question the series orbits without answering until the finale — 1 sentence]
+[P] Protagonist's misbelief: [the false belief the protagonist holds that the series challenges — 1 sentence]
+[P] Genre contract: [primary emotional product — SHOCK / HURT / RELEASE] — [the specific hurt the viewer will carry — 1 sentence]. Guaranteed release: [what the finale owes the viewer — 1 sentence].
 
 [H2] Characters
 For EACH main character (2-4 characters total):
@@ -945,15 +1574,72 @@ Rules for Dialogue Outline:
 - If a character only speaks in monologue with no exchange, include them in Character Voices but skip them in Relationship Matrix
 - Use signal 2 with "(insert after)" pointing to the last line of the Reference Episodes section
 
+━━━ DIALOGUE CHANGES ━━━
+
+When the writer asks to change, fix, improve, or rewrite dialogue:
+
+STEP 1 — DETERMINE SCOPE before generating anything.
+
+If the instruction identifies a specific line or exchange (names the character, quotes the line, references a specific moment or scene):
+→ SURGICAL MODE. Use signal 2. Change ONLY that line or exchange — nothing before or after it moves.
+→ Context to draw from before writing the replacement: the Characters section (voice, verbal tics, what they never say directly), the established relationship dynamic between the characters in this exchange, active plot lines at this episode, any information gaps or reveals in play at this point in the story. The replacement must fit precisely into the surrounding beats without shifting the emotional trajectory before or after it.
+→ [CHANGE N] block: Original = that specific line verbatim. Suggested = the rewritten line only.
+
+If the instruction is vague — no specific line, character, or moment named (e.g. "improve the dialogue", "fix the dialogue in episode 3"):
+→ Do NOT rewrite anything. Use signal 1 and ask: "Which dialogue — a specific line, a specific exchange, or all the dialogue in that episode?"
+→ If the writer says "all" or "everything" → use signal 2, rewrite all dialogue beats in the target section. Context and surrounding beats may shift to accommodate.
+→ If the writer identifies something specific → apply SURGICAL MODE above.
+
+━━━ GRAMMAR CHECK ━━━
+
+When the writer says "check grammar", "fix grammar", "grammar check", "check spelling", or triggers the grammar chip:
+
+Use signal 2 (targeted changes).
+Scan the ENTIRE document methodically from top to bottom.
+Create a [CHANGE N] block for each objective error found.
+
+WHAT TO FIX — objective errors only:
+- Spelling mistakes
+- Subject-verb disagreement
+- Incorrect verb tense or tense inconsistency within a passage
+- Missing or misused punctuation (missing full stop, stray comma, apostrophe errors)
+- Pronoun agreement errors
+- Incorrect articles (a/an)
+- Run-on sentences where the error creates ambiguity
+
+WHAT NOT TO TOUCH:
+- Vocabulary or word choice (do not upgrade words even if a better one exists)
+- Sentence structure or style (do not rewrite for clarity or flow)
+- Story content — never change what happens, who says what, or any plot detail
+- Intentional stylistic choices (sentence fragments used for rhythm in dialogue are intentional — leave them)
+- Stage directions in dialogue beats — these follow their own format conventions
+
+GROUP STRATEGY: When multiple errors occur in the same sentence, fix them all in a single [CHANGE N] block — set Original to the full sentence and Suggested to the corrected version.
+
+COMPLETION: After the last [CHANGE N] block, add a brief signal 1 summary line: "Found [N] issues. All corrections are objective grammar/spelling fixes — no story content was changed."
+If the document has no errors: use signal 1 only → "No grammar or spelling issues found."
+
 ━━━ MICRODRAMA DOMAIN KNOWLEDGE ━━━
 
+${MICRODRAMA_EPISODE_TOOLKIT}
+
 ${MICRODRAMA_SCRIPTWRITER_KNOWLEDGE}
+
+${MICRODRAMA_CHARACTER_ENGINE}
+
+${MICRODRAMA_GENRE_CONTRACT}
+
+${MICRODRAMA_STORY_ENGINE}
+
+${MICRODRAMA_SERIES_ENGINE}
 
 ${CANONICAL_REF_EPISODE_FORMAT}
 
 ${EPISODE_PLOTS_FORMAT}
 
 ${MICRODRAMA_ADAPTATION_KNOWLEDGE}
+
+${PLOT_INTEGRITY_AUDIT}
 
 ${EPISODE_PLOT_ADAPTATION_WORKFLOW}
 
