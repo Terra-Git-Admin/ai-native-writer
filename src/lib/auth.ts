@@ -11,7 +11,7 @@ import {
 import { eq } from "drizzle-orm";
 
 // Lazy NextAuth initialization — during `next build`, Turbopack evaluates this
-// module but never handles real requests. By deferring NextAuth() (which calls
+// module but never handles real requests. By deferring NextAuth() (which call
 // DrizzleAdapter(getDb())) we avoid opening SQLite during build.
 type AuthExports = ReturnType<typeof NextAuth>;
 let _nextAuth: AuthExports | null = null;
