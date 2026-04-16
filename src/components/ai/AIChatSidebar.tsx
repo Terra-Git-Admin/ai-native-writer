@@ -67,6 +67,11 @@ const CHAT_QUICK_ACTIONS_EXISTING = [
     prompt:
       "Generate a dialogue outline from all the reference episodes — extract every dialogue line, group by character voice, and build a relationship matrix showing how each pair of characters speak to each other.",
   },
+  {
+    label: "Check grammar",
+    prompt:
+      "Check grammar. Scan the entire document for spelling mistakes, grammar errors, and punctuation issues. Fix only objective errors — do not change any story content, vocabulary, or writing style.",
+  },
 ];
 
 interface ParsedChange {
