@@ -62,16 +62,17 @@ export async function PUT(
     await maybeCreateVersion(id, doc.content, session.user.id);
   }
 
+  const now = new Date();
   await db
     .update(documents)
     .set({
       title: body.commentMarkOnly ? doc.title : (body.title ?? doc.title),
       content: body.content ?? doc.content,
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(eq(documents.id, id));
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, updatedAt: now.toISOString() });
 }
 
 // DELETE /api/documents/[id] — delete document (owner only)

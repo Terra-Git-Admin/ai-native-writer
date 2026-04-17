@@ -140,6 +140,33 @@ function parseTaggedLines(lines: string[]): object[] {
   return nodes;
 }
 
+// Returns true if the two Tiptap JSON documents differ only in commentMark attributes.
+// Used by the poll to decide whether to auto-apply server content (comment-mark sync
+// from a reviewer is safe) or surface a conflict banner (structural edit from another tab).
+function isCommentMarkOnlyDiff(a: object, b: object): boolean {
+  const strip = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(strip);
+    if (v && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(o)) {
+        if (k === "marks" && Array.isArray(val)) {
+          const filtered = (val as Record<string, unknown>[])
+            .filter((m) => m.type !== "commentMark")
+            .map(strip);
+          if (filtered.length > 0) out[k] = filtered;
+          // omit key entirely when empty so it matches nodes that have no marks property
+        } else {
+          out[k] = strip(val);
+        }
+      }
+      return out;
+    }
+    return v;
+  };
+  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+}
+
 interface EditorProps {
   documentId: string;
   initialContent: string | null;
@@ -193,10 +220,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   );
   const saveStatusRef = useRef<"saved" | "saving" | "unsaved">("saved");
   useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
-  // Tracks when our last save completed (client time). Used by the poll to
-  // distinguish stale server responses from genuine updates by other users.
-  const lastSavedAtRef = useRef(0);
+  // Server-side updatedAt from the last PUT response. Used by the poll to
+  // recognise our own saves and avoid false conflict banners.
+  const lastSavedServerUpdatedAtRef = useRef<string | null>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Conflict state: set when the poll detects structural content changes from another tab.
+  const [conflictDetected, setConflictDetected] = useState(false);
+  const [pendingServerContent, setPendingServerContent] = useState<object | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -635,12 +665,15 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (!isOwner) {
           payload.commentMarkOnly = true;
         }
-        await fetch(`/api/documents/${documentId}`, {
+        const res = await fetch(`/api/documents/${documentId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        lastSavedAtRef.current = Date.now();
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+        }
         setSaveStatus("saved");
       } catch {
         setSaveStatus("unsaved");
@@ -649,7 +682,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     [documentId, isOwner]
   );
 
-  // Poll for document updates (picks up comment marks added by other users)
+  // Poll for document updates (picks up comment marks added by reviewers).
+  // For owners, the poll ONLY auto-applies comment-mark-only changes. Any structural
+  // content difference (e.g. same doc open in another tab with stale content) is
+  // surfaced as a conflict banner — never silently applied.
   useEffect(() => {
     if (!editor) return;
     const poll = async () => {
@@ -662,30 +698,43 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const serverContent = JSON.parse(data.content);
         const localContent = editor.getJSON();
 
-        // Only update if server content differs (avoids cursor jumps for owner)
-        if (JSON.stringify(serverContent) !== JSON.stringify(localContent)) {
-          // For reviewers: always update (they're read-only).
-          // For owners: only update if (a) no unsaved changes, AND (b) the server
-          // version is genuinely newer than our last save — i.e. another user wrote
-          // to the document after us (e.g. a reviewer adding a comment mark).
-          // The 500ms buffer covers server-client clock skew.
-          const serverUpdatedAt = data.updatedAt
-            ? new Date(data.updatedAt).getTime()
-            : 0;
-          const isGenuinelyNewer =
-            serverUpdatedAt > lastSavedAtRef.current - 500;
-          if (!isOwner || (saveStatusRef.current === "saved" && isGenuinelyNewer)) {
+        if (JSON.stringify(serverContent) === JSON.stringify(localContent)) return;
+
+        const restoreCursor = () => {
+          try {
             const { from } = editor.state.selection;
-            editor.commands.setContent(serverContent, { emitUpdate: false });
-            // Restore cursor position
-            try {
-              editor.commands.setTextSelection(
-                Math.min(from, editor.state.doc.content.size)
-              );
-            } catch {
-              // ignore if position is invalid
-            }
-          }
+            editor.commands.setTextSelection(
+              Math.min(from, editor.state.doc.content.size)
+            );
+          } catch { /* ignore invalid position */ }
+        };
+
+        if (!isOwner) {
+          // Reviewers are read-only — always sync to server
+          editor.commands.setContent(serverContent, { emitUpdate: false });
+          restoreCursor();
+          return;
+        }
+
+        // Owner path: skip if local changes are in flight
+        if (saveStatusRef.current !== "saved") return;
+
+        // Skip if this updatedAt is the one we just saved (avoids a race where
+        // the poll response arrives just after our save but before the next edit)
+        if (
+          lastSavedServerUpdatedAtRef.current &&
+          data.updatedAt === lastSavedServerUpdatedAtRef.current
+        ) return;
+
+        if (isCommentMarkOnlyDiff(serverContent, localContent)) {
+          // Only comment marks differ — reviewer added a highlight. Apply silently.
+          editor.commands.setContent(serverContent, { emitUpdate: false });
+          restoreCursor();
+        } else {
+          // Structural content differs from another instance. Never silently revert —
+          // surface a banner so the writer decides.
+          setPendingServerContent(serverContent);
+          setConflictDetected(true);
         }
       } catch {
         // ignore fetch errors
@@ -818,6 +867,38 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           </div>
         )}
       </div>
+
+      {/* Conflict banner — shown when poll detects structural content change from another tab */}
+      {conflictDetected && pendingServerContent && (
+        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <span className="flex-1">This document was updated in another window.</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (editor) {
+                editor.commands.setContent(pendingServerContent, { emitUpdate: false });
+                lastSavedServerUpdatedAtRef.current = null;
+              }
+              setConflictDetected(false);
+              setPendingServerContent(null);
+            }}
+            className="rounded bg-amber-100 px-2 py-1 font-medium hover:bg-amber-200 transition-colors"
+          >
+            Apply their version
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConflictDetected(false);
+              setPendingServerContent(null);
+              if (editor && isOwner) saveDocument(editor.getJSON());
+            }}
+            className="rounded bg-white border border-amber-200 px-2 py-1 font-medium hover:bg-amber-50 transition-colors"
+          >
+            Keep mine
+          </button>
+        </div>
+      )}
 
       {/* Editor */}
       <div className="flex-1 overflow-y-auto">
