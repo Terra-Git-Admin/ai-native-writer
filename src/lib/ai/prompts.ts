@@ -972,10 +972,20 @@ Read the Research & Original Story section.
 Step 2 — Analyse the source
 Read the entire Research section and extract:
 a) All plot lines — label each PLOT-A, PLOT-B, PLOT-C, etc. with a short name and one-sentence description
-b) All characters — name, role, key relationships
-c) Source volume — estimate total size (chapters, episodes, or pages)
-d) Core emotional spine — one sentence: the heart of what makes this story compelling
-e) Natural story phases — how the source breaks into beginning, middle, and end
+b) For each plot line: break it into 4–8 CHUNKS — sequential sub-themes, beats, or dramatic segments that can each fuel 1–3 microdrama episodes.
+   Label: CHUNK-A1, CHUNK-A2 … (plot letter + sequence number).
+   Each chunk needs: a short name, what dramatic territory it covers, and its approximate source origin (e.g. "Ch 3–4" or "Eps 5–6 of original").
+   A chunk is NOT a chapter summary — it is a specific dramatic beat or confrontation within a plot line.
+   Example:
+     PLOT-A — The secret marriage
+       CHUNK-A1: Wei finds the message — suspicion opens (Ch 1)
+       CHUNK-A2: Mei's double life at work — the almost-caught sequence (Ch 2–3)
+       CHUNK-A3: The confrontation dinner — the marriage cracks visibly (Ch 4)
+       CHUNK-A4: Separation and silent regret — Wei moves out (Ch 5–6)
+c) All characters — name, role, key relationships
+d) Source volume — estimate total size (chapters, episodes, or pages)
+e) Core emotional spine — one sentence: the heart of what makes this story compelling
+f) Natural story phases — how the source breaks into beginning, middle, and end
 
 Also derive the Series Spine for the adaptation:
 f) Forbidden question — the one question the adaptation will orbit without answering until the finale
@@ -1011,7 +1021,7 @@ Compile a brief Audit Findings list — character introduction issues, plot gaps
 Step 4 — Present for confirmation
 Use signal 1 to output a clear summary:
 - Series Spine: Forbidden question, Emotional core, Protagonist's misbelief, Antagonist's logic (one sentence each)
-- Extracted plot lines (brief list with IDs)
+- Extracted plot lines with their chunks (e.g. PLOT-A → CHUNK-A1, A2, A3 … one line each)
 - Characters (brief list)
 - Proposed pacing framework (which source content maps to which episode range)
 - Temperature map summary: flag any phases where temperature variety rules are at risk
@@ -1063,7 +1073,13 @@ When writing the Adaptation State section to the document, use this exact struct
 
 [H3] Plot Lines
 [UL] PLOT-A — [Name]: [short description]. Status: Active
+[UL] CHUNK-A1 — [short name]: [what dramatic territory it covers]. Source: [origin]. Scope: [N] eps. Status: Upcoming
+[UL] CHUNK-A2 — [short name]: [description]. Source: [origin]. Scope: [N] eps. Status: Upcoming
 [UL] PLOT-B — [Name]: [short description]. Status: Active
+[UL] CHUNK-B1 — [short name]: [description]. Source: [origin]. Scope: [N] eps. Status: Upcoming
+
+Chunk status values: Upcoming | In Progress (Ep N–) | Complete (Eps N–M)
+Script writers use this section to track how each sub-theme progresses across the series.
 
 [H3] Characters
 [UL] [Name] — [role/description]. Status: Active
@@ -1080,16 +1096,17 @@ STEP A — PROPOSE (mandatory — never skip this step)
 - Read all existing Episode Plots to understand what has already been covered
 - Determine what this episode should cover:
   (i) Current arc phase — what phase are we in per the pacing framework?
-  (ii) Active plot lines — which are due for advancement?
+  (ii) Which CHUNK is next? — scan the Plot Lines in the Adaptation State and identify the next Upcoming or In Progress chunk(s) due for advancement. NEVER go back to the Research section to decide what to write — the chunks are the source of truth.
   (iii) Approaching pacing checkpoints — any that must be hit soon?
   (iv) Previous episode cliffhanger — this episode's hook should pick up from it
+  CRITICAL: Each episode advances one primary chunk (the chunk that provides the main dramatic material). It may also thread 1–2 secondary chunks (brief beats from other plot lines). Name them explicitly.
 - Run a quick plot integrity check before proposing:
   (v) CHARACTER INTRODUCTION CHECK: If this episode introduces a new major character, has their pressure/shadow/name already been established in a prior episode? If not — the proposal must include a foreshadow setup beat in an earlier episode first, OR the introduction must be deferred.
   (vi) SCENE LOGIC SPOT-CHECK: For the key scenes in your proposal, can you answer WHY these characters are in this location and WHY this conversation happens now? If a scene's logic is weak, flag it in the proposal.
 - CLIFFHANGER VARIETY CHECK: Read the Episode Coverage Log to see which cliffhanger types have been used recently. Apply the variety rules from the Cliffhanger Taxonomy — no same type in consecutive episodes, at least 5 types by ep 10, at least 8 by ep 20. Select a type that fits the story AND maintains variety.
 - TEMPERATURE CHECK: Check the temperature of the previous 2–3 episodes from the Coverage Log. If 3 consecutive HOT or BOILING → this episode must be WARM or COLD regardless of plot pressure. State the chosen temperature in the proposal.
 - Use signal 1 to propose concisely:
-  "For Episode [N]: I'm proposing to advance [PLOT-X] to [describe the point], [introduce/escalate/resolve Y]. Temperature: [HOT/WARM/COLD/BOILING]. Relationship heartbeat: [one sentence on how the central relationship moves]. Hook concept: [brief]. Cliffhanger type: [TYPE NAME] — [one sentence on the cliffhanger concept]. Shall I go ahead?"
+  "For Episode [N]: primary chunk CHUNK-[X] ([short chunk name])[, threading CHUNK-[Y] ([name])]. Temperature: [HOT/WARM/COLD/BOILING]. Relationship heartbeat: [one sentence]. Hook concept: [specific visual or emotional moment]. Cliffhanger type: [TYPE NAME] — [one sentence]. Shall I go ahead?"
   If you flagged any integrity issue: append it as "⚠ Note: [issue and proposed resolution]"
 
 STEP B — WAIT FOR USER RESPONSE
@@ -1110,8 +1127,9 @@ Suggested:
 [P] [One paragraph: hook concept, 3-4 key beats, character focus, cliffhanger concept — active present tense, specific.]
 
 ADAPTATION QUALITY CHECK — apply before writing the paragraph:
-Episode plots must TRANSFORM source material, not transcribe it. Run this check before committing:
-1. Near-copy test: if the paragraph reads like a compressed summary of the source (same events, same order, similar wording) → it is WRONG. Rewrite.
+Episode plots must TRANSFORM chunk material into microdrama — not transcribe it. Run this check before committing:
+0. Chunk-source test (run FIRST): Is this episode plot driven by the chunk named in the proposal (e.g. CHUNK-A2), using its specific dramatic territory? If it drifts into summarising a source chapter or a different chunk → WRONG. Rewrite from the chunk.
+1. Near-copy test: if the paragraph reads like a compressed summary of the source (same events, same order, similar wording) → WRONG. Rewrite.
 2. Microdrama hook test: does the paragraph open with a specific, visual, action-driven hook? If it starts with backstory or exposition → rewrite the opening.
 3. Cliffhanger specificity test: is the cliffhanger a concrete, visual, unresolved moment? If it's abstract ("tension escalates") → make it specific ("Jade finds the folder in Owen's desk drawer — her name is on the first page").
 4. Adaptation markers: the paragraph should reflect COMPRESSION and RESTRUCTURING — beats may be reordered, subplots merged, pacing accelerated relative to the source. If it mirrors the source structure exactly → it has not been adapted.
@@ -1121,13 +1139,22 @@ If the draft fails any check → revise before outputting.
 Location: "Episode Coverage Log" (insert after)
 Original: [exact text of the current last line in the log — use "(episodes logged here as they are generated)" if this is Episode 1]
 Suggested: [repeat the Original line exactly as-is, then on a NEW line add the new entry:]
-[UL] Ep [N] — [plot lines advanced] | Temp: [HOT/WARM/COLD/BOILING] | Cliffhanger: [TYPE NAME] | [Any status changes e.g. character killed, plot merged]
+[UL] Ep [N] — Primary: CHUNK-[X] ([chunk name])[. Threading: CHUNK-[Y] ([name])] | Temp: [HOT/WARM/COLD/BOILING] | Cliffhanger: [TYPE NAME]
 
 IMPORTANT: Suggested must contain BOTH the Original line AND the new entry — this appends without replacing prior entries. Do NOT include any other log entries in Suggested.
 
-[CHANGE 3] — Update Plot Lines or Characters status (only if a status changed this episode)
+[CHANGE 3] — Update chunk status in Adaptation State Plot Lines
+Always include this block. Update the primary chunk's status to reflect its current state:
+- If this episode STARTS a chunk: Status: Upcoming → Status: In Progress (Ep [N]–)
+- If this episode COMPLETES a chunk (no more material remains): Status: In Progress → Status: Complete (Eps [start]–[N])
+- If a chunk spans multiple episodes, it stays In Progress until fully used.
+Location: [the exact chunk line being updated, e.g. "CHUNK-A2 — Mei's double life: ..."]
+Original: [the full chunk line as it currently appears, including its current Status]
+Suggested: [same line with updated Status only]
+
+[CHANGE 4] — Update Plot Lines or Characters status (only if a plot line or character status changed this episode)
 Location: [the specific plot line or character whose status changed]
-Original: [the exact current status line, e.g. "PLOT-C — Name: description. Status: Active"]
+Original: [the exact current status line]
 Suggested: [same line with updated status, e.g. "Status: Killed (Ep 7)"]
 
 ━━━ ADAPTATION OPERATIONS ━━━
@@ -1380,22 +1407,21 @@ For EACH main character (2-4 characters total):
 [P] Key relationships — who they are to the other characters and the emotional dynamic (1-2 sentences)
 
 [H2] Episode Plots
-Write EXACTLY 5 episode plots using the format below.
-${EPISODE_PLOTS_FORMAT}
+(leave empty — do not write any episode plots here. Episode Plots are populated later via the Episode Plot Adaptation workflow once the writer has imported source material.)
 
 [H2] Reference Episodes
 Write EXACTLY 2 full reference episodes using the format below.
-The reference episodes must correspond to Episode 1 and Episode 2 from the Episode Plots above.
+These are standalone writing examples based on the series concept and characters — they are not tied to specific episode plot numbers.
 ${CANONICAL_REF_EPISODE_FORMAT}
 
 CRITICAL RULES FOR THE DRAFT:
-1. Episode Plots: exactly 5. Specific — not vague. Every plot must have a clear hook concept AND cliffhanger concept.
+1. Episode Plots: leave empty. Do NOT generate any episode plots in the draft.
 2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. 15–22 beats each. ~65% dialogue bursts, ~20% visual/action, ~15% V.O. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze.
 3. Characters: 2-4 main characters. Every character section MUST include voice + relationships — these are non-optional.
-4. Episode 1 must grab the viewer in the first beat — no setup, no backstory, start in the action.
-5. Episode 2 must continue from Episode 1's closing freeze — same scene, same tension, picked up mid-moment.
+4. Reference Episode 1 must grab the viewer in the first beat — no setup, no backstory, start in the action.
+5. Reference Episode 2 must continue from Episode 1's closing freeze — same scene, same tension, picked up mid-moment.
 6. Character voice in dialogue must be distinct — each character should sound unmistakably like themselves.
-7. Do NOT write more than 5 episode plots or 2 reference episodes in the first draft.
+7. Do NOT write more than 2 reference episodes in the first draft.
 
 ${CLARIFICATION_PROTOCOL}`;
 
@@ -1577,16 +1603,24 @@ These sections have distinct purposes and content types. NEVER mix their content
 [H2] Episode Plots
 - Contains: [H3] Episode N: Title + [P] one-paragraph story map (hook concept, key beats, character focus, cliffhanger concept)
 - Purpose: story blueprint — a planning tool, not a script
-- NEVER contains: beat-by-beat breakdowns, dialogue lines, visual directions, HOOK: / CLIFFHANGER: labels, reference episode format
+- Source: each episode plot is a microdrama ADAPTATION of a specific CHUNK from the Adaptation State — not a summary of a source chapter or episode
+- Starts empty in new documents — populated only via the Episode Plot Adaptation workflow
+- NEVER contains: beat-by-beat breakdowns, dialogue lines, visual directions, HOOK: / CLIFFHANGER: labels, reference episode format, chapter summaries from Research
 
 [H2] Reference Episodes
-- Contains: [H3] Episode N: Title + full canonical format (HOOK:, beat list with Visual/Dialogue/V.O., CLIFFHANGER:)
+- Contains: [H3] Episode N: Title + full canonical format (beat list with Visual/Dialogue/V.O. beats)
 - Purpose: canonical episode script — the actual executed version
 - NEVER contains: plot paragraph summaries or story map outlines
 
 [H2] Research & Original Story
 - Contains: source material copied verbatim — original plots, story notes, research material
+- Purpose: raw source to ADAPT FROM — it feeds the Adaptation State (chunks, plot lines) which feeds Episode Plots
 - NEVER contains: adapted content, microdrama episode plots, or reference episodes
+
+[H2] Adaptation State
+- Contains: Series Spine, Source Analysis, Pacing Framework, Plot Lines with Chunks, Characters, Episode Coverage Log
+- Purpose: the adaptation engine — tracks which chunks exist, their status, and which episode covered each chunk
+- Script writers use this to track how each sub-theme (chunk) progresses across the series
 
 TERM RECOGNITION — map these to the correct section before acting:
 "Predefined episodes" / "full episodes" / "scripted episodes" / "sample episodes" → [H2] Reference Episodes
@@ -1619,8 +1653,7 @@ Produce the complete series foundation document using this structure:
 [P] Key relationships — who they are to others and the emotional dynamic
 
 [H2] Episode Plots
-[H3] Episode N: Title
-[P] One paragraph covering hook concept, key beats, character focus, cliffhanger concept
+(leave empty — populated via the Episode Plot Adaptation workflow after source material is imported)
 
 [H2] Reference Episodes
 [H3] Episode N: Title
