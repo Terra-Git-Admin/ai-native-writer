@@ -440,7 +440,11 @@ export default function AIChatSidebar({
       if (messages.length === 0) {
         return `## Full Document (for context only — do NOT reproduce)\n${fullDocumentText}\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
       }
-      return userInput;
+      // Follow-up: include a brief scope anchor so the AI knows the original selection is still active.
+      // If this instruction seems unrelated to the selected text, the AI should ask for clarification
+      // before acting (see FOLLOW-UP MESSAGES — SCOPE CLARITY rule in the system prompt).
+      const selectionPreview = selection.text.slice(0, 120).replace(/\n/g, " ").trim();
+      return `[Follow-up — original selection still active: "${selectionPreview}${selection.text.length > 120 ? "..." : ""}"]\n\n## Instruction\n${userInput}`;
     }
     if (mode === "chat") {
       // Always include the full document so the AI has current content on every message
