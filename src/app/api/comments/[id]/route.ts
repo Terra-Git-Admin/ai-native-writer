@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { comments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // PUT /api/comments/[id] — update/resolve
 export async function PUT(
@@ -64,5 +64,18 @@ export async function DELETE(
   }
 
   await db.delete(comments).where(eq(comments.id, id));
+
+  // If this was a root comment, cascade-delete all replies (scoped to same document)
+  if (!comment.parentId) {
+    await db
+      .delete(comments)
+      .where(
+        and(
+          eq(comments.commentMarkId, comment.commentMarkId),
+          eq(comments.documentId, comment.documentId)
+        )
+      );
+  }
+
   return NextResponse.json({ ok: true });
 }

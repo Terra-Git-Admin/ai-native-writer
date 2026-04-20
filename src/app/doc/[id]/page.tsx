@@ -43,6 +43,7 @@ export default function DocumentPage() {
   // Comment sidebar state
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [openCommentCount, setOpenCommentCount] = useState(0);
   const [pendingComment, setPendingComment] = useState<{
     markId: string;
     quotedText: string;
@@ -162,6 +163,17 @@ export default function DocumentPage() {
     []
   );
 
+  const handleCommentMarkClick = useCallback(
+    (commentMarkId: string) => {
+      setCommentSidebarOpen(true);
+      setAiSidebarOpen(false);
+      setVersionHistoryOpen(false);
+      setPromptsOpen(false);
+      setActiveCommentId(commentMarkId);
+    },
+    []
+  );
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -234,13 +246,18 @@ export default function DocumentPage() {
                 setPromptsOpen(false);
               }
             }}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               commentSidebarOpen
                 ? "bg-yellow-100 text-yellow-700"
                 : "text-gray-600 hover:bg-gray-100"
             }`}
           >
             Comments
+            {openCommentCount > 0 && (
+              <span className="inline-flex items-center justify-center rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
+                {openCommentCount}
+              </span>
+            )}
           </button>
           {doc.isOwner && (
             <>
@@ -331,6 +348,7 @@ export default function DocumentPage() {
           activeCommentId={activeCommentId}
           onAIEditRequest={doc.isOwner ? handleAIEditRequest : undefined}
           onAddComment={handleAddComment}
+          onCommentMarkClick={handleCommentMarkClick}
           onHeadingsChange={setHeadings}
         />
 
@@ -355,6 +373,7 @@ export default function DocumentPage() {
               onRemoveCommentMark={(commentMarkId) => {
                 editorRef.current?.removeCommentMark(commentMarkId);
               }}
+              onCountChange={setOpenCommentCount}
             />
           </div>
         )}

@@ -181,6 +181,7 @@ interface EditorProps {
     surroundingContext: string
   ) => void;
   onAddComment?: (commentMarkId: string, quotedText: string, from: number, to: number) => void;
+  onCommentMarkClick?: (commentMarkId: string) => void;
   onHeadingsChange?: (headings: HeadingItem[]) => void;
 }
 
@@ -211,6 +212,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     activeCommentId,
     onAIEditRequest,
     onAddComment,
+    onCommentMarkClick,
     onHeadingsChange,
   },
   ref
@@ -357,19 +359,13 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             mark.type.name === "commentMark" &&
             mark.attrs.commentId === commentId
           ) {
-            editor.commands.setTextSelection(pos);
-            // Scroll the editor to the position
-            const domNode = editor.view.domAtPos(pos);
-            if (domNode.node instanceof HTMLElement) {
-              domNode.node.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-              });
-            } else if (domNode.node.parentElement) {
-              domNode.node.parentElement.scrollIntoView({
-                behavior: "smooth",
-                block: "center",
-              });
+            // Walk up from any node type (text nodes included) to find an HTMLElement
+            let el: Node | null = editor.view.domAtPos(pos).node;
+            while (el && !(el instanceof HTMLElement)) {
+              el = el.parentNode;
+            }
+            if (el instanceof HTMLElement) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
             }
             found = true;
             return false;
@@ -901,7 +897,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       )}
 
       {/* Editor */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="flex-1 overflow-y-auto"
+        onClick={(e) => {
+          if (!onCommentMarkClick) return;
+          const markEl = (e.target as HTMLElement).closest('[data-comment-id]') as HTMLElement | null;
+          if (markEl) onCommentMarkClick(markEl.getAttribute('data-comment-id')!);
+        }}
+      >
         <div className="mx-auto max-w-4xl px-8 py-8">
           {editor && (
             <BubbleMenu
