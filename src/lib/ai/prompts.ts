@@ -313,15 +313,15 @@ Core principles:
    Expected: Jade is embarrassed. She apologises.
    Unexpected: Jade slides a "Marriage Benefit" folder across the table and asks him to sign it.
 
-3. Every line earns its place — each dialogue beat must do at least one of:
-   - Reveal something about the character's personality, wound, or desire
-   - Shift the power dynamic in the scene
-   - Advance the plot toward the episode's cliffhanger
+3. Every line earns its place — each dialogue beat must serve at least one (in priority order):
+   - Serves the current plot point: moves this episode's situation forward
+   - Plants a future plot point: a seed that pays off in a named later episode
+   - Builds character arc or relationship: reveals who this person is becoming, or shifts the dynamic
    If it does none of these, cut it.
 
 4. Conflict lives in all dialogue — even "friendly" conversations have underlying tension in microdrama. Characters want different things. That want creates friction even when they're smiling.
 
-5. Short lines for mobile — maximum 1-2 sentences per line. Viewers watch on phones with split attention. Long speeches lose them.
+5. Short lines for mobile — one idea per line, maximum 15 words. If a character has two things to say, write two consecutive beats. Viewers watch on phones with split attention; long speeches lose them.
 
 6. Stage directions when they matter — [not looking up from his coffee], [grabbing the hanger until it snaps], [voice dropping to a whisper]. Physical action in dialogue reveals character as much as the words.
 
@@ -525,6 +525,11 @@ Every dialogue line must do at least one of these — if it does none, cut it:
 
 No line exists to fill silence, confirm what we already know, or repeat what was just said.
 
+DIALOGUE PURPOSE HIERARCHY — each line should serve at least one (in priority order):
+  1. Current plot point: moves this episode's situation forward
+  2. Future plot point: plants something that pays off in a later episode
+  3. Character arc or relationship: reveals who this person is becoming, or shifts how two characters relate
+
 ── TYPE C: V.O. ──
 A character's internal thought — what cannot be shown on screen.
 Format: [UL] CharacterName (V.O.): thought
@@ -532,19 +537,23 @@ No quotes. No asterisks. No INTERNAL MONOLOGUE prefix.
 
 When to use V.O.:
 — In solo scenes where a character has no one to speak to: V.O. is the primary beat type
-— In multi-character scenes: use sparingly (2–3 per episode maximum) for thoughts the character would never say aloud
+— In multi-character scenes: when the character's internal thought is essential and cannot be expressed through action or dialogue
 — Never use V.O. to explain what is visually obvious, or to restate what was just said in dialogue
+— Frequency is character-dependent: a protagonist narrator (rom-com lead, solo-mission character in a thriller) uses V.O. freely across all scene types; supporting or antagonist characters use it rarely, only at moments of genuine extremity
 
 ━━━ BEAT COUNT AND COMPOSITION ━━━
 
-Target: 15–22 beats per episode.
+Target: 15–22 spoken dialogue lines per episode (Type B). Visual and V.O. beats sit on top of this — they do not count toward the dialogue target.
 
-Dialogue (Type B): the majority of beats — conflict, revelation, and emotional shifts happen through what characters say to each other.
-Visual/Action (Type A): used to move scenes forward, show physical action, and mark transitions.
-V.O. (Type C): used sparingly except in solo scenes.
+Dialogue (Type B): the backbone. Revelation, confrontation, and emotional shifts live in what characters say to each other.
+Visual/Action (Type A): marks scene transitions, physical moves, reaction shots too large for a stage direction, and insert shots of significant objects.
+V.O. (Type C): when a character's internal thought is essential. Frequency depends on the character — some use it constantly, others rarely or never.
 
-Dialogue runs in consecutive exchanges — several lines back and forth before a Visual beat interrupts.
-Do not break up conversations with action beats after every single line.
+EXTENDED EXCHANGE RULE: Run 5–8 consecutive dialogue lines before inserting a Visual beat. The Visual beat must earn its place: a physical move, an object reveal, or a reaction too large to carry in a stage direction alone. Never insert a Visual beat after every single dialogue line.
+
+ONE IDEA PER LINE: Each dialogue beat = one thought. If a character has two things to say, write two consecutive beats. Short responses are complete beats:
+  [UL] Victoria: So who went overboard?   ← 5 words. Complete beat.
+  [UL] Elina: Secret cargo?               ← 2 words. Complete beat.
 
 ━━━ EPISODE OPENING ━━━
 
@@ -580,6 +589,12 @@ Before writing a single beat, read:
    The final beat of the previous episode is where this episode opens.
    Check how each character has spoken so far — match their established voice exactly, do not drift.
    Check what has already been revealed — never repeat what the viewer already knows, never contradict what has happened.
+
+5. BEFORE WRITING ANY DIALOGUE-HEAVY SEQUENCE — for each character pair in the scene:
+   What does A want from B in this scene?
+   What is A hiding from B?
+   What does the scene need to have revealed or shifted by its end?
+   Every dialogue line must be traceable to this. If it isn't, cut it.
 
 CHARACTER VOICE CHECK — mandatory before finalising any dialogue:
 Cover the character name on every line. You must know who said it from the words and rhythm alone.
@@ -1290,7 +1305,7 @@ COMMON INSTRUCTIONS — how to handle them:
 → Read the Episode Plots section from the full document context to understand what each episode must deliver.
 → Before writing a single beat: read the Characters section (voice, mannerisms, relationships for every character appearing in this episode), the Research & Original Story section (source material context), and ALL existing Reference Episodes in order — to continue from the last beat of the previous episode and match established character voices exactly.
 → Expand each plot paragraph into a full reference episode using the canonical format: Visual/Action, Dialogue, and V.O. beats. No HOOK label. No CLIFFHANGER label.
-→ Target 15–22 beats. ~65% dialogue bursts (3–8 consecutive lines before a Visual interrupts), ~20% Visual/Action, ~15% V.O.
+→ Target 15–22 spoken dialogue lines per episode. Run 5–8 consecutive dialogue lines before inserting a Visual beat — never break after every single line. Visual and V.O. beats are additional structure on top of dialogue, not part of the count.
 → Every episode opens with a Visual beat establishing the scene or picking up from the previous episode's last beat.
 → Every episode ends on an unresolved freeze — the last beat is never labelled.
 → Output reference episodes ONLY in the [H2] Reference Episodes section — do not reproduce or replace episode plot paragraphs.
@@ -1416,7 +1431,7 @@ ${CANONICAL_REF_EPISODE_FORMAT}
 
 CRITICAL RULES FOR THE DRAFT:
 1. Episode Plots: leave empty. Do NOT generate any episode plots in the draft.
-2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. 15–22 beats each. ~65% dialogue bursts, ~20% visual/action, ~15% V.O. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze.
+2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. Target 15–22 spoken dialogue lines per episode; run 5–8 consecutive dialogue lines before a Visual beat interrupts. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze.
 3. Characters: 2-4 main characters. Every character section MUST include voice + relationships — these are non-optional.
 4. Reference Episode 1 must grab the viewer in the first beat — no setup, no backstory, start in the action.
 5. Reference Episode 2 must continue from Episode 1's closing freeze — same scene, same tension, picked up mid-moment.
