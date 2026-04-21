@@ -20,6 +20,7 @@ import {
   MICRODRAMA_CHARACTER_ENGINE,
   MICRODRAMA_GENRE_CONTRACT,
   PLOT_INTEGRITY_AUDIT,
+  BEAT_OPTION_FRAMEWORK,
   EPISODE_PLOT_ADAPTATION_WORKFLOW,
 } from "@/lib/ai/prompts";
 
@@ -40,6 +41,7 @@ const DEFAULTS = [
   { id: "story_engine", label: "Microdrama Story Engine (Forbidden Question, Relationship Heartbeat, Emotional Temperature, A/B/C Beat Counts, Information Drip)", content: MICRODRAMA_STORY_ENGINE },
   { id: "series_engine", label: "Microdrama Series Engine (Series Spine, Escalation Ladders, Character Arc, Villain Curve, Session Structure)", content: MICRODRAMA_SERIES_ENGINE },
   { id: "plot_integrity_audit", label: "Plot Integrity Audit (Why Chain + Scene Logic + Character Introduction)", content: PLOT_INTEGRITY_AUDIT },
+  { id: "beat_option_framework", label: "Beat Option Framework (Character × Location × Topic × Mode, 3-option generation)", content: BEAT_OPTION_FRAMEWORK },
   { id: "adaptation_workflow", label: "Episode Plot Adaptation Workflow", content: EPISODE_PLOT_ADAPTATION_WORKFLOW },
   { id: "character_engine", label: "Microdrama Character Engine (Engine / Wall / Witness / Nuke)", content: MICRODRAMA_CHARACTER_ENGINE },
   { id: "genre_contract", label: "Microdrama Genre Contract (Shock / Hurt / Release by Genre)", content: MICRODRAMA_GENRE_CONTRACT },
