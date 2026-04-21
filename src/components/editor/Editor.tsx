@@ -293,7 +293,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       const aiLines = taggedAIResponse.split("\n").filter((l) => l.trim());
 
-      // Inline (single block): strip tags, use insertText to preserve marks
+      // Inline (single block): strip tags, use insertText to preserve marks.
       if (originalBlocks.length <= 1) {
         const strippedText = taggedAIResponse
           .replace(/^\[(?:H\d|OL|UL|P)\]\s*/, "")
@@ -304,47 +304,40 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         return;
       }
 
-      // Multi-block: expand the selection to full block boundaries, then
-      // replace the entire range with the AI response parsed into Tiptap nodes.
-      // This avoids the list nesting issue — orderedList replaces orderedList,
-      // not content inside it.
-      const $from = state.doc.resolve(selectionFrom);
-      const $to = state.doc.resolve(selectionTo);
+      // Multi-block: replace exactly the blocks the user selected — no
+      // expansion to the enclosing list/container. extractTaggedBlocks already
+      // captured each block at its full node boundaries (paragraph/heading/
+      // listItem), so the first block's from and the last block's to define
+      // the true minimal range the user meant to edit.
+      //
+      // Previously we walked up to the outermost list/heading, which meant a
+      // "rewrite items 3-4" on a 10-item list clobbered all 10 items.
+      const rangeStart = originalBlocks[0].from;
+      const rangeEnd = originalBlocks[originalBlocks.length - 1].to;
 
-      let expandedFrom = selectionFrom;
-      let expandedTo = selectionTo;
+      let nodes = parseTaggedLines(aiLines);
 
-      // Walk up from selection start to find the outermost block boundary
-      for (let d = $from.depth; d > 0; d--) {
-        const name = $from.node(d).type.name;
-        if (
-          ["orderedList", "bulletList", "heading"].includes(name) ||
-          (name === "paragraph" &&
-            $from.node(d - 1).type.name === "doc")
-        ) {
-          expandedFrom = $from.before(d);
-          break;
+      // If the selection was entirely listItems of one list type and the AI
+      // wrapped its output in a single same-type list, unwrap so we splice
+      // items directly into the existing list instead of nesting a list.
+      const firstTag = originalBlocks[0].line.match(/^\[(UL|OL)\]/)?.[1];
+      const allItems =
+        firstTag != null &&
+        originalBlocks.every((b) => b.line.startsWith(`[${firstTag}] `));
+      if (allItems) {
+        const expectedList = firstTag === "UL" ? "bulletList" : "orderedList";
+        if (nodes.length === 1) {
+          const only = nodes[0] as { type?: string; content?: object[] };
+          if (only.type === expectedList && Array.isArray(only.content)) {
+            nodes = only.content;
+          }
         }
       }
 
-      // Walk up from selection end
-      for (let d = $to.depth; d > 0; d--) {
-        const name = $to.node(d).type.name;
-        if (
-          ["orderedList", "bulletList", "heading"].includes(name) ||
-          (name === "paragraph" &&
-            $to.node(d - 1).type.name === "doc")
-        ) {
-          expandedTo = $to.after(d);
-          break;
-        }
-      }
-
-      const nodes = parseTaggedLines(aiLines);
       editor
         .chain()
         .focus()
-        .insertContentAt({ from: expandedFrom, to: expandedTo }, nodes)
+        .insertContentAt({ from: rangeStart, to: rangeEnd }, nodes)
         .run();
       triggerSave();
     },
