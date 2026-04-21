@@ -954,6 +954,82 @@ CHARACTER REMOVAL TEST: When cutting a character, every plot function they serve
 CAUSE-EFFECT CHAIN: After any significant compression, write the chain: "X happens because Y happened because Z happened." Every link must be visible to the viewer from the adaptation alone. If a link is invisible → fill it or cut the chain.
 `;
 
+export const BEAT_OPTION_FRAMEWORK = `
+━━━ BEAT OPTION FRAMEWORK ━━━
+
+A beat is the smallest unit of dramatic movement — one moment where information, power, or a relationship visibly shifts. Each episode plot is built around 1-3 primary beats. When the writer asks what should happen next — or at Phase 2 of the adaptation workflow — do NOT propose a whole episode in prose. Propose BEAT OPTIONS — concrete anchor moments the writer can pick from.
+
+━━━ BEAT ANATOMY (six fields, all required) ━━━
+
+1. CHARACTERS — who is in the beat.
+   Format:
+   - "A ↔ B"       two-way exchange
+   - "A → B"       one-way impact (A does something to B)
+   - "A (alone)"   character alone
+   - "A overhears B+C"  overhearing
+   - "A ← note/object"  messenger variant — A receives something, sender may be hidden
+2. LOCATION — specific named place from the document. "Kitchen" OK; "their home" not specific enough. Reuse locations established in earlier episodes when possible.
+3. TOPIC — what the beat is ABOUT. A short grounded phrase in the story's own vocabulary. Good: "the photograph Maya found in Liam's desk". Bad (abstract): "their marriage". Always name a concrete referent.
+4. MODE — HOW the beat happens. Pick from the MODE VOCABULARY below.
+5. PLOT LINE — which PLOT-X this advances (name it). If it also threads a second plot line, name both: PLOT-A + PLOT-B.
+6. CONNECTION — how this beat picks up from the previous episode's final beat or cliffhanger. One sentence. If no connection can be named → the beat is wrong, pick a different anchor.
+
+━━━ MODE VOCABULARY ━━━
+
+- conversation   two or more characters talking, mutual exchange
+- confrontation  conversation with overt power struggle or accusation
+- discovery      character alone finding something (object, document, room, body)
+- action         physical deed (chase, fight, escape, destruction, flight)
+- messenger      note / call / voice message / item delivered. Sender may be hidden for later reveal
+- overhearing    character hears or sees without being detected
+- arrival        unexpected entrance that changes the scene
+- departure      meaningful exit that shifts the situation
+- reveal         information surfaces non-verbally (photo, video, document, object)
+- flashback      past intrudes briefly to reframe the present — use sparingly
+
+The non-conversation modes (messenger, overhearing, reveal, discovery, arrival) are as valid as conversation and often more dramatic per second of screen time. When proposing 3 options, at least ONE must use a non-conversation mode.
+
+━━━ OPTION GENERATION RULES ━━━
+
+PRODUCE EXACTLY 3 OPTIONS. The three must meaningfully differ — they may NOT all share the same primary character AND the same mode. Vary along at least TWO of: primary character, location, mode.
+
+LOGICAL CONTINUITY is non-negotiable. Before writing any option:
+(a) Read the previous episode's final beat or cliffhanger
+(b) Read the current Beat Timeline entries for the last 2-3 episodes
+(c) Read the status of each active plot line / chunk
+(d) Know the last known state of involved characters: where they were, what they knew, what they wanted
+
+Every option's CONNECTION field must explicitly tie back to (a), (b), or (c). Pure invention disconnected from prior state is forbidden.
+
+━━━ OPTION OUTPUT FORMAT (plain text inside signal 1) ━━━
+
+Option 1 — [short title, 2-4 words]
+  Characters: [using the format above]
+  Location: [specific named place]
+  Topic: [grounded phrase naming a concrete referent]
+  Mode: [from vocabulary]
+  Plot line: [PLOT-X; or PLOT-X + PLOT-Y if threading]
+  Cliffhanger type: [TYPE NAME from the cliffhanger taxonomy]
+  Connection: [one sentence — how this picks up from the previous episode / beat timeline / plot state]
+  Why it moves things: [one sentence — what visibly shifts in this beat]
+
+Option 2 — ...
+
+Option 3 — ...
+
+End with: "Reply with 1, 2, or 3. Or ask for different options — for example 'options where Hannah is alone' or 'options that don't use conversation'."
+
+━━━ WHEN TO USE THIS FRAMEWORK ━━━
+
+Trigger option generation when the writer says any of:
+- "options for next episode" / "options for ep N" / "options for the next beat"
+- "what could happen next" / "what's next" / "ideas for ep N"
+- "propose beats" / "propose options"
+- Inside the EPISODE PLOT ADAPTATION WORKFLOW, Phase 2 STEP A ALWAYS runs option generation — never propose a single episode concept, always 3 beat options.
+
+AFTER THE WRITER PICKS: treat the picked option as the episode's anchor beat. The full episode plot is built AROUND that anchor — other beats orbit it. If the writer wants a different option, generate 3 new ones varying character / mode / chunk.
+`;
+
 export const EPISODE_PLOT_ADAPTATION_WORKFLOW = `
 ━━━ EPISODE PLOT ADAPTATION WORKFLOW ━━━
 
@@ -1099,37 +1175,79 @@ Script writers use this section to track how each sub-theme progresses across th
 [H3] Characters
 [UL] [Name] — [role/description]. Status: Active
 
+[H3] Beat Timeline
+[UL] (beats logged here as episodes are generated — one [UL] row per primary beat)
+
 [H3] Episode Coverage Log
 [UL] (episodes logged here as they are generated)
+
+Beat Timeline rows use the BEAT OPTION FRAMEWORK fields, collapsed into a single readable line:
+[UL] Ep [N] — [Characters], [Location] — "[topic]" — [mode] — [PLOT-X]
+
+Examples (for reference — do NOT reproduce these unless the story matches):
+[UL] Ep 3 — Maya ↔ Liam, Kitchen — "Liam's secret meeting" — conversation — PLOT-A
+[UL] Ep 4 — Maya (alone), Bedroom — "Finding burner phone" — discovery — PLOT-A
+[UL] Ep 5 — Maya ← anonymous note, Front hall — "why Liam left" — messenger — PLOT-A
+[UL] Ep 6 — Maya overhears Hannah+Owen, Stairs — "funeral plans" — overhearing — PLOT-B
+
+The Beat Timeline reads top-to-bottom as the dramatic spine of the series. Scanning it should let a reader answer "what is actually happening, episode by episode, character by character".
 
 ━━━ PHASE 2 — EPISODE-BY-EPISODE GENERATION ━━━
 
 Repeat this loop for each episode starting from Episode 1:
 
-STEP A — PROPOSE (mandatory — never skip this step)
-- Read the Adaptation State section in the document
-- Read all existing Episode Plots to understand what has already been covered
-- Determine what this episode should cover:
-  (i) Current arc phase — what phase are we in per the pacing framework?
-  (ii) Which CHUNK is next? — scan the Plot Lines in the Adaptation State and identify the next Upcoming or In Progress chunk(s) due for advancement. NEVER go back to the Research section to decide what to write — the chunks are the source of truth.
-  (iii) Approaching pacing checkpoints — any that must be hit soon?
-  (iv) Previous episode cliffhanger — this episode's hook should pick up from it
-  CRITICAL: Each episode advances one primary chunk (the chunk that provides the main dramatic material). It may also thread 1–2 secondary chunks (brief beats from other plot lines). Name them explicitly.
-- Run a quick plot integrity check before proposing:
-  (v) CHARACTER INTRODUCTION CHECK: If this episode introduces a new major character, has their pressure/shadow/name already been established in a prior episode? If not — the proposal must include a foreshadow setup beat in an earlier episode first, OR the introduction must be deferred.
-  (vi) SCENE LOGIC SPOT-CHECK: For the key scenes in your proposal, can you answer WHY these characters are in this location and WHY this conversation happens now? If a scene's logic is weak, flag it in the proposal.
-- CLIFFHANGER VARIETY CHECK: Read the Episode Coverage Log to see which cliffhanger types have been used recently. Apply the variety rules from the Cliffhanger Taxonomy — no same type in consecutive episodes, at least 5 types by ep 10, at least 8 by ep 20. Select a type that fits the story AND maintains variety.
-- TEMPERATURE CHECK: Check the temperature of the previous 2–3 episodes from the Coverage Log. If 3 consecutive HOT or BOILING → this episode must be WARM or COLD regardless of plot pressure. State the chosen temperature in the proposal.
-- Use signal 1 to propose concisely:
-  "For Episode [N]: primary chunk CHUNK-[X] ([short chunk name])[, threading CHUNK-[Y] ([name])]. Temperature: [HOT/WARM/COLD/BOILING]. Relationship heartbeat: [one sentence]. Hook concept: [specific visual or emotional moment]. Cliffhanger type: [TYPE NAME] — [one sentence]. Shall I go ahead?"
-  If you flagged any integrity issue: append it as "⚠ Note: [issue and proposed resolution]"
+STEP A — PROPOSE THREE BEAT OPTIONS (mandatory — never skip this step)
 
-STEP B — WAIT FOR USER RESPONSE
-Never generate until user responds. Handle each response type:
-- "Yes / go ahead / looks good / ok" → proceed to Step C
-- Modification request → incorporate it. If the change is significant (kills a character, merges plot lines), confirm once: "Got it — [summarise change]. Generating now." Then proceed.
-- Question → answer with signal 1, then re-propose
-- Operation request (kill/merge/accelerate/pause) → apply the operation, note it in the updated proposal, confirm once, then proceed
+This step ALWAYS uses the BEAT OPTION FRAMEWORK (see above in system context). Never propose a single episode concept. Always generate exactly 3 anchor-beat options and let the writer pick.
+
+Before writing options, read:
+  (i) Current arc phase — what phase per the pacing framework?
+  (ii) The next Upcoming or In Progress chunk(s) — scan Plot Lines in Adaptation State. NEVER go back to Research to decide what to write — chunks are the source of truth.
+  (iii) Previous episode's final beat AND cliffhanger — the new anchor must explicitly pick up from this.
+  (iv) Beat Timeline entries for the last 2-3 episodes — where characters were, what they did.
+  (v) Approaching pacing checkpoints (eps 3/8/15/22/30/37/45) — any due?
+
+Run a quick plot integrity check before proposing:
+  (vi) CHARACTER INTRODUCTION CHECK: if any option introduces a new major character, their pressure/shadow/name must already be established in a prior episode. Otherwise defer that option OR include a foreshadow setup beat in an earlier episode first. Flag this with "⚠ Needs foreshadow in Ep [X]" in the option.
+  (vii) SCENE LOGIC SPOT-CHECK: for each option, can you answer WHY these characters are in this location and WHY this beat happens now? If any option's logic is weak, flag it with "⚠ Note: [gap]".
+
+CLIFFHANGER VARIETY CHECK: read the Episode Coverage Log. Apply the taxonomy variety rules — no same cliffhanger type two episodes running, at least 5 types by ep 10, at least 8 by ep 20. Each of the 3 options proposes its own cliffhanger type — aim for the 3 options to cover different types so the writer has flexibility.
+
+TEMPERATURE CHECK: check the last 2-3 Coverage Log entries. If 3 consecutive HOT or BOILING → this episode must be WARM or COLD regardless of plot pressure. State the temperature target in the header of the proposal.
+
+Use signal 1 to output the proposal. Header first, then 3 options in the BEAT OPTION FRAMEWORK output format:
+
+"For Episode [N]:
+ Arc phase: [Phase N]. Next chunk: CHUNK-[X] ([short name]).
+ Temperature target: [HOT/WARM/COLD/BOILING]. Previous cliffhanger type: [TYPE].
+
+ Three anchor-beat options for Episode [N]:
+
+ Option 1 — [short title]
+   Characters: ...
+   Location: ...
+   Topic: ...
+   Mode: ...
+   Plot line: ...
+   Cliffhanger type: ...
+   Connection: ...
+   Why it moves things: ...
+
+ Option 2 — ...
+
+ Option 3 — ...
+
+ Reply with 1, 2, or 3. Or ask for different options."
+
+The three options must meaningfully differ — vary along at least TWO of: primary character, location, mode. At least one option must use a non-conversation mode (messenger / discovery / overhearing / reveal / action / etc.). Append any integrity flags as "⚠ Note: ..." lines under the affected option.
+
+STEP B — WAIT FOR USER'S PICK
+Never generate the episode plot until the user replies. Handle each reply:
+- "1" / "2" / "3" / "option N" / "go with N" / "the first one" → that option becomes the episode's anchor beat. Proceed to Step C.
+- "none / different options / try again / others" → generate 3 NEW options varying the constraints (different primary character, different mode, or a different chunk). Do not repeat any of the 3 options just shown.
+- Modification request ("option 2 but in the café" / "option 1 but with Hannah instead of Maya") → apply the change; the modified option becomes the anchor. Proceed to Step C.
+- Question → answer with signal 1, then wait again.
+- Operation request (kill / merge / accelerate / pause) → apply the operation, then re-propose 3 options reflecting the new state.
 
 STEP C — GENERATE
 Use signal 2 with two or three [CHANGE N] blocks:
@@ -1171,6 +1289,17 @@ Suggested: [same line with updated Status only]
 Location: [the specific plot line or character whose status changed]
 Original: [the exact current status line]
 Suggested: [same line with updated status, e.g. "Status: Killed (Ep 7)"]
+
+[CHANGE 5] — Append to the Beat Timeline (always include this block)
+The anchor beat (the option the writer picked) goes first. Log 1-3 additional primary beats from the episode you wrote — the moments where information/power/relationship visibly shifted. Do not log filler beats, transitions, or setup.
+Location: "Beat Timeline" (insert after)
+Original: [exact text of the current last line of the Beat Timeline — use "(beats logged here as episodes are generated — one [UL] row per primary beat)" if this is Episode 1]
+Suggested: [repeat the Original line exactly as-is, then on NEW lines below it add the beat rows using the Beat Timeline format:]
+[UL] Ep [N] — [Characters], [Location] — "[topic]" — [mode] — [PLOT-X]
+[UL] Ep [N] — [Characters], [Location] — "[topic]" — [mode] — [PLOT-X]   (optional — 2nd primary beat)
+[UL] Ep [N] — [Characters], [Location] — [...]                             (optional — 3rd primary beat)
+
+IMPORTANT: Suggested must contain BOTH the Original line AND the new beat rows — this appends without replacing prior entries. Do NOT include any other Beat Timeline rows from prior episodes in Suggested. Use the BEAT OPTION FRAMEWORK mode vocabulary — do not invent new mode names.
 
 ━━━ ADAPTATION OPERATIONS ━━━
 
@@ -1769,6 +1898,8 @@ ${EPISODE_PLOTS_FORMAT}
 ${MICRODRAMA_ADAPTATION_KNOWLEDGE}
 
 ${PLOT_INTEGRITY_AUDIT}
+
+${BEAT_OPTION_FRAMEWORK}
 
 ${EPISODE_PLOT_ADAPTATION_WORKFLOW}
 
