@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { comments, users } from "@/lib/db/schema";
+import { comments, documents, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
+import { logTrace } from "@/lib/saveTrace";
+
+function readTraceHeaders(req: Request) {
+  return {
+    tabId: req.headers.get("x-tab-id") || null,
+    reqId: req.headers.get("x-req-id") || null,
+  };
+}
 
 // GET /api/comments?documentId=xxx
 export async function GET(req: Request) {
@@ -45,7 +53,10 @@ export async function GET(req: Request) {
 // POST /api/comments
 export async function POST(req: Request) {
   const session = await auth();
+  const trace = readTraceHeaders(req);
+
   if (!session?.user) {
+    logTrace("comment.create.401", { ...trace });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -59,6 +70,13 @@ export async function POST(req: Request) {
     );
   }
 
+  // Read doc.updatedAt + ownerId so we can correlate the subsequent doc PUT
+  // (from applyCommentMark → onUpdate → debounced save) with this create.
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, documentId),
+    columns: { ownerId: true, updatedAt: true },
+  });
+
   const id = nanoid(12);
   await db.insert(comments).values({
     id,
@@ -70,6 +88,21 @@ export async function POST(req: Request) {
     parentId: parentId || null,
     resolved: false,
     createdAt: new Date(),
+  });
+
+  logTrace("comment.create.ok", {
+    commentId: id,
+    documentId,
+    commentMarkId,
+    authorId: session.user.id,
+    isOwner: doc?.ownerId === session.user.id,
+    docOwnerId: doc?.ownerId,
+    docUpdatedAt: doc?.updatedAt,
+    isReply: Boolean(parentId),
+    parentId: parentId || null,
+    quotedTextLen: quotedText ? String(quotedText).length : 0,
+    contentLen: String(content).length,
+    ...trace,
   });
 
   return NextResponse.json({ id });
