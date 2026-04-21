@@ -111,10 +111,33 @@ export default function CommentSidebar({
     parentId?: string
   ) => {
     if (!content.trim()) return;
-    await fetch("/api/comments", {
+    const reqId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    console.log("[save-trace]", {
+      event: "client.comment.create.start",
+      reqId,
+      documentId,
+      markId,
+      isReply: Boolean(parentId),
+      parentId: parentId || null,
+      contentLen: content.length,
+      quotedTextLen: quotedText ? quotedText.length : 0,
+    });
+    const res = await fetch("/api/comments", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Req-Id": reqId,
+      },
       body: JSON.stringify({ documentId, commentMarkId: markId, content, quotedText, parentId: parentId || null }),
+    });
+    console.log("[save-trace]", {
+      event: "client.comment.create.done",
+      reqId,
+      status: res.status,
+      ok: res.ok,
     });
     fetchComments();
   };
@@ -135,6 +158,12 @@ export default function CommentSidebar({
   };
 
   const resolveComment = async (commentId: string, resolved: boolean) => {
+    console.log("[save-trace]", {
+      event: "client.comment.resolve",
+      commentId,
+      documentId,
+      resolved,
+    });
     await fetch(`/api/comments/${commentId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -144,14 +173,34 @@ export default function CommentSidebar({
   };
 
   const deleteComment = async (commentId: string, commentMarkId: string, isRoot: boolean) => {
+    console.log("[save-trace]", {
+      event: "client.comment.delete",
+      commentId,
+      commentMarkId,
+      documentId,
+      isRoot,
+    });
     await fetch(`/api/comments/${commentId}`, { method: "DELETE" });
     if (isRoot) {
+      // Removing the mark triggers onUpdate → debounced save. Worth knowing
+      // because that save carries the current editor content to the server
+      // (possibly stale if the owner hasn't refreshed after recent edits).
+      console.log("[save-trace]", {
+        event: "client.comment.delete.removeMark",
+        commentMarkId,
+        documentId,
+      });
       onRemoveCommentMark(commentMarkId);
     }
     fetchComments();
   };
 
   const deleteReply = async (replyId: string) => {
+    console.log("[save-trace]", {
+      event: "client.comment.deleteReply",
+      replyId,
+      documentId,
+    });
     await fetch(`/api/comments/${replyId}`, { method: "DELETE" });
     fetchComments();
   };
