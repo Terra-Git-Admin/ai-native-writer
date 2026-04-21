@@ -22,6 +22,11 @@ import {
 } from "react";
 import EditorToolbar from "./EditorToolbar";
 import type { EditorState } from "@tiptap/pm/state";
+// Used by the poll to decide whether to auto-apply server content (comment-mark
+// sync from a reviewer is safe) or surface a conflict banner (structural edit
+// from another tab). Implementation lives in src/lib/commentMarks.ts so the
+// server seatbelt uses the same comparison.
+import { isCommentMarkOnlyDiff } from "@/lib/commentMarks";
 
 export type TaggedBlock = {
   line: string; // full tagged string e.g. "[OL] Flutter app in V2..."
@@ -140,31 +145,25 @@ function parseTaggedLines(lines: string[]): object[] {
   return nodes;
 }
 
-// Returns true if the two Tiptap JSON documents differ only in commentMark attributes.
-// Used by the poll to decide whether to auto-apply server content (comment-mark sync
-// from a reviewer is safe) or surface a conflict banner (structural edit from another tab).
-function isCommentMarkOnlyDiff(a: object, b: object): boolean {
-  const strip = (v: unknown): unknown => {
-    if (Array.isArray(v)) return v.map(strip);
-    if (v && typeof v === "object") {
-      const o = v as Record<string, unknown>;
-      const out: Record<string, unknown> = {};
-      for (const [k, val] of Object.entries(o)) {
-        if (k === "marks" && Array.isArray(val)) {
-          const filtered = (val as Record<string, unknown>[])
-            .filter((m) => m.type !== "commentMark")
-            .map(strip);
-          if (filtered.length > 0) out[k] = filtered;
-          // omit key entirely when empty so it matches nodes that have no marks property
-        } else {
-          out[k] = strip(val);
-        }
-      }
-      return out;
-    }
-    return v;
-  };
-  return JSON.stringify(strip(a)) === JSON.stringify(strip(b));
+// djb2 hash of arbitrary string — used to correlate client-side content state
+// with server-side save-trace logs. Not cryptographic.
+function contentHash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function newId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function trace(event: string, data: Record<string, unknown> = {}): void {
+  try {
+    console.log("[save-trace]", { event, ts: new Date().toISOString(), ...data });
+  } catch {
+    /* swallow */
+  }
 }
 
 interface EditorProps {
@@ -222,13 +221,53 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   );
   const saveStatusRef = useRef<"saved" | "saving" | "unsaved">("saved");
   useEffect(() => { saveStatusRef.current = saveStatus; }, [saveStatus]);
+  // Non-null when the last save attempt failed (HTTP error or network throw).
+  // Surfaced as a visible banner so silent 401/403/500 can't mask data loss.
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Server-side updatedAt from the last PUT response. Used by the poll to
   // recognise our own saves and avoid false conflict banners.
   const lastSavedServerUpdatedAtRef = useRef<string | null>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Stable per-tab id — threaded into save/poll logs on both client and server
+  // so we can correlate events across the two in Cloud Run.
+  const tabIdRef = useRef<string>(newId());
   // Conflict state: set when the poll detects structural content changes from another tab.
   const [conflictDetected, setConflictDetected] = useState(false);
   const [pendingServerContent, setPendingServerContent] = useState<object | null>(null);
+
+  // One-time mount log + visibility change tracking (hypothesis E: browsers
+  // throttle setInterval on backgrounded tabs, so a reviewer's poll can go
+  // minutes without firing — making their local content arbitrarily stale).
+  useEffect(() => {
+    trace("client.editor.mount", {
+      docId: documentId,
+      tabId: tabIdRef.current,
+      isOwner,
+      initialBytes: initialContent?.length ?? 0,
+      initialHash: initialContent ? contentHash(initialContent) : null,
+      visibility: typeof document !== "undefined" ? document.visibilityState : null,
+    });
+    if (typeof document === "undefined") return;
+    let hiddenAt: number | null = null;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        trace("client.visibility.hidden", {
+          docId: documentId,
+          tabId: tabIdRef.current,
+        });
+      } else {
+        trace("client.visibility.visible", {
+          docId: documentId,
+          tabId: tabIdRef.current,
+          hiddenDurationMs: hiddenAt ? Date.now() - hiddenAt : null,
+        });
+        hiddenAt = null;
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [documentId, isOwner, initialContent]);
 
   const editor = useEditor({
     extensions: [
@@ -652,27 +691,71 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const saveDocument = useCallback(
     async (content: object) => {
+      const reqId = newId();
+      const contentStr = JSON.stringify(content);
+      const tStart =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
+      trace("client.save.start", {
+        reqId,
+        docId: documentId,
+        tabId: tabIdRef.current,
+        isOwner,
+        bytes: contentStr.length,
+        hash: contentHash(contentStr),
+      });
       setSaveStatus("saving");
       try {
-        const payload: Record<string, unknown> = {
-          content: JSON.stringify(content),
-        };
-        // Non-owners can only save comment mark changes
-        if (!isOwner) {
-          payload.commentMarkOnly = true;
-        }
+        const payload: Record<string, unknown> = { content: contentStr };
+        // Non-owners can only save comment mark changes (server enforces too).
+        if (!isOwner) payload.commentMarkOnly = true;
         const res = await fetch(`/api/documents/${documentId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Tab-Id": tabIdRef.current,
+            "X-Req-Id": reqId,
+            "X-Client-Ts": new Date().toISOString(),
+          },
           body: JSON.stringify(payload),
         });
+        const latency = Math.round(
+          (typeof performance !== "undefined" ? performance.now() : Date.now()) -
+            tStart
+        );
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
           if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          setSaveStatus("saved");
+          setSaveError(null);
+          trace("client.save.ok", {
+            reqId,
+            status: res.status,
+            updatedAt: data.updatedAt ?? null,
+            latencyMs: latency,
+          });
+        } else {
+          // DON'T mask non-2xx as "saved" — that was the original silent-failure
+          // bug. Surface it, clear the server-updatedAt ref so poll won't
+          // falsely suppress a conflict banner on the next tick, and flip state
+          // back to "unsaved" so the next keystroke will retry via debounce.
+          const errBody = await res.text().catch(() => "");
+          lastSavedServerUpdatedAtRef.current = null;
+          setSaveStatus("unsaved");
+          setSaveError(
+            `Save failed (HTTP ${res.status}). ${errBody.slice(0, 200)}`
+          );
+          trace("client.save.fail", {
+            reqId,
+            status: res.status,
+            bodyPreview: errBody.slice(0, 200),
+            latencyMs: latency,
+          });
         }
-        setSaveStatus("saved");
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         setSaveStatus("unsaved");
+        setSaveError(`Network error while saving: ${msg}`);
+        trace("client.save.throw", { reqId, err: msg });
       }
     },
     [documentId, isOwner]
@@ -685,16 +768,53 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   useEffect(() => {
     if (!editor) return;
     const poll = async () => {
+      const reqId = newId();
       try {
-        const res = await fetch(`/api/documents/${documentId}`);
-        if (!res.ok) return;
+        const res = await fetch(`/api/documents/${documentId}`, {
+          headers: {
+            "X-Tab-Id": tabIdRef.current,
+            "X-Req-Id": reqId,
+            "X-Client-Ts": new Date().toISOString(),
+          },
+        });
+        if (!res.ok) {
+          trace("client.poll.fail", {
+            reqId,
+            docId: documentId,
+            tabId: tabIdRef.current,
+            status: res.status,
+          });
+          return;
+        }
         const data = await res.json();
         if (!data.content) return;
 
         const serverContent = JSON.parse(data.content);
         const localContent = editor.getJSON();
+        const serverStr = JSON.stringify(serverContent);
+        const localStr = JSON.stringify(localContent);
 
-        if (JSON.stringify(serverContent) === JSON.stringify(localContent)) return;
+        if (serverStr === localStr) return;
+
+        const commentMarkOnly = isCommentMarkOnlyDiff(
+          serverContent,
+          localContent
+        );
+
+        const pollCtx = {
+          reqId,
+          docId: documentId,
+          tabId: tabIdRef.current,
+          isOwner,
+          saveStatus: saveStatusRef.current,
+          refUpdatedAt: lastSavedServerUpdatedAtRef.current,
+          serverUpdatedAt: data.updatedAt,
+          localHash: contentHash(localStr),
+          serverHash: contentHash(serverStr),
+          localBytes: localStr.length,
+          serverBytes: serverStr.length,
+          commentMarkOnly,
+        };
 
         const restoreCursor = () => {
           try {
@@ -707,33 +827,45 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
         if (!isOwner) {
           // Reviewers are read-only — always sync to server
+          trace("client.poll.reviewer.applyServer", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
           restoreCursor();
           return;
         }
 
         // Owner path: skip if local changes are in flight
-        if (saveStatusRef.current !== "saved") return;
+        if (saveStatusRef.current !== "saved") {
+          trace("client.poll.skip.inflight", pollCtx);
+          return;
+        }
 
         // Skip if this updatedAt is the one we just saved (avoids a race where
         // the poll response arrives just after our save but before the next edit)
         if (
           lastSavedServerUpdatedAtRef.current &&
           data.updatedAt === lastSavedServerUpdatedAtRef.current
-        ) return;
+        ) {
+          trace("client.poll.skip.ownSave", pollCtx);
+          return;
+        }
 
-        if (isCommentMarkOnlyDiff(serverContent, localContent)) {
+        if (commentMarkOnly) {
           // Only comment marks differ — reviewer added a highlight. Apply silently.
+          trace("client.poll.applyCommentMarks", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
           restoreCursor();
         } else {
           // Structural content differs from another instance. Never silently revert —
           // surface a banner so the writer decides.
+          trace("client.poll.conflict", pollCtx);
           setPendingServerContent(serverContent);
           setConflictDetected(true);
         }
-      } catch {
-        // ignore fetch errors
+      } catch (err) {
+        trace("client.poll.throw", {
+          reqId,
+          err: err instanceof Error ? err.message : String(err),
+        });
       }
     };
 
@@ -864,6 +996,36 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         )}
       </div>
 
+      {/* Save error banner — shown when a PUT failed (HTTP error or network).
+          Previously these were silently swallowed and saveStatus still said "Saved". */}
+      {saveError && (
+        <div className="flex items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+          <span className="flex-1">{saveError}</span>
+          <button
+            type="button"
+            onClick={() => {
+              if (editor && isOwner) {
+                trace("client.saveError.retry", {
+                  docId: documentId,
+                  tabId: tabIdRef.current,
+                });
+                saveDocument(editor.getJSON());
+              }
+            }}
+            className="rounded bg-red-100 px-2 py-1 font-medium hover:bg-red-200 transition-colors"
+          >
+            Retry
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="rounded bg-white border border-red-200 px-2 py-1 font-medium hover:bg-red-50 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Conflict banner — shown when poll detects structural content change from another tab */}
       {conflictDetected && pendingServerContent && (
         <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
@@ -872,24 +1034,34 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             type="button"
             onClick={() => {
               if (editor) {
+                const localBytes = JSON.stringify(editor.getJSON()).length;
+                trace("client.banner.applyServer", {
+                  docId: documentId,
+                  tabId: tabIdRef.current,
+                  localBytesDiscarded: localBytes,
+                });
                 editor.commands.setContent(pendingServerContent, { emitUpdate: false });
                 lastSavedServerUpdatedAtRef.current = null;
               }
               setConflictDetected(false);
               setPendingServerContent(null);
             }}
-            className="rounded bg-amber-100 px-2 py-1 font-medium hover:bg-amber-200 transition-colors"
+            className="rounded bg-white border border-amber-200 px-2 py-1 font-medium hover:bg-amber-50 transition-colors"
           >
             Apply their version
           </button>
           <button
             type="button"
             onClick={() => {
+              trace("client.banner.keepLocal", {
+                docId: documentId,
+                tabId: tabIdRef.current,
+              });
               setConflictDetected(false);
               setPendingServerContent(null);
               if (editor && isOwner) saveDocument(editor.getJSON());
             }}
-            className="rounded bg-white border border-amber-200 px-2 py-1 font-medium hover:bg-amber-50 transition-colors"
+            className="rounded bg-amber-100 px-2 py-1 font-medium hover:bg-amber-200 transition-colors"
           >
             Keep mine
           </button>

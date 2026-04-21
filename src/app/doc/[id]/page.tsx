@@ -146,11 +146,19 @@ export default function DocumentPage() {
 
   const handleAddComment = useCallback(
     (commentMarkId: string, quotedText: string, from: number, to: number) => {
+      console.log("[save-trace]", {
+        event: "client.comment.addStart",
+        documentId: params.id,
+        commentMarkId,
+        quotedTextLen: quotedText.length,
+        selectionFrom: from,
+        selectionTo: to,
+      });
       setPendingComment({ markId: commentMarkId, quotedText, from, to });
       setCommentSidebarOpen(true);
       setAiSidebarOpen(false);
     },
-    []
+    [params.id]
   );
 
   const handleActiveCommentChange = useCallback(
