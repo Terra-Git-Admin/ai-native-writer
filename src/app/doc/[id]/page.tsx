@@ -67,6 +67,53 @@ export default function DocumentPage() {
   const [selectedModelId, setSelectedModelId] = useState("");
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
 
+  // AI sidebar width — 20% wider than the old w-96 (384px) by default, user-
+  // adjustable by dragging the left edge, persisted per-browser in localStorage.
+  const AI_SIDEBAR_DEFAULT = 460;
+  const AI_SIDEBAR_MIN = 320;
+  const AI_SIDEBAR_MAX = 900;
+  const [aiSidebarWidth, setAiSidebarWidth] = useState(AI_SIDEBAR_DEFAULT);
+  const aiSidebarWidthRef = useRef(AI_SIDEBAR_DEFAULT);
+  useEffect(() => {
+    aiSidebarWidthRef.current = aiSidebarWidth;
+  }, [aiSidebarWidth]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = Number(window.localStorage.getItem("aiSidebarWidth"));
+    if (saved >= AI_SIDEBAR_MIN && saved <= AI_SIDEBAR_MAX) {
+      setAiSidebarWidth(saved);
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("aiSidebarWidth", String(aiSidebarWidth));
+  }, [aiSidebarWidth]);
+  const startAiSidebarDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = aiSidebarWidthRef.current;
+    const onMove = (ev: MouseEvent) => {
+      // Handle sits on the LEFT edge of the sidebar — so dragging left makes
+      // the sidebar wider, dragging right makes it narrower.
+      const delta = startX - ev.clientX;
+      const next = Math.max(
+        AI_SIDEBAR_MIN,
+        Math.min(AI_SIDEBAR_MAX, startW + delta)
+      );
+      setAiSidebarWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
+
   useEffect(() => {
     fetch(`/api/documents/${params.id}`)
       .then((r) => {
@@ -378,7 +425,15 @@ export default function DocumentPage() {
           </div>
         )}
         {aiSidebarOpen && (
-          <div className="w-96 border-l border-gray-200 bg-gray-50">
+          <div
+            className="relative shrink-0 border-l border-gray-200 bg-gray-50"
+            style={{ width: aiSidebarWidth }}
+          >
+            <div
+              onMouseDown={startAiSidebarDrag}
+              title="Drag to resize"
+              className="absolute left-0 top-0 bottom-0 z-10 w-1 cursor-col-resize hover:bg-indigo-200/60 active:bg-indigo-300/70"
+            />
             <AIChatSidebar
               documentId={doc.id}
               selection={aiSelection}
