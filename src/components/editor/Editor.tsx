@@ -26,7 +26,7 @@ import type { EditorState } from "@tiptap/pm/state";
 // sync from a reviewer is safe) or surface a conflict banner (structural edit
 // from another tab). Implementation lives in src/lib/commentMarks.ts so the
 // server seatbelt uses the same comparison.
-import { isCommentMarkOnlyDiff } from "@/lib/commentMarks";
+import { isCommentMarkOnlyDiff, isNormalisedEqual } from "@/lib/commentMarks";
 
 export type TaggedBlock = {
   line: string; // full tagged string e.g. "[OL] Flutter app in V2..."
@@ -839,7 +839,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const serverStr = JSON.stringify(serverContent);
         const localStr = JSON.stringify(localContent);
 
+        // Identical bytes → obvious no-op.
         if (serverStr === localStr) return;
+        // Tiptap can add default null attrs (e.g. textAlign: null) on load
+        // that aren't in the stored JSON. Treat those as equal so a
+        // freshly-split doc doesn't fire a false conflict banner on first open.
+        if (isNormalisedEqual(serverContent, localContent)) return;
 
         const commentMarkOnly = isCommentMarkOnlyDiff(
           serverContent,

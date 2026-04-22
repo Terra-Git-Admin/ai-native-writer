@@ -15,7 +15,7 @@ import { inferTabType } from "./tab-type-inference";
 
 interface TiptapNode {
   type?: string;
-  attrs?: { level?: number };
+  attrs?: Record<string, unknown>;
   content?: TiptapNode[];
   text?: string;
   marks?: unknown[];
@@ -43,7 +43,10 @@ export interface SectionTab {
 function h1HeadingNode(title: string): TiptapNode {
   return {
     type: "heading",
-    attrs: { level: 1 },
+    // textAlign: null matches Tiptap's round-trip output (TextAlign extension
+    // adds it on load). Without it the first poll after doc open sees a
+    // normalisation mismatch and fires a false conflict banner.
+    attrs: { textAlign: null, level: 1 },
     content: [{ type: "text", text: title }],
   };
 }

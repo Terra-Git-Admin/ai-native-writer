@@ -51,7 +51,9 @@ function serialise(nodes) {
   return JSON.stringify({ type: "doc", content: nodes });
 }
 function h1Node(title) {
-  return { type: "heading", attrs: { level: 1 }, content: [{ type: "text", text: title }] };
+  // textAlign: null matches Tiptap's normalised round-trip output so the
+  // client's poll doesn't flag a false conflict on first load.
+  return { type: "heading", attrs: { textAlign: null, level: 1 }, content: [{ type: "text", text: title }] };
 }
 
 function splitTiptapDocument(rawContent) {
