@@ -355,7 +355,7 @@ Core principles:
 
 4. Conflict lives in all dialogue — even "friendly" conversations have underlying tension in microdrama. Characters want different things. That want creates friction even when they're smiling.
 
-5. Short lines for mobile — one idea per line, maximum 15 words. If a character has two things to say, write two consecutive beats. Viewers watch on phones with split attention; long speeches lose them.
+5. Short lines for mobile — one idea per line, maximum 10 words. If a character has two things to say, write two consecutive beats. Viewers watch on phones with split attention; long speeches lose them. (Exception: break this limit only when the script writer explicitly requests it.)
 
 6. Stage directions when they matter — [not looking up from his coffee], [grabbing the hanger until it snaps], [voice dropping to a whisper]. Physical action in dialogue reveals character as much as the words.
 
@@ -577,13 +577,13 @@ When to use V.O.:
 
 ━━━ BEAT COUNT AND COMPOSITION ━━━
 
-Target: 15–22 spoken dialogue lines per episode (Type B). Visual and V.O. beats sit on top of this — they do not count toward the dialogue target.
+Target: 13–18 spoken dialogue lines per episode (Type B). Visual and V.O. beats sit on top of this — they do not count toward the dialogue target.
 
 Dialogue (Type B): the backbone. Revelation, confrontation, and emotional shifts live in what characters say to each other.
 Visual/Action (Type A): marks scene transitions, physical moves, reaction shots too large for a stage direction, and insert shots of significant objects.
 V.O. (Type C): when a character's internal thought is essential. Frequency depends on the character — some use it constantly, others rarely or never.
 
-EXTENDED EXCHANGE RULE: Run 5–8 consecutive dialogue lines before inserting a Visual beat. The Visual beat must earn its place: a physical move, an object reveal, or a reaction too large to carry in a stage direction alone. Never insert a Visual beat after every single dialogue line.
+EXTENDED EXCHANGE RULE: Run 4–6 consecutive dialogue lines before inserting a Visual beat. The Visual beat must earn its place: a physical move, an object reveal, or a reaction too large to carry in a stage direction alone. Never insert a Visual beat after every single dialogue line. (Exception: break this rule only when the script writer explicitly requests it.)
 
 ONE IDEA PER LINE: Each dialogue beat = one thought. If a character has two things to say, write two consecutive beats. Short responses are complete beats:
   [UL] Victoria: So who went overboard?   ← 5 words. Complete beat.
@@ -1472,7 +1472,7 @@ COMMON INSTRUCTIONS — how to handle them:
 → Read the "## Surrounding Episode Plots" context block to understand what each episode must deliver.
 → Before writing a single beat: read the "## Characters" block (voice, mannerisms, relationships), the "## Original Plotline" block (source material context), and the "## Previous Reference Episodes" block in order — to continue from the last beat of the previous episode and match established character voices exactly.
 → Expand each plot paragraph into a full reference episode using the canonical format: Visual/Action, Dialogue, and V.O. beats. No HOOK label. No CLIFFHANGER label.
-→ Target 15–22 spoken dialogue lines per episode. Run 5–8 consecutive dialogue lines before inserting a Visual beat — never break after every single line. Visual and V.O. beats are additional structure on top of dialogue, not part of the count.
+→ Target 13–18 spoken dialogue lines per episode. Run 4–6 consecutive dialogue lines before inserting a Visual beat — never break after every single line. Visual and V.O. beats are additional structure on top of dialogue, not part of the count. (Exception: any of these limits may be broken only when the script writer explicitly requests it.)
 → Every episode opens with a Visual beat establishing the scene or picking up from the previous episode's last beat.
 → Every episode ends on an unresolved freeze — the last beat is never labelled.
 → Output is a new [H3] block appended at the end of the active reference_episode tab's content. Never reproduce or replace existing [H3] blocks unless the writer explicitly selected one.
@@ -1598,7 +1598,7 @@ ${CANONICAL_REF_EPISODE_FORMAT}
 
 CRITICAL RULES FOR THE DRAFT:
 1. Episode Plots: leave empty. Do NOT generate any episode plots in the draft.
-2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. Target 15–22 spoken dialogue lines per episode; run 5–8 consecutive dialogue lines before a Visual beat interrupts. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze.
+2. Reference Episodes: exactly 2. Use the canonical format — Visual/Action, Dialogue, and V.O. beat types. No HOOK label. No CLIFFHANGER label. Target 13–18 spoken dialogue lines per episode; run 4–6 consecutive dialogue lines before a Visual beat interrupts. Read the Characters section before writing any dialogue — every line must match each character's established voice. Episode 1 opens with an immediate Visual beat and ends on an unresolved freeze. Episode 2 opens with a Visual beat that picks up from Episode 1's closing freeze. (Exception: any of these limits may be broken only when the script writer explicitly requests it.)
 3. Characters: 2-4 main characters. Every character section MUST include voice + relationships — these are non-optional.
 4. Reference Episode 1 must grab the viewer in the first beat — no setup, no backstory, start in the action.
 5. Reference Episode 2 must continue from Episode 1's closing freeze — same scene, same tension, picked up mid-moment.
