@@ -168,6 +168,7 @@ function trace(event: string, data: Record<string, unknown> = {}): void {
 
 interface EditorProps {
   documentId: string;
+  tabId: string;
   initialContent: string | null;
   isOwner: boolean;
   activeCommentId: string | null;
@@ -195,17 +196,20 @@ export interface EditorHandle {
     selectionTo: number
   ) => void;
   getFullText: () => string;
+  getContentJSON: () => string | null;
   isEmpty: () => boolean;
   setFullContent: (content: string) => void;
   findAndReplace: (original: string, replacement: string) => void;
   highlightSelection: (from: number, to: number, color: string) => void;
   removeHighlight: (from: number, to: number) => void;
   scrollToHeading: (pos: number) => void;
+  scrollToHeadingByText: (text: string) => boolean;
 }
 
 const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   {
     documentId,
+    tabId,
     initialContent,
     isOwner,
     activeCommentId,
@@ -241,6 +245,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   useEffect(() => {
     trace("client.editor.mount", {
       docId: documentId,
+      docTabId: tabId,
       tabId: tabIdRef.current,
       isOwner,
       initialBytes: initialContent?.length ?? 0,
@@ -409,6 +414,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (!editor) return "";
       return editor.state.doc.textContent;
     },
+    getContentJSON() {
+      if (!editor) return null;
+      try {
+        return JSON.stringify(editor.getJSON());
+      } catch {
+        return null;
+      }
+    },
     isEmpty() {
       return !editor || editor.isEmpty;
     },
@@ -466,6 +479,36 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       } catch {
         // ignore if position is out of range
       }
+    },
+    // Find the first heading whose text matches (case-insensitive, trimmed)
+    // and scroll to it. Returns true when found. Used by the tab rail's
+    // nested sub-items — each sub-item is derived from a [H3] heading.
+    scrollToHeadingByText(text: string): boolean {
+      if (!editor) return false;
+      const needle = text.trim().toLowerCase();
+      if (!needle) return false;
+      let hit = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (hit) return false;
+        if (node.type.name === "heading") {
+          if (node.textContent.trim().toLowerCase() === needle) {
+            try {
+              const domNode = editor.view.domAtPos(pos + 1).node as HTMLElement;
+              let el: Node | null = domNode;
+              while (el && !(el instanceof HTMLElement)) el = el.parentNode;
+              (el as HTMLElement | null)?.scrollIntoView?.({
+                behavior: "smooth",
+                block: "start",
+              });
+            } catch {
+              /* ignore */
+            }
+            hit = true;
+            return false;
+          }
+        }
+      });
+      return hit;
     },
     findAndReplace(original: string, replacement: string) {
       if (!editor) return;
@@ -691,6 +734,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       trace("client.save.start", {
         reqId,
         docId: documentId,
+        docTabId: tabId,
         tabId: tabIdRef.current,
         isOwner,
         bytes: contentStr.length,
@@ -701,16 +745,20 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const payload: Record<string, unknown> = { content: contentStr };
         // Non-owners can only save comment mark changes (server enforces too).
         if (!isOwner) payload.commentMarkOnly = true;
-        const res = await fetch(`/api/documents/${documentId}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Tab-Id": tabIdRef.current,
-            "X-Req-Id": reqId,
-            "X-Client-Ts": new Date().toISOString(),
-          },
-          body: JSON.stringify(payload),
-        });
+        const res = await fetch(
+          `/api/documents/${documentId}/tabs/${tabId}/content`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Tab-Id": tabIdRef.current,
+              "X-Doc-Tab-Id": tabId,
+              "X-Req-Id": reqId,
+              "X-Client-Ts": new Date().toISOString(),
+            },
+            body: JSON.stringify(payload),
+          }
+        );
         const latency = Math.round(
           (typeof performance !== "undefined" ? performance.now() : Date.now()) -
             tStart
@@ -751,25 +799,29 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         trace("client.save.throw", { reqId, err: msg });
       }
     },
-    [documentId, isOwner]
+    [documentId, tabId, isOwner]
   );
 
-  // Poll for document updates (picks up comment marks added by reviewers).
+  // Poll for tab updates (picks up comment marks added by reviewers).
   // For owners, the poll ONLY auto-applies comment-mark-only changes. Any structural
-  // content difference (e.g. same doc open in another tab with stale content) is
+  // content difference (e.g. same tab open in another window with stale content) is
   // surfaced as a conflict banner — never silently applied.
   useEffect(() => {
     if (!editor) return;
     const poll = async () => {
       const reqId = newId();
       try {
-        const res = await fetch(`/api/documents/${documentId}`, {
-          headers: {
-            "X-Tab-Id": tabIdRef.current,
-            "X-Req-Id": reqId,
-            "X-Client-Ts": new Date().toISOString(),
-          },
-        });
+        const res = await fetch(
+          `/api/documents/${documentId}/tabs/${tabId}/content`,
+          {
+            headers: {
+              "X-Tab-Id": tabIdRef.current,
+              "X-Doc-Tab-Id": tabId,
+              "X-Req-Id": reqId,
+              "X-Client-Ts": new Date().toISOString(),
+            },
+          }
+        );
         if (!res.ok) {
           trace("client.poll.fail", {
             reqId,
@@ -864,7 +916,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
     const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [editor, documentId, isOwner]);
+  }, [editor, documentId, tabId, isOwner]);
 
   // Keyboard shortcut for manual save
   useEffect(() => {

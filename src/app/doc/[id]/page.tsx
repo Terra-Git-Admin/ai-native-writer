@@ -1,10 +1,10 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Editor, { EditorHandle, TaggedBlock, HeadingItem } from "@/components/editor/Editor";
-import DocumentOutline from "@/components/editor/DocumentOutline";
+import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
@@ -14,6 +14,7 @@ interface DocumentData {
   id: string;
   title: string;
   content: string | null;
+  activeTabId: string | null;
   ownerId: string;
   isOwner: boolean;
 }
@@ -21,15 +22,17 @@ interface DocumentData {
 export default function DocumentPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const editorRef = useRef<EditorHandle>(null);
   const [doc, setDoc] = useState<DocumentData | null>(null);
+  const [tabs, setTabs] = useState<TabRow[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [titleSaveTimeout, setTitleSaveTimeout] =
     useState<NodeJS.Timeout | null>(null);
 
-  // AI sidebar state
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
   const [aiSelection, setAiSelection] = useState<{
     text: string;
@@ -40,7 +43,6 @@ export default function DocumentPage() {
     surroundingContext: string;
   } | null>(null);
 
-  // Comment sidebar state
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [openCommentCount, setOpenCommentCount] = useState(0);
@@ -51,24 +53,21 @@ export default function DocumentPage() {
     to: number;
   } | null>(null);
 
-  // Version history state
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
-
-  // Prompts panel state
   const [promptsOpen, setPromptsOpen] = useState(false);
 
-  // Document outline headings
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  // Live headings of the active tab — fed by the editor on every transaction
+  // and consumed by the rail for the active tab's nested outline, so a newly
+  // typed [H3] appears in the rail immediately rather than waiting for a
+  // tabs-refetch.
+  const [activeTabHeadings, setActiveTabHeadings] = useState<HeadingItem[]>([]);
 
-  // AI model selection
   const [aiModels, setAiModels] = useState<
     { id: string; label: string; provider: string; thinking?: boolean }[]
   >([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
 
-  // AI sidebar width — 20% wider than the old w-96 (384px) by default, user-
-  // adjustable by dragging the left edge, persisted per-browser in localStorage.
   const AI_SIDEBAR_DEFAULT = 460;
   const AI_SIDEBAR_MIN = 320;
   const AI_SIDEBAR_MAX = 900;
@@ -93,8 +92,6 @@ export default function DocumentPage() {
     const startX = e.clientX;
     const startW = aiSidebarWidthRef.current;
     const onMove = (ev: MouseEvent) => {
-      // Handle sits on the LEFT edge of the sidebar — so dragging left makes
-      // the sidebar wider, dragging right makes it narrower.
       const delta = startX - ev.clientX;
       const next = Math.max(
         AI_SIDEBAR_MIN,
@@ -114,39 +111,78 @@ export default function DocumentPage() {
     document.addEventListener("mouseup", onUp);
   }, []);
 
+  const fetchTabs = useCallback(async (): Promise<TabRow[]> => {
+    const res = await fetch(`/api/documents/${params.id}/tabs`);
+    if (!res.ok) return [];
+    const data: TabRow[] = await res.json();
+    setTabs(data);
+    return data;
+  }, [params.id]);
+
   useEffect(() => {
-    fetch(`/api/documents/${params.id}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Not found");
-        return r.json();
-      })
-      .then((data) => {
-        setDoc(data);
-        setTitle(data.title);
+    let cancelled = false;
+    (async () => {
+      try {
+        const [docRes, tabsRes] = await Promise.all([
+          fetch(`/api/documents/${params.id}`),
+          fetch(`/api/documents/${params.id}/tabs`),
+        ]);
+        if (!docRes.ok) throw new Error("Not found");
+        const docData: DocumentData = await docRes.json();
+        const tabList: TabRow[] = tabsRes.ok ? await tabsRes.json() : [];
+        if (cancelled) return;
+
+        setDoc(docData);
+        setTitle(docData.title);
+        setTabs(tabList);
+
+        const urlTab = searchParams.get("tab");
+        let target: string | null = null;
+        if (urlTab && tabList.find((t) => t.id === urlTab)) {
+          target = urlTab;
+        } else if (
+          docData.activeTabId &&
+          tabList.find((t) => t.id === docData.activeTabId)
+        ) {
+          target = docData.activeTabId;
+        } else if (tabList[0]) {
+          target = tabList[0].id;
+        }
+
+        setActiveTabId(target);
         setLoading(false);
 
-        // Auto-open comments sidebar if doc has comments
-        fetch(`/api/comments?documentId=${params.id}`)
-          .then((r) => r.json())
-          .then((comments) => {
-            if (comments.length > 0) {
-              setCommentSidebarOpen(true);
-            }
-          })
-          .catch(() => {});
-      })
-      .catch(() => {
-        router.push("/");
-      });
-  }, [params.id, router]);
+        if (target && !urlTab) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("tab", target);
+          window.history.replaceState({}, "", url.toString());
+        }
 
-  // Fetch available AI models
+        if (target) {
+          fetch(`/api/comments?documentId=${params.id}&tabId=${target}`)
+            .then((r) => r.json())
+            .then((comments) => {
+              if (Array.isArray(comments) && comments.length > 0) {
+                setCommentSidebarOpen(true);
+              }
+            })
+            .catch(() => {});
+        }
+      } catch {
+        if (!cancelled) router.push("/");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id]);
+
   useEffect(() => {
     fetch("/api/ai/models")
       .then((r) => r.json())
       .then((models) => {
         if (Array.isArray(models) && models.length > 0) {
-          // Filter to non-thinking models for the dropdown
           const nonThinking = models.filter((m: { thinking?: boolean }) => !m.thinking);
           setAiModels(models);
           if (nonThinking.length > 0 && !selectedModelId) {
@@ -155,7 +191,43 @@ export default function DocumentPage() {
         }
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleTabSwitch = useCallback(
+    (tabId: string, scrollToHeadingText?: string) => {
+      // Same-tab click with a heading target: scroll immediately.
+      if (tabId === activeTabId) {
+        if (scrollToHeadingText) {
+          editorRef.current?.scrollToHeadingByText(scrollToHeadingText);
+        }
+        return;
+      }
+      setActiveTabId(tabId);
+      setAiSelection(null);
+      setAiSidebarOpen(false);
+      setActiveCommentId(null);
+      setPendingComment(null);
+      setActiveTabHeadings([]); // clear — editor will re-emit on remount
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tabId);
+      window.history.pushState({}, "", url.toString());
+      // Defer scroll until the editor has remounted and hydrated the new tab.
+      if (scrollToHeadingText) {
+        setTimeout(() => {
+          editorRef.current?.scrollToHeadingByText(scrollToHeadingText);
+        }, 400);
+      }
+    },
+    [activeTabId]
+  );
+
+  const handleTabsChange = useCallback(async () => {
+    const list = await fetchTabs();
+    if (activeTabId && !list.find((t) => t.id === activeTabId)) {
+      if (list[0]) handleTabSwitch(list[0].id);
+    }
+  }, [activeTabId, fetchTabs, handleTabSwitch]);
 
   const handleTitleChange = useCallback(
     (newTitle: string) => {
@@ -185,7 +257,6 @@ export default function DocumentPage() {
       setAiSelection({ text: displayText, taggedText, taggedBlocks, from, to, surroundingContext });
       setAiSidebarOpen(true);
       setCommentSidebarOpen(false);
-      // Highlight selected text in editor
       editorRef.current?.highlightSelection(from, to, "#bbf7d0");
     },
     []
@@ -196,6 +267,7 @@ export default function DocumentPage() {
       console.log("[save-trace]", {
         event: "client.comment.addStart",
         documentId: params.id,
+        tabId: activeTabId,
         commentMarkId,
         quotedTextLen: quotedText.length,
         selectionFrom: from,
@@ -205,7 +277,7 @@ export default function DocumentPage() {
       setCommentSidebarOpen(true);
       setAiSidebarOpen(false);
     },
-    [params.id]
+    [params.id, activeTabId]
   );
 
   const handleActiveCommentChange = useCallback(
@@ -237,11 +309,13 @@ export default function DocumentPage() {
     );
   }
 
-  if (!doc) return null;
+  if (!doc || !activeTabId) return null;
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeTabContent = activeTab?.content ?? null;
 
   return (
     <div className="flex h-screen flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2">
         <div className="flex items-center gap-3">
           <button
@@ -263,7 +337,6 @@ export default function DocumentPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Model selector + thinking toggle (owner only) */}
           {doc.isOwner && aiModels.length > 0 && (
             <>
               <select
@@ -386,32 +459,36 @@ export default function DocumentPage() {
         </div>
       </header>
 
-      {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Document outline panel */}
-        <DocumentOutline
-          headings={headings}
-          onScrollTo={(pos) => editorRef.current?.scrollToHeading(pos)}
+        <TabRail
+          documentId={doc.id}
+          tabs={tabs}
+          activeTabId={activeTabId}
+          activeTabHeadings={activeTabHeadings}
+          isOwner={doc.isOwner}
+          onSwitch={handleTabSwitch}
+          onTabsChange={handleTabsChange}
         />
 
-        {/* Editor */}
         <Editor
+          key={activeTabId}
           ref={editorRef}
           documentId={doc.id}
-          initialContent={doc.content}
+          tabId={activeTabId}
+          initialContent={activeTabContent}
           isOwner={doc.isOwner}
           activeCommentId={activeCommentId}
           onAIEditRequest={doc.isOwner ? handleAIEditRequest : undefined}
           onAddComment={handleAddComment}
           onCommentMarkClick={handleCommentMarkClick}
-          onHeadingsChange={setHeadings}
+          onHeadingsChange={setActiveTabHeadings}
         />
 
-        {/* Right Sidebar */}
         {commentSidebarOpen && (
           <div className="w-80 border-l border-gray-200 bg-gray-50">
             <CommentSidebar
               documentId={doc.id}
+              tabId={activeTabId}
               activeCommentId={activeCommentId}
               onActiveCommentChange={handleActiveCommentChange}
               pendingComment={pendingComment}
@@ -432,7 +509,7 @@ export default function DocumentPage() {
             />
           </div>
         )}
-        {aiSidebarOpen && (
+        {aiSidebarOpen && activeTab && (
           <div
             className="relative shrink-0 border-l border-gray-200 bg-gray-50"
             style={{ width: aiSidebarWidth }}
@@ -444,9 +521,11 @@ export default function DocumentPage() {
             />
             <AIChatSidebar
               documentId={doc.id}
+              tabs={tabs}
+              activeTab={activeTab}
+              editorRef={editorRef}
               selection={aiSelection}
-              editorIsEmpty={editorRef.current?.isEmpty() ?? !doc.content}
-              fullDocumentText={editorRef.current?.getFullText() ?? ""}
+              editorIsEmpty={editorRef.current?.isEmpty() ?? !activeTabContent}
               modelId={selectedModelId}
               thinking={thinkingEnabled}
               onApplyEdit={(taggedAIResponse) => {
@@ -495,8 +574,7 @@ export default function DocumentPage() {
           <div className="w-80 border-l border-gray-200 bg-gray-50">
             <VersionHistory
               documentId={doc.id}
-              onRevert={(content) => {
-                // Reload the page to pick up the reverted content
+              onRevert={() => {
                 setVersionHistoryOpen(false);
                 window.location.reload();
               }}

@@ -57,10 +57,34 @@ export const verificationTokens = sqliteTable(
 export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
   title: text("title").notNull().default("Untitled"),
-  content: text("content"), // Tiptap JSON string
+  // Legacy single-blob content. Kept populated for backwards compat; tab
+  // content is the source of truth going forward.
+  content: text("content"),
+  activeTabId: text("active_tab_id"),
   ownerId: text("owner_id")
     .notNull()
     .references(() => users.id),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const tabs = sqliteTable("tabs", {
+  id: text("id").primaryKey(),
+  documentId: text("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  title: text("title").notNull().default("Untitled"),
+  // 'custom' | 'series_overview' | 'characters' | 'episode_plot'
+  // | 'reference_episode' | 'research'. Inferred from the title — writers
+  // don't pick it.
+  type: text("type").notNull().default("custom"),
+  sequenceNumber: integer("sequence_number"),
+  content: text("content"),
+  position: integer("position").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -74,6 +98,7 @@ export const comments = sqliteTable("comments", {
   documentId: text("document_id")
     .notNull()
     .references(() => documents.id, { onDelete: "cascade" }),
+  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
   commentMarkId: text("comment_mark_id").notNull(), // matches mark ID in editor
   content: text("content").notNull(),
   quotedText: text("quoted_text"), // the selected text this comment refers to
@@ -152,6 +177,15 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   owner: one(users, { fields: [documents.ownerId], references: [users.id] }),
   comments: many(comments),
   versions: many(documentVersions),
+  tabs: many(tabs),
+}));
+
+export const tabsRelations = relations(tabs, ({ one, many }) => ({
+  document: one(documents, {
+    fields: [tabs.documentId],
+    references: [documents.id],
+  }),
+  comments: many(comments),
 }));
 
 export const documentVersionsRelations = relations(
@@ -172,6 +206,10 @@ export const commentsRelations = relations(comments, ({ one }) => ({
   document: one(documents, {
     fields: [comments.documentId],
     references: [documents.id],
+  }),
+  tab: one(tabs, {
+    fields: [comments.tabId],
+    references: [tabs.id],
   }),
   author: one(users, { fields: [comments.authorId], references: [users.id] }),
 }));

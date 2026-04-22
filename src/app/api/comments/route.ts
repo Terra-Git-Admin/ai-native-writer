@@ -3,17 +3,19 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { comments, documents, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logTrace } from "@/lib/saveTrace";
 
 function readTraceHeaders(req: Request) {
   return {
     tabId: req.headers.get("x-tab-id") || null,
+    docTabId: req.headers.get("x-doc-tab-id") || null,
     reqId: req.headers.get("x-req-id") || null,
   };
 }
 
-// GET /api/comments?documentId=xxx
+// GET /api/comments?documentId=xxx&tabId=yyy — tabId optional; when present,
+// returns only comments scoped to that tab.
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
@@ -22,6 +24,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const documentId = url.searchParams.get("documentId");
+  const tabId = url.searchParams.get("tabId");
   if (!documentId) {
     return NextResponse.json(
       { error: "documentId required" },
@@ -29,9 +32,14 @@ export async function GET(req: Request) {
     );
   }
 
+  const whereClause = tabId
+    ? and(eq(comments.documentId, documentId), eq(comments.tabId, tabId))
+    : eq(comments.documentId, documentId);
+
   const allComments = await db
     .select({
       id: comments.id,
+      tabId: comments.tabId,
       commentMarkId: comments.commentMarkId,
       content: comments.content,
       quotedText: comments.quotedText,
@@ -44,7 +52,7 @@ export async function GET(req: Request) {
     })
     .from(comments)
     .leftJoin(users, eq(comments.authorId, users.id))
-    .where(eq(comments.documentId, documentId))
+    .where(whereClause)
     .orderBy(comments.createdAt);
 
   return NextResponse.json(allComments);
@@ -61,7 +69,7 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { documentId, commentMarkId, content, quotedText, parentId } = body;
+  const { documentId, tabId, commentMarkId, content, quotedText, parentId } = body;
 
   if (!documentId || !commentMarkId || !content) {
     return NextResponse.json(
@@ -74,13 +82,18 @@ export async function POST(req: Request) {
   // (from applyCommentMark → onUpdate → debounced save) with this create.
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, documentId),
-    columns: { ownerId: true, updatedAt: true },
+    columns: { ownerId: true, updatedAt: true, activeTabId: true },
   });
+
+  // Fallback: old clients might omit tabId — scope to the doc's active tab so
+  // comments never end up orphaned post-migration.
+  const effectiveTabId: string | null = tabId || doc?.activeTabId || null;
 
   const id = nanoid(12);
   await db.insert(comments).values({
     id,
     documentId,
+    tabId: effectiveTabId,
     commentMarkId,
     content,
     quotedText: quotedText || null,
@@ -93,6 +106,7 @@ export async function POST(req: Request) {
   logTrace("comment.create.ok", {
     commentId: id,
     documentId,
+    tabId: effectiveTabId,
     commentMarkId,
     authorId: session.user.id,
     isOwner: doc?.ownerId === session.user.id,
