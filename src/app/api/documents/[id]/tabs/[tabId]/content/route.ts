@@ -38,7 +38,7 @@ export async function GET(
     columns: { ownerId: true },
   });
   if (!doc) {
-    logTrace("tab.get.404.doc", { docId: id, tabId, ...trace });
+    logTrace("tab.get.404.doc", { docId: id, docTabIdPath: tabId, ...trace });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -46,13 +46,13 @@ export async function GET(
     where: and(eq(tabs.id, tabId), eq(tabs.documentId, id)),
   });
   if (!tab) {
-    logTrace("tab.get.404.tab", { docId: id, tabId, ...trace });
+    logTrace("tab.get.404.tab", { docId: id, docTabIdPath: tabId, ...trace });
     return NextResponse.json({ error: "Tab not found" }, { status: 404 });
   }
 
   logTrace("tab.get.ok", {
     docId: id,
-    tabId,
+    docTabIdPath: tabId,
     type: tab.type,
     updatedAt: tab.updatedAt,
     contentHash: contentHash(tab.content),
@@ -85,7 +85,7 @@ export async function PUT(
     where: eq(documents.id, id),
   });
   if (!doc) {
-    logTrace("tab.put.404.doc", { docId: id, tabId, ...trace });
+    logTrace("tab.put.404.doc", { docId: id, docTabIdPath: tabId, ...trace });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -93,7 +93,7 @@ export async function PUT(
     where: and(eq(tabs.id, tabId), eq(tabs.documentId, id)),
   });
   if (!tab) {
-    logTrace("tab.put.404.tab", { docId: id, tabId, ...trace });
+    logTrace("tab.put.404.tab", { docId: id, docTabIdPath: tabId, ...trace });
     return NextResponse.json({ error: "Tab not found" }, { status: 404 });
   }
 
@@ -104,7 +104,7 @@ export async function PUT(
   if (!isOwner && !commentMarkOnly) {
     logTrace("tab.put.403", {
       docId: id,
-      tabId,
+      docTabIdPath: tabId,
       userId: session.user.id,
       ownerId: doc.ownerId,
       commentMarkOnly,
@@ -148,7 +148,7 @@ export async function PUT(
 
   const entryLog = {
     docId: id,
-    tabId,
+    docTabIdPath: tabId,
     tabType: tab.type,
     userId: session.user.id,
     isOwner,
@@ -225,7 +225,7 @@ export async function PUT(
 
   logTrace("tab.put.ok", {
     docId: id,
-    tabId,
+    docTabIdPath: tabId,
     userId: session.user.id,
     isOwner,
     commentMarkOnly,
