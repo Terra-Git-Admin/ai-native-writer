@@ -106,7 +106,10 @@ export async function POST(req: Request) {
   logTrace("comment.create.ok", {
     commentId: id,
     documentId,
-    tabId: effectiveTabId,
+    // effectiveTabId = what we actually wrote to comments.tabId (body-supplied
+    // tabId ?? doc.activeTabId). Trace headers below carry tabId (window id)
+    // and docTabId (header-supplied doc tab id) — both are useful signals.
+    effectiveTabId,
     commentMarkId,
     authorId: session.user.id,
     isOwner: doc?.ownerId === session.user.id,
