@@ -18,6 +18,7 @@ interface Comment {
 
 interface CommentSidebarProps {
   documentId: string;
+  tabId: string;
   activeCommentId: string | null;
   onActiveCommentChange: (commentMarkId: string | null) => void;
   pendingComment: { markId: string; quotedText: string; from: number; to: number } | null;
@@ -41,6 +42,7 @@ function formatTimestamp(dateStr: string): string {
 
 export default function CommentSidebar({
   documentId,
+  tabId,
   activeCommentId,
   onActiveCommentChange,
   pendingComment,
@@ -63,12 +65,14 @@ export default function CommentSidebar({
   const isAdmin = session?.user?.role === "admin";
 
   const fetchComments = useCallback(async () => {
-    const res = await fetch(`/api/comments?documentId=${documentId}`);
+    const res = await fetch(
+      `/api/comments?documentId=${documentId}&tabId=${tabId}`
+    );
     if (res.ok) {
       const data = await res.json();
       setComments(data);
     }
-  }, [documentId]);
+  }, [documentId, tabId]);
 
   useEffect(() => {
     fetchComments();
@@ -119,6 +123,7 @@ export default function CommentSidebar({
       event: "client.comment.create.start",
       reqId,
       documentId,
+      tabId,
       markId,
       isReply: Boolean(parentId),
       parentId: parentId || null,
@@ -130,8 +135,9 @@ export default function CommentSidebar({
       headers: {
         "Content-Type": "application/json",
         "X-Req-Id": reqId,
+        "X-Doc-Tab-Id": tabId,
       },
-      body: JSON.stringify({ documentId, commentMarkId: markId, content, quotedText, parentId: parentId || null }),
+      body: JSON.stringify({ documentId, tabId, commentMarkId: markId, content, quotedText, parentId: parentId || null }),
     });
     console.log("[save-trace]", {
       event: "client.comment.create.done",

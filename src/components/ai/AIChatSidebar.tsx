@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, RefObject } from "react";
+import type { TabRow } from "@/components/editor/TabRail";
+import type { EditorHandle } from "@/components/editor/Editor";
+import { buildAIContext } from "@/lib/ai/context-engine";
 
 // ─── Types ───
 
@@ -112,6 +115,9 @@ function parseChanges(text: string): ParsedChange[] | null {
 
 interface AIChatSidebarProps {
   documentId: string;
+  tabs: TabRow[];
+  activeTab: TabRow;
+  editorRef: RefObject<EditorHandle | null>;
   selection: {
     text: string;
     taggedText: string;
@@ -120,7 +126,6 @@ interface AIChatSidebarProps {
     surroundingContext?: string;
   } | null;
   editorIsEmpty: boolean;
-  fullDocumentText: string;
   modelId: string;
   thinking: boolean;
   onApplyEdit: (taggedAIResponse: string) => void;
@@ -135,9 +140,11 @@ interface AIChatSidebarProps {
 
 export default function AIChatSidebar({
   documentId,
+  tabs,
+  activeTab,
+  editorRef,
   selection,
   editorIsEmpty,
-  fullDocumentText,
   modelId,
   thinking,
   onApplyEdit,
@@ -436,22 +443,29 @@ export default function AIChatSidebar({
   }, [input, isStreaming, messages, sendMessages, mode]);
 
   function buildUserMessage(userInput: string): string {
+    const liveContent = editorRef.current?.getContentJSON() ?? null;
+    const contextBlock = buildAIContext({
+      tabs,
+      activeTab,
+      activeTabLiveContent: liveContent,
+      mode: mode === "edit" ? "edit" : "chat",
+      selection: selection
+        ? {
+            taggedText: selection.taggedText,
+            surroundingContext: selection.surroundingContext,
+          }
+        : null,
+    });
+
     if (mode === "edit" && selection) {
       if (messages.length === 0) {
-        return `## Full Document (for context only — do NOT reproduce)\n${fullDocumentText}\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
+        return `${contextBlock}\n\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
       }
-      // Follow-up: include a brief scope anchor so the AI knows the original selection is still active.
-      // If this instruction seems unrelated to the selected text, the AI should ask for clarification
-      // before acting (see FOLLOW-UP MESSAGES — SCOPE CLARITY rule in the system prompt).
       const selectionPreview = selection.text.slice(0, 120).replace(/\n/g, " ").trim();
       return `[Follow-up — original selection still active: "${selectionPreview}${selection.text.length > 120 ? "..." : ""}"]\n\n## Instruction\n${userInput}`;
     }
     if (mode === "chat") {
-      // Always include the full document so the AI has current content on every message
-      const docContext = fullDocumentText.trim()
-        ? `## Full Document (for context)\n${fullDocumentText}\n\n`
-        : "";
-      return `${docContext}## Message\n${userInput}`;
+      return `${contextBlock}\n\n## Message\n${userInput}`;
     }
     return userInput;
   }
