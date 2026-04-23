@@ -67,7 +67,7 @@ Typed tabs you will encounter (each is singleton-ish per doc — one of each usu
 The writer's context block structure:
 1. "## Document Tabs" — manifest of tab names + types (awareness only, do not try to write to them)
 2. "## Series Logline" + "## Original Plotline" + "## Characters" — baseline context, always included when those tabs exist
-3. Recipe-specific blocks when editing a reference episode or plot — "## Previous Reference Episodes (last N, from this tab)", "## Surrounding Episode Plots", "## Most Recent Reference Episodes"
+3. Recipe-specific blocks when editing a reference episode or plot — "## Previous Reference Episodes (full chain …)" (every prior ref episode when the writer is in the reference_episode tab), "## Episode Plot to Generate From" (the last plot in the Episode Plots tab, the one the next ref episode is built from), "## Previous Episode Plots" / "## Upcoming Episode Plots" / "## Most Recent Reference Episodes" (when the writer is in the episode_plot tab)
 4. "## Active Tab — [name] ([type])" — the content of the tab being edited. This is your canvas.
 5. "## Selected Text" + "## Instruction" (EDIT mode) OR "## Message" (CHAT mode)
 
@@ -75,7 +75,7 @@ TAB BOUNDARY RULES:
 - All output targets the ACTIVE TAB only. Never produce content that belongs in a different tab.
 - If the writer asks for something that belongs in a different tab (e.g. they're on Episode Plots and ask you to "write the full reference episode"), use [CLARIFY] and ask: "Do you want to switch to the Reference Episodes tab for this, or should I write a plot-level outline here?"
 - When appending a new reference episode or plot, add a new [H3] at the end of the active tab's content — never modify other [H3] blocks unless explicitly asked.
-- "Previous Reference Episodes" and "Surrounding Episode Plots" are READ-ONLY context — use them to maintain continuity, do not rewrite them.
+- "Previous Reference Episodes", "Episode Plot to Generate From", "Previous/Upcoming Episode Plots", "Most Recent Reference Episodes" are all READ-ONLY context blocks — use them to maintain continuity, do not rewrite them.
 `;
 
 // ─── Clarification Protocol (shared across all prompts) ───
@@ -1469,9 +1469,11 @@ COMMON INSTRUCTIONS — how to handle them:
 
 "generate reference episodes" / "generate episodes" / "predefined episodes" / "predef episodes" / "full episodes" / "scripted episodes":
 → These ALL belong in the reference_episode tab. If the writer is on the episode_plot tab, use [CLARIFY] and ask them to switch tabs before you write.
-→ Read the "## Surrounding Episode Plots" context block to understand what each episode must deliver.
-→ Before writing a single beat: read the "## Characters" block (voice, mannerisms, relationships), the "## Original Plotline" block (source material context), and the "## Previous Reference Episodes" block in order — to continue from the last beat of the previous episode and match established character voices exactly.
-→ Expand each plot paragraph into a full reference episode using the canonical format: Visual/Action, Dialogue, and V.O. beats. No HOOK label. No CLIFFHANGER label.
+→ The context gives you two blocks that are specifically for this task:
+   1. "## Episode Plot to Generate From" — the single plot this reference episode must deliver. This is the only plot that matters for this generation; any other plots in the doc are for background continuity, not the beats of this episode.
+   2. "## Previous Reference Episodes (full chain …)" — every reference episode written so far, in order. Use this for character voice, pacing calibration, and the exact last beat of the previous episode (your first beat must pick up from there).
+→ Before writing a single beat: read the "## Characters" block (voice, mannerisms, relationships), the "## Original Plotline" block (source material context), the full "## Previous Reference Episodes" chain, and then the "## Episode Plot to Generate From" — in that order.
+→ Expand the single Episode Plot into a full reference episode using the canonical format: Visual/Action, Dialogue, and V.O. beats. No HOOK label. No CLIFFHANGER label.
 → Target 13–18 spoken dialogue lines per episode. Run 4–6 consecutive dialogue lines before inserting a Visual beat — never break after every single line. Visual and V.O. beats are additional structure on top of dialogue, not part of the count. (Exception: any of these limits may be broken only when the script writer explicitly requests it.)
 → Every episode opens with a Visual beat establishing the scene or picking up from the previous episode's last beat.
 → Every episode ends on an unresolved freeze — the last beat is never labelled.
