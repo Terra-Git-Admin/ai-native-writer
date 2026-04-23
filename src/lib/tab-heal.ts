@@ -183,6 +183,11 @@ export async function healFixedTabs(docId: string): Promise<boolean> {
     if (extract) {
       workbookContentOverride = extract.lifted;
       overviewStrippedContent = extract.stripped;
+      logTrace("tabs.heal.adaptation_lift", {
+        docId,
+        sourceTabId: overview.id,
+        liftedBytes: extract.lifted.length,
+      });
     }
   }
 
@@ -209,6 +214,14 @@ export async function healFixedTabs(docId: string): Promise<boolean> {
     if (Object.keys(patch).length > 1) {
       await db.update(tabs).set(patch).where(eq(tabs.id, existing.id));
       touched.push({ action: "upgrade", tabId: existing.id, type: spec.type });
+      if (patch.type && patch.type !== existing.type) {
+        logTrace("tabs.heal.legacy_rename", {
+          docId,
+          tabId: existing.id,
+          from: existing.type,
+          to: patch.type,
+        });
+      }
     }
   }
 
@@ -233,6 +246,7 @@ export async function healFixedTabs(docId: string): Promise<boolean> {
       updatedAt: now,
     });
     touched.push({ action: "insert", tabId: id, type: spec.type });
+    logTrace("tabs.heal.seed_fixed", { docId, tabId: id, type: spec.type });
   }
 
   // 3) Rename legacy research tabs to archive. Content retained as-is so
@@ -250,6 +264,7 @@ export async function healFixedTabs(docId: string): Promise<boolean> {
       })
       .where(eq(tabs.id, r.id));
     touched.push({ action: "research_archive", tabId: r.id });
+    logTrace("tabs.heal.research_archive", { docId, tabId: r.id });
     archives.push(r); // flow into trailing-position list
   }
 
