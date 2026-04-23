@@ -6,8 +6,9 @@ export type InferredTabType =
   | "custom"
   | "series_overview"
   | "characters"
-  | "episode_plot"
-  | "reference_episode"
+  | "microdrama_plots"
+  | "predefined_episodes"
+  | "workbook"
   | "research";
 
 export interface InferredTab {
@@ -18,18 +19,20 @@ export interface InferredTab {
 export function inferTabType(rawTitle: string): InferredTab {
   const t = (rawTitle || "").trim().toLowerCase();
 
-  // Reference Episodes / Reference Episode (plural or singular container)
-  if (/^reference\s*episodes?\b/.test(t)) {
-    return { type: "reference_episode", sequenceNumber: null };
+  if (/^predefined\s*episodes?\b/.test(t) || /^reference\s*episodes?\b/.test(t)) {
+    return { type: "predefined_episodes", sequenceNumber: null };
   }
-  if (/^series\s*overview\b/.test(t) || /^overview\b/.test(t)) {
+  if (/^original\s*research\b/.test(t) || /^series\s*overview\b/.test(t) || /^overview\b/.test(t)) {
     return { type: "series_overview", sequenceNumber: null };
   }
   if (/^characters?\b/.test(t) || /^cast\b/.test(t)) {
     return { type: "characters", sequenceNumber: null };
   }
-  if (/^episode\s*plots?\b/.test(t) || /^plots?\b/.test(t)) {
-    return { type: "episode_plot", sequenceNumber: null };
+  if (/^microdrama\s*plots?\b/.test(t) || /^episode\s*plots?\b/.test(t) || /^plots?\b/.test(t)) {
+    return { type: "microdrama_plots", sequenceNumber: null };
+  }
+  if (/^workbook\b/.test(t)) {
+    return { type: "workbook", sequenceNumber: null };
   }
   if (/^research\b/.test(t) || /^original\s*(story|plotline)\b/.test(t) || /^source\b/.test(t)) {
     return { type: "research", sequenceNumber: null };

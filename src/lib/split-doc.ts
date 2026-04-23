@@ -33,7 +33,14 @@ function serialise(nodes: TiptapNode[]): string {
 
 export interface SectionTab {
   title: string;
-  type: "custom" | "series_overview" | "characters" | "episode_plot" | "reference_episode" | "research";
+  type:
+    | "custom"
+    | "series_overview"
+    | "characters"
+    | "microdrama_plots"
+    | "predefined_episodes"
+    | "workbook"
+    | "research";
   sequenceNumber: number | null;
   content: string;
 }

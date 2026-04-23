@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { documents, tabs, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { desc, eq, sql } from "drizzle-orm";
+import { buildCanonicalTabRows } from "@/lib/canonical-tabs";
 
 // GET /api/documents — list all documents with owner info + recent comment count
 export async function GET() {
@@ -45,33 +46,25 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const id = nanoid(12);
-  const tabId = nanoid(12);
   const now = new Date();
 
-  // New docs need a default "Main" tab, mirroring migration 0002's seeding
-  // for pre-migration docs. Without this, the doc page renders null because
-  // activeTabId is never set.
+  // Every new doc is seeded with the five canonical protected tabs (Original
+  // Research, Characters, Microdrama Plots, Predefined Episodes, Workbook).
+  // See canonical-tabs.ts for the fixed spec. Legacy docs get the same set
+  // healed in by GET /api/documents/[id]/tabs.
+  const { rows, firstTabId } = buildCanonicalTabRows(id, now);
+
   await db.insert(documents).values({
     id,
     title: body.title || "Untitled",
     content: null,
     ownerId: session.user.id,
-    activeTabId: tabId,
+    activeTabId: firstTabId,
     createdAt: now,
     updatedAt: now,
   });
 
-  await db.insert(tabs).values({
-    id: tabId,
-    documentId: id,
-    title: "Main",
-    type: "custom",
-    sequenceNumber: null,
-    content: null,
-    position: 0,
-    createdAt: now,
-    updatedAt: now,
-  });
+  await db.insert(tabs).values(rows);
 
   return NextResponse.json({ id });
 }

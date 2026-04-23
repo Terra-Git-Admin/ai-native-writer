@@ -37,8 +37,38 @@ export async function PUT(
     return NextResponse.json({ error: "order must be an array of tab IDs" }, { status: 400 });
   }
 
+  // Enforce protected canonical tabs stay at their fixed positions. Fetch
+  // current state and reject any proposed order that would move a protected
+  // tab out of its original slot. Protected tabs sort by current position
+  // (seeded to 0..4 by canonical-tabs.ts) and must occupy the leading slots
+  // in the incoming order.
+  const currentRows = await db
+    .select({
+      id: tabs.id,
+      position: tabs.position,
+      isProtected: tabs.isProtected,
+    })
+    .from(tabs)
+    .where(eq(tabs.documentId, id));
+  const expectedProtectedIds = currentRows
+    .filter((r) => r.isProtected)
+    .sort((a, b) => a.position - b.position)
+    .map((r) => r.id);
+  const incomingOrder = order as string[];
+  for (let i = 0; i < expectedProtectedIds.length; i++) {
+    if (incomingOrder[i] !== expectedProtectedIds[i]) {
+      return NextResponse.json(
+        {
+          error:
+            "Protected canonical tabs cannot be reordered. They must stay in their fixed positions at the top.",
+        },
+        { status: 403 }
+      );
+    }
+  }
+
   const now = new Date();
-  const tx = (order as string[]).map((tabId, idx) =>
+  const tx = incomingOrder.map((tabId, idx) =>
     db
       .update(tabs)
       .set({ position: idx, updatedAt: now })
@@ -52,7 +82,7 @@ export async function PUT(
 
   logTrace("tabs.reorder.ok", {
     docId: id,
-    count: (order as string[]).length,
+    count: incomingOrder.length,
     userId: session.user.id,
   });
 

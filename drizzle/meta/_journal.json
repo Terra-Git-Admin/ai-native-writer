@@ -29,6 +29,13 @@
       "when": 1777363200000,
       "tag": "0003_document_versions_tab",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1777536000000,
+      "tag": "0004_fixed_tab_protection",
+      "breakpoints": true
     }
   ]
 }
