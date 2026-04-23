@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, users, comments } from "@/lib/db/schema";
+import { documents, tabs, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { desc, eq, and, gt, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 
 // GET /api/documents — list all documents with owner info + recent comment count
 export async function GET() {
@@ -45,13 +45,30 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const id = nanoid(12);
+  const tabId = nanoid(12);
   const now = new Date();
 
+  // New docs need a default "Main" tab, mirroring migration 0002's seeding
+  // for pre-migration docs. Without this, the doc page renders null because
+  // activeTabId is never set.
   await db.insert(documents).values({
     id,
     title: body.title || "Untitled",
     content: null,
     ownerId: session.user.id,
+    activeTabId: tabId,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  await db.insert(tabs).values({
+    id: tabId,
+    documentId: id,
+    title: "Main",
+    type: "custom",
+    sequenceNumber: null,
+    content: null,
+    position: 0,
     createdAt: now,
     updatedAt: now,
   });

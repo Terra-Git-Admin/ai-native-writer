@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { and, eq, max } from "drizzle-orm";
+import { and, eq, max, sql } from "drizzle-orm";
 import { logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
 import { splitTiptapDocument, shouldSplit } from "@/lib/split-doc";
@@ -16,6 +16,42 @@ const VALID_TYPES: readonly InferredTabType[] = [
   "reference_episode",
   "research",
 ];
+
+// Docs created via POST /api/documents before the "seed default Main tab on
+// create" fix have zero tabs, so the doc page renders blank (no activeTabId →
+// Editor never mounts). Heal idempotently on first GET: insert a Main tab
+// identical to what migration 0002 seeds and point activeTabId at it.
+async function healMissingDefaultTab(
+  docId: string,
+  docContent: string | null
+): Promise<boolean> {
+  const existing = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(tabs)
+    .where(eq(tabs.documentId, docId));
+  if ((existing[0]?.count ?? 0) > 0) return false;
+
+  const tabId = nanoid(12);
+  const now = new Date();
+  await db.insert(tabs).values({
+    id: tabId,
+    documentId: docId,
+    title: "Main",
+    type: "custom",
+    sequenceNumber: null,
+    content: docContent,
+    position: 0,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await db
+    .update(documents)
+    .set({ activeTabId: tabId, updatedAt: now })
+    .where(eq(documents.id, docId));
+
+  logTrace("tabs.heal.defaultMain", { docId, tabId });
+  return true;
+}
 
 // On first tabs-fetch after migration 0002, a doc has exactly one "Main" tab
 // holding all its pre-tab content. If that content has a canonical [H2]
@@ -95,11 +131,16 @@ export async function GET(
   const { id } = await params;
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { id: true, ownerId: true },
+    columns: { id: true, ownerId: true, content: true },
   });
   if (!doc) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Heal docs that were created without a default Main tab (regression from
+  // tabs PR — POST /api/documents didn't seed one). Runs before auto-split
+  // so a healed doc with canonical structure still gets split on next open.
+  await healMissingDefaultTab(id, doc.content);
 
   // Lazy auto-split on first real fetch. Only runs when the doc is still a
   // single-Main-tab state + the Main content has splittable structure.
