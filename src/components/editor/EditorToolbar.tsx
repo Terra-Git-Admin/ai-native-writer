@@ -3,6 +3,57 @@
 import { Editor } from "@tiptap/react";
 import { useEffect, useReducer } from "react";
 
+// TipTap's native toggleHeading converts every block the selection touches —
+// if the writer selects one visual line inside a paragraph, the entire
+// paragraph flips to a heading. Writers want to promote just the selected
+// run. We split the enclosing block at the selection boundaries first so the
+// middle slice is a block of its own, then toggle heading on that.
+//
+// Boundary-aware: if the selection already aligns with block edges (empty
+// cursor, full-block selection, or starts/ends at block start/end), the
+// relevant splits are skipped so we don't leave empty blocks behind.
+function toggleHeadingAwareOfSelection(
+  editor: Editor,
+  level: 1 | 2 | 3
+): void {
+  const { state } = editor;
+  const { from, to, empty } = state.selection;
+
+  if (empty) {
+    editor.chain().focus().toggleHeading({ level }).run();
+    return;
+  }
+
+  const $from = state.doc.resolve(from);
+  const $to = state.doc.resolve(to);
+  // Multi-block selection: default toggle flips every touched block.
+  if ($from.parent !== $to.parent) {
+    editor.chain().focus().toggleHeading({ level }).run();
+    return;
+  }
+
+  const atBlockStart = $from.parentOffset === 0;
+  const atBlockEnd = $to.parentOffset === $to.parent.content.size;
+  if (atBlockStart && atBlockEnd) {
+    editor.chain().focus().toggleHeading({ level }).run();
+    return;
+  }
+
+  // Chain the splits so both positions compose within the same transaction.
+  // splitBlock places the cursor at the start of the new (right-side) block,
+  // which means after the second split the cursor sits inside the middle
+  // slice containing the original selection text — toggleHeading then hits
+  // exactly that slice.
+  const chain = editor.chain().focus();
+  if (!atBlockEnd) {
+    chain.setTextSelection(to).splitBlock();
+  }
+  if (!atBlockStart) {
+    chain.setTextSelection(from).splitBlock();
+  }
+  chain.toggleHeading({ level }).run();
+}
+
 interface EditorToolbarProps {
   editor: Editor | null;
 }
@@ -179,21 +230,21 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
         Text
       </ToolbarButton>
       <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        onClick={() => toggleHeadingAwareOfSelection(editor, 1)}
         isActive={editor.isActive("heading", { level: 1 })}
         title="Heading 1"
       >
         H1
       </ToolbarButton>
       <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        onClick={() => toggleHeadingAwareOfSelection(editor, 2)}
         isActive={editor.isActive("heading", { level: 2 })}
         title="Heading 2"
       >
         H2
       </ToolbarButton>
       <ToolbarButton
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        onClick={() => toggleHeadingAwareOfSelection(editor, 3)}
         isActive={editor.isActive("heading", { level: 3 })}
         title="Heading 3"
       >
