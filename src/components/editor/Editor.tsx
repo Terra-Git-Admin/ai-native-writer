@@ -107,10 +107,10 @@ function parseTaggedLines(lines: string[]): object[] {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const ol = line.match(/^\[OL\]\s*(.+)/);
-    const ul = line.match(/^\[UL\]\s*(.+)/);
-    const h = line.match(/^\[H(\d)\]\s*(.+)/);
-    const p = line.match(/^\[P\]\s*(.+)/);
+    const ol = line.match(/^\[OL\]\s*(.+)/i);
+    const ul = line.match(/^\[UL\]\s*(.+)/i);
+    const h = line.match(/^\[H([1-6])\]\s*(.+)/i);
+    const p = line.match(/^\[P\]\s*(.+)/i);
 
     if (ol) {
       if (listType !== "orderedList") flushList();
@@ -122,9 +122,13 @@ function parseTaggedLines(lines: string[]): object[] {
       listItems.push(ul[1]);
     } else if (h) {
       flushList();
+      // Clamp to H1-H3 so AI-returned [H4]+ don't render headings the writer
+      // can't easily format back with the toolbar (which only goes to H3).
+      const raw = parseInt(h[1]);
+      const level = raw > 3 ? 3 : raw < 1 ? 1 : raw;
       nodes.push({
         type: "heading",
-        attrs: { level: parseInt(h[1]) },
+        attrs: { level },
         content: [{ type: "text", text: h[2] }],
       });
     } else if (p) {
@@ -134,8 +138,16 @@ function parseTaggedLines(lines: string[]): object[] {
         content: [{ type: "text", text: p[1] }],
       });
     } else {
-      // Untagged fallback — strip markdown markers
-      const t = line.replace(/^[-*•]\s+/, "").replace(/^\d+[.)]\s+/, "").replace(/\*\*/g, "");
+      // Untagged fallback — strip any leading [TAG] prefix the AI emitted that
+      // our known tags didn't match (e.g. [BQ], [CODE], [NOTE]). Without this
+      // the bracketed marker leaks into the paragraph as literal text, which
+      // writers have hit in practice. Also strip markdown bullet/number/bold
+      // markers while we're here.
+      const t = line
+        .replace(/^\[[A-Z0-9_-]+\]\s*/i, "")
+        .replace(/^[-*•]\s+/, "")
+        .replace(/^\d+[.)]\s+/, "")
+        .replace(/\*\*/g, "");
       if (t) {
         flushList();
         nodes.push({ type: "paragraph", content: [{ type: "text", text: t }] });
