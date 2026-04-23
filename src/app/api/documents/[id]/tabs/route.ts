@@ -7,14 +7,18 @@ import { and, eq, max, sql } from "drizzle-orm";
 import { logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
 import { splitTiptapDocument, shouldSplit } from "@/lib/split-doc";
+import { healFixedTabs } from "@/lib/tab-heal";
 
-const VALID_TYPES: readonly InferredTabType[] = [
+const VALID_TYPES: readonly string[] = [
   "custom",
   "series_overview",
   "characters",
   "episode_plot",
   "reference_episode",
   "research",
+  "microdrama_plots",
+  "predefined_episodes",
+  "workbook",
 ];
 
 // Docs created via POST /api/documents before the "seed default Main tab on
@@ -147,6 +151,12 @@ export async function GET(
   // Idempotent: later fetches find >1 tab and skip.
   await autoSplitIfNeeded(id);
 
+  // Upgrade legacy docs to the five canonical protected tabs. Runs AFTER
+  // autoSplit so tabs that were just split out of Main get renamed/protected
+  // in the same request. Idempotent — later fetches see all five tabs
+  // already in canonical shape and skip.
+  await healFixedTabs(id);
+
   const rows = await db
     .select()
     .from(tabs)
@@ -187,18 +197,18 @@ export async function POST(
   const type: InferredTabType =
     body.type && VALID_TYPES.includes(body.type) ? body.type : inferred.type;
 
-  // Sequence number: explicit override > inferred (for reference_episode) >
-  // auto-increment max+1 for reference_episode > null.
+  // Sequence number: explicit override > inferred (for predefined_episodes) >
+  // auto-increment max+1 for predefined_episodes > null.
   let sequenceNumber: number | null = null;
   if (typeof body.sequenceNumber === "number") {
     sequenceNumber = body.sequenceNumber;
-  } else if (inferred.sequenceNumber != null && type === "reference_episode") {
+  } else if (inferred.sequenceNumber != null && type === "predefined_episodes") {
     sequenceNumber = inferred.sequenceNumber;
-  } else if (type === "reference_episode") {
+  } else if (type === "predefined_episodes") {
     const maxRow = await db
       .select({ max: max(tabs.sequenceNumber) })
       .from(tabs)
-      .where(and(eq(tabs.documentId, id), eq(tabs.type, "reference_episode")));
+      .where(and(eq(tabs.documentId, id), eq(tabs.type, "predefined_episodes")));
     sequenceNumber = (maxRow[0]?.max ?? 0) + 1;
   }
 

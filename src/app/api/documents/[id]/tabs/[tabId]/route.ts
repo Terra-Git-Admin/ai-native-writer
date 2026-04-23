@@ -6,13 +6,16 @@ import { and, eq } from "drizzle-orm";
 import { logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
 
-const VALID_TYPES: readonly InferredTabType[] = [
+const VALID_TYPES: readonly string[] = [
   "custom",
   "series_overview",
   "characters",
   "episode_plot",
   "reference_episode",
   "research",
+  "microdrama_plots",
+  "predefined_episodes",
+  "workbook",
 ];
 
 // PATCH /api/documents/[id]/tabs/[tabId] — rename / change type / reorder.
@@ -52,6 +55,24 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}));
   const patch: Record<string, unknown> = { updatedAt: new Date() };
 
+  // Protected canonical tabs: reject title, type, sequenceNumber, and position
+  // changes. Content updates pass through — writers still fill them in.
+  const touchesStructure =
+    typeof body.title === "string" ||
+    typeof body.type === "string" ||
+    typeof body.sequenceNumber === "number" ||
+    body.sequenceNumber === null ||
+    typeof body.position === "number";
+  if (tab.isProtected && touchesStructure) {
+    return NextResponse.json(
+      {
+        error:
+          "This is a canonical tab (Original Research, Characters, Microdrama Plots, Predefined Episodes, or Workbook). Its title, type, and position are fixed — but you can still edit its contents.",
+      },
+      { status: 403 }
+    );
+  }
+
   let reInferred: ReturnType<typeof inferTabType> | null = null;
   if (typeof body.title === "string") {
     const t = body.title.trim();
@@ -62,7 +83,7 @@ export async function PATCH(
   }
 
   if (typeof body.type === "string") {
-    if (!VALID_TYPES.includes(body.type as InferredTabType)) {
+    if (!VALID_TYPES.includes(body.type)) {
       return NextResponse.json({ error: "Invalid tab type" }, { status: 400 });
     }
     patch.type = body.type;
@@ -120,6 +141,24 @@ export async function DELETE(
   }
   if (doc.ownerId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Block deletion of protected canonical tabs.
+  const target = await db.query.tabs.findFirst({
+    where: and(eq(tabs.id, tabId), eq(tabs.documentId, id)),
+    columns: { isProtected: true },
+  });
+  if (!target) {
+    return NextResponse.json({ error: "Tab not found" }, { status: 404 });
+  }
+  if (target.isProtected) {
+    return NextResponse.json(
+      {
+        error:
+          "Canonical tabs (Original Research, Characters, Microdrama Plots, Predefined Episodes, Workbook) cannot be deleted.",
+      },
+      { status: 403 }
+    );
   }
 
   // Block deletion of the last remaining tab

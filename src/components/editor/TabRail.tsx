@@ -6,6 +6,12 @@ export type TabType =
   | "custom"
   | "series_overview"
   | "characters"
+  | "microdrama_plots"
+  | "predefined_episodes"
+  | "workbook"
+  // Legacy values kept for docs that haven't been healed yet — a tab fetched
+  // between migration and heal may still arrive with one of these. Badges
+  // mirror the canonical replacement so the UI is already correct.
   | "episode_plot"
   | "reference_episode"
   | "research";
@@ -17,16 +23,36 @@ export interface TabRow {
   sequenceNumber: number | null;
   position: number;
   content: string | null;
+  isProtected: boolean;
   updatedAt: string | Date;
 }
 
 const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
   custom: { label: "Tab", className: "bg-gray-100 text-gray-600" },
-  series_overview: { label: "Overview", className: "bg-purple-100 text-purple-700" },
-  characters: { label: "Chars", className: "bg-blue-100 text-blue-700" },
-  episode_plot: { label: "Plots", className: "bg-amber-100 text-amber-700" },
-  reference_episode: { label: "Ref Ep", className: "bg-green-100 text-green-700" },
-  research: { label: "Research", className: "bg-pink-100 text-pink-700" },
+  series_overview: {
+    label: "Original Research",
+    className: "bg-purple-100 text-purple-700",
+  },
+  characters: { label: "Characters", className: "bg-blue-100 text-blue-700" },
+  microdrama_plots: {
+    label: "Microdrama Plots",
+    className: "bg-amber-100 text-amber-700",
+  },
+  predefined_episodes: {
+    label: "Predefined Episodes",
+    className: "bg-green-100 text-green-700",
+  },
+  workbook: { label: "Workbook", className: "bg-teal-100 text-teal-700" },
+  // Legacy aliases — render identically to their post-heal canonical.
+  episode_plot: {
+    label: "Microdrama Plots",
+    className: "bg-amber-100 text-amber-700",
+  },
+  reference_episode: {
+    label: "Predefined Episodes",
+    className: "bg-green-100 text-green-700",
+  },
+  research: { label: "Research", className: "bg-gray-100 text-gray-600" },
 };
 
 const isArchive = (title: string) => /\(archive\)/i.test(title);
@@ -171,16 +197,10 @@ export default function TabRail({
     return () => clearInterval(interval);
   }, [documentId]);
 
-  // Sort: archive always first, then by position.
+  // Pure position sort — healFixedTabs guarantees protected canonical tabs
+  // occupy 0-4 and archive/custom tabs trail at 5+.
   const sortedTabs = useMemo(
-    () =>
-      [...tabs].sort((a, b) => {
-        const aPinned = isArchive(a.title);
-        const bPinned = isArchive(b.title);
-        if (aPinned && !bPinned) return -1;
-        if (!aPinned && bPinned) return 1;
-        return a.position - b.position;
-      }),
+    () => [...tabs].sort((a, b) => a.position - b.position),
     [tabs]
   );
 
@@ -255,25 +275,21 @@ export default function TabRail({
     });
   };
 
-  // Drag reorder — only within the non-pinned (non-archive) tabs. Dropping
-  // onto any non-archive parent moves the dragged tab to that position.
+  // Drag reorder — only unprotected tabs (custom + archive) can move, and
+  // they can only drop onto other unprotected tabs. The five canonical
+  // protected tabs are frozen at positions 0-4 in whatever order healFixedTabs
+  // assigns; the server enforces the same invariant in /tabs/reorder.
   const commitReorder = async (draggedId: string, targetId: string) => {
     if (draggedId === targetId) return;
-    // Build the new order: remove dragged, insert before target.
-    const ids = sortedTabs.map((t) => t.id);
-    const fromIdx = ids.indexOf(draggedId);
-    const toIdx = ids.indexOf(targetId);
+    const protectedIds = sortedTabs.filter((t) => t.isProtected).map((t) => t.id);
+    const movable = sortedTabs.filter((t) => !t.isProtected).map((t) => t.id);
+    const fromIdx = movable.indexOf(draggedId);
+    const toIdx = movable.indexOf(targetId);
     if (fromIdx < 0 || toIdx < 0) return;
-    ids.splice(fromIdx, 1);
+    movable.splice(fromIdx, 1);
     const adjusted = toIdx > fromIdx ? toIdx - 1 : toIdx;
-    ids.splice(adjusted, 0, draggedId);
-    // Never let a non-archive tab end up above the archive: force archive(s) first.
-    const pinned = ids.filter((id) => {
-      const t = sortedTabs.find((x) => x.id === id);
-      return t && isArchive(t.title);
-    });
-    const rest = ids.filter((id) => !pinned.includes(id));
-    const finalOrder = [...pinned, ...rest];
+    movable.splice(adjusted, 0, draggedId);
+    const finalOrder = [...protectedIds, ...movable];
 
     await fetch(`/api/documents/${documentId}/tabs/reorder`, {
       method: "PUT",
@@ -345,11 +361,12 @@ export default function TabRail({
         {sortedTabs.map((tab) => {
           const active = tab.id === activeTabId;
           const badge = TYPE_BADGES[tab.type];
-          const pinned = isArchive(tab.title);
-          // Any non-archive tab with headings inside gets a nested outline.
-          // No more allow-list by type — if the writer adds structure, the
-          // rail reflects it.
-          const outlineHeadings = pinned ? [] : headingsForTab(tab);
+          const archive = isArchive(tab.title);
+          const protectedTab = tab.isProtected;
+          // Any tab with headings inside gets a nested outline. Archive tabs
+          // skip the outline (they're frozen safety copies — no need to
+          // surface their internal structure).
+          const outlineHeadings = archive ? [] : headingsForTab(tab);
           const hasNested = outlineHeadings.length > 0;
           const subItemCount = outlineHeadings.length;
           const collapsed = collapsedParents.has(tab.id);
@@ -382,10 +399,10 @@ export default function TabRail({
           return (
             <div key={tab.id}>
               <div
-                draggable={isOwner && !pinned}
+                draggable={isOwner && !protectedTab}
                 onDragStart={() => setDragId(tab.id)}
                 onDragOver={(e) => {
-                  if (!dragId || dragId === tab.id || pinned) return;
+                  if (!dragId || dragId === tab.id || protectedTab) return;
                   e.preventDefault();
                   setDropTargetId(tab.id);
                 }}
@@ -406,7 +423,7 @@ export default function TabRail({
                   active ? "bg-indigo-100" : "hover:bg-gray-100"
                 } ${isDropTarget ? "border-t-2 border-indigo-500" : ""} ${
                   dragId === tab.id ? "opacity-50" : ""
-                } ${pinned ? "border-b border-dashed border-gray-300" : ""}`}
+                } ${archive ? "border-b border-dashed border-gray-300" : ""}`}
               >
                 {hasNested && subItemCount > 0 ? (
                   <button
@@ -444,20 +461,24 @@ export default function TabRail({
                   type="button"
                   onClick={() => onSwitch(tab.id)}
                   onDoubleClick={() => {
-                    if (!isOwner) return;
+                    if (!isOwner || protectedTab) return;
                     setRenameValue(tab.title);
                     setRenamingId(tab.id);
                   }}
                   className={`flex-1 min-w-0 text-left truncate py-2 pr-1 text-sm ${
                     active ? "text-indigo-800 font-medium" : "text-gray-700"
-                  } ${pinned ? "italic text-gray-500" : ""}`}
-                  title={`${tab.title} (double-click to rename)`}
+                  } ${archive ? "italic text-gray-500" : ""}`}
+                  title={
+                    protectedTab
+                      ? tab.title
+                      : `${tab.title} (double-click to rename)`
+                  }
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span
                       className={`flex-shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold uppercase ${badge.className}`}
                     >
-                      {pinned ? "Archive" : badge.label}
+                      {archive ? "Archive" : badge.label}
                     </span>
                     <span className="truncate">{tab.title}</span>
                     {count > 0 && (
@@ -471,7 +492,7 @@ export default function TabRail({
                   </div>
                 </button>
 
-                {isOwner && (
+                {isOwner && !protectedTab && (
                   <button
                     type="button"
                     onClick={(e) => {

@@ -8,15 +8,15 @@
 //   - Logline (from Series Overview)
 //   - Characters (full)
 //
-// For reference_episode tabs (where the writer generates predefined episodes):
+// For predefined_episodes tabs (where the writer generates predefined episodes):
 //   - The FULL chain of previous reference episodes in that tab — no limit.
 //     Writers confirmed they want the entire history passed so continuity is
 //     perfect; context budget is not a concern at current series lengths.
-//   - The LAST episode plot in the Episode Plots tab, because the writer
+//   - The LAST microdrama plot in the Microdrama Plots tab, because the writer
 //     finalises the next plot there as the last [H3] and then generates the
 //     reference episode from it. That is the single plot that matters.
 //
-// For episode_plot tabs (plot editing, not ref-ep generation):
+// For microdrama_plots tabs (plot editing, not ref-ep generation):
 //   - Previous 3 + upcoming 3 [H3] plots in the tab for local continuity.
 //   - Last 3 reference episodes paired by episode number for realised tone.
 
@@ -90,10 +90,14 @@ export function tiptapJsonToTagged(contentStr: string | null): string {
 // ─── Tab lookups ───
 
 function findTabByType(tabs: TabRow[], type: string): TabRow | undefined {
-  // Skip archive tabs — they're duplicates of content already in typed tabs.
-  return tabs.find(
-    (t) => t.type === type && !/\(archive\)/i.test(t.title)
-  );
+  // Match by type. Only skip "(archive)" tabs for types where the archive is
+  // a known duplicate of a canonical tab's content — today that's just the
+  // "Main (archive)" case, which never matches a real type anyway since it
+  // carries type="custom". For type="research" the sole instance IS the
+  // renamed archive tab (healFixedTabs titles it "Research (archive)" while
+  // retaining the research type), and skipping it would lose the Original
+  // Plotline source.
+  return tabs.find((t) => t.type === type);
 }
 
 // ─── Logline extraction ───
@@ -118,7 +122,7 @@ function extractLogline(seriesOverviewTagged: string): string {
 
 // ─── H3-section slicing ───
 //
-// Both the reference_episode tab and the episode_plot tab hold their
+// Both the predefined_episodes tab and the microdrama_plots tab hold their
 // content as a sequence of [H3] sections. We split by [H3] so the engine
 // can address individual episodes/plots.
 
@@ -224,8 +228,8 @@ export function buildAIContext(args: BuildContextArgs): string {
   const researchTab = findTabByType(tabs, "research");
   const seriesOverviewTab = findTabByType(tabs, "series_overview");
   const charactersTab = findTabByType(tabs, "characters");
-  const episodePlotTab = findTabByType(tabs, "episode_plot");
-  const refEpisodeTab = findTabByType(tabs, "reference_episode");
+  const episodePlotTab = findTabByType(tabs, "microdrama_plots");
+  const refEpisodeTab = findTabByType(tabs, "predefined_episodes");
 
   const researchTagged = renderTab(researchTab);
   const seriesOverviewTagged = renderTab(seriesOverviewTab);
@@ -255,7 +259,7 @@ export function buildAIContext(args: BuildContextArgs): string {
   if (charactersTagged) sections.push(`## Characters\n${charactersTagged}`);
 
   // Recipe-specific.
-  if (activeTab.type === "reference_episode") {
+  if (activeTab.type === "predefined_episodes") {
     // Generating predefined episodes: writer wants the FULL previous chain
     // (no trim) + the single latest Episode Plot (which is how the workflow
     // is wired — the next episode's plot is finalised as the last [H3] in
@@ -303,7 +307,7 @@ export function buildAIContext(args: BuildContextArgs): string {
         `## Currently Editing — "${current.title}"\nThis is the section the writer is working on.`
       );
     }
-  } else if (activeTab.type === "episode_plot") {
+  } else if (activeTab.type === "microdrama_plots") {
     // Plots as [H3] sections in this tab.
     const selfSections = splitTabByH3(activeTagged);
     const activeTitle = selection
