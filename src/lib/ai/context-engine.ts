@@ -8,12 +8,17 @@
 //   - Logline (from Series Overview)
 //   - Characters (full)
 //
-// For reference_episode and episode_plot tabs, the AI also sees:
-//   - Previous 3 [H3] sections in the SAME tab (sliced around the writer's
-//     cursor/selection), since episodes and plots both live as [H3] blocks
-//     inside one parent tab.
-//   - Cross-tab neighbours: nearby plots when editing a ref episode; last
-//     3 reference episodes when editing a plot.
+// For reference_episode tabs (where the writer generates predefined episodes):
+//   - The FULL chain of previous reference episodes in that tab — no limit.
+//     Writers confirmed they want the entire history passed so continuity is
+//     perfect; context budget is not a concern at current series lengths.
+//   - The LAST episode plot in the Episode Plots tab, because the writer
+//     finalises the next plot there as the last [H3] and then generates the
+//     reference episode from it. That is the single plot that matters.
+//
+// For episode_plot tabs (plot editing, not ref-ep generation):
+//   - Previous 3 + upcoming 3 [H3] plots in the tab for local continuity.
+//   - Last 3 reference episodes paired by episode number for realised tone.
 
 import type { TabRow } from "@/components/editor/TabRail";
 
@@ -251,7 +256,10 @@ export function buildAIContext(args: BuildContextArgs): string {
 
   // Recipe-specific.
   if (activeTab.type === "reference_episode") {
-    // All episodes live as [H3] sections in this tab. Slice.
+    // Generating predefined episodes: writer wants the FULL previous chain
+    // (no trim) + the single latest Episode Plot (which is how the workflow
+    // is wired — the next episode's plot is finalised as the last [H3] in
+    // the Episode Plots tab, and the ref episode is generated from it).
     const selfSections = splitTabByH3(activeTagged);
     const activeTitle = selection
       ? detectActiveH3Title(selection.taggedText, selection.surroundingContext || "")
@@ -262,36 +270,38 @@ export function buildAIContext(args: BuildContextArgs): string {
       return selfSections.length > 0 ? selfSections.length - 1 : -1;
     })();
 
-    if (curIdx >= 0 && selfSections.length > 0) {
-      const current = selfSections[curIdx];
-      const prevStart = Math.max(0, curIdx - 3);
-      const previous = selfSections.slice(prevStart, curIdx);
-      if (previous.length > 0) {
-        const body = previous
+    // All reference episodes authored BEFORE the current editing point.
+    // When the writer is appending a new ref episode at the end, curIdx is
+    // the last existing section; we pass everything strictly before it —
+    // which for a fresh append means every prior episode.
+    const previous =
+      curIdx >= 0 ? selfSections.slice(0, curIdx) : selfSections;
+    if (previous.length > 0) {
+      sections.push(
+        `## Previous Reference Episodes (full chain — all ${previous.length}, in order, from this tab)\n${previous
           .map((s) => s.content)
-          .join("\n\n");
+          .join("\n\n")}`
+      );
+    }
+
+    // The LAST Episode Plot in the Episode Plots tab. The writer finalises
+    // the next episode's plot there as the trailing [H3]; that's the plot
+    // this ref episode is built from, not a number-paired match.
+    if (episodePlotTagged) {
+      const plotSections = splitTabByH3(episodePlotTagged);
+      if (plotSections.length > 0) {
+        const lastPlot = plotSections[plotSections.length - 1];
         sections.push(
-          `## Previous Reference Episodes (last ${previous.length}, from this tab)\n${body}`
+          `## Episode Plot to Generate From (last [H3] in the Episode Plots tab — finalised plot for the next reference episode)\n${lastPlot.content}`
         );
       }
+    }
 
-      // Pair with nearby plots by episode number.
-      const curEpNum = extractEpisodeNumber(current.title);
-      if (episodePlotTagged && curEpNum != null) {
-        const plotSections = splitTabByH3(episodePlotTagged);
-        const plotNumbers: number[] = [];
-        for (let n = curEpNum - 3; n <= curEpNum + 3; n++) {
-          if (n !== curEpNum && n > 0) plotNumbers.push(n);
-        }
-        const nearbyPlots = sectionsByEpisodeNumbers(plotSections, plotNumbers);
-        if (nearbyPlots.length > 0) {
-          sections.push(
-            `## Surrounding Episode Plots (for Eps ${plotNumbers.join(", ")})\n${nearbyPlots.map((s) => s.content).join("\n\n")}`
-          );
-        }
-      }
-
-      sections.push(`## Currently Editing — "${current.title}"\nThis is the section the writer is working on.`);
+    if (curIdx >= 0 && selfSections.length > 0) {
+      const current = selfSections[curIdx];
+      sections.push(
+        `## Currently Editing — "${current.title}"\nThis is the section the writer is working on.`
+      );
     }
   } else if (activeTab.type === "episode_plot") {
     // Plots as [H3] sections in this tab.
