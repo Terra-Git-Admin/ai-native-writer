@@ -77,6 +77,19 @@ const CHAT_QUICK_ACTIONS_EXISTING = [
   },
 ];
 
+// Shown when the writer opens the sidebar with the Workbook tab active and
+// the tab still empty. The generation prompt fills a full Adaptation State
+// section per DOCUMENT_STYLE_GUIDE's ADAPTATION STATE FORMAT, pulling from
+// the doc's existing Original Research, Characters, and Microdrama Plots.
+// Writers can also type their own prompt or edit the active tab manually.
+const WORKBOOK_QUICK_ACTIONS = [
+  {
+    label: "Generate Adaptation State",
+    prompt:
+      "Generate a complete Adaptation State section for this Workbook tab, following the ADAPTATION STATE FORMAT in the style guide. Populate Series Spine, Source Analysis, Pacing Framework, Plot Lines, and Characters from the Original Research, Characters, and Microdrama Plots tabs. Leave Beat Timeline and Episode Coverage Log empty — writers fill those as episodes are generated. Output the full Workbook body with [H1] Workbook at the top and [H2]/[H3]/[UL] structure per the format.",
+  },
+];
+
 interface ParsedChange {
   id: number;
   location: string;
@@ -575,20 +588,27 @@ export default function AIChatSidebar({
             {mode === "chat" && (
               <div className="flex flex-col gap-3">
                 <p className="text-center text-gray-400">
-                  {editorIsEmpty ? "What would you like to do?" : "What would you like to work on?"}
+                  {activeTab.type === "workbook" && editorIsEmpty
+                    ? "Workbook is empty. Generate the Adaptation State to get started, or type your own prompt."
+                    : editorIsEmpty
+                    ? "What would you like to do?"
+                    : "What would you like to work on?"}
                 </p>
                 <div className="flex flex-col gap-2">
-                  {(editorIsEmpty ? CHAT_QUICK_ACTIONS_EMPTY : CHAT_QUICK_ACTIONS_EXISTING).map(
-                    (action) => (
-                      <button
-                        key={action.label}
-                        onClick={() => setInput(action.prompt)}
-                        className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
-                      >
-                        {action.label}
-                      </button>
-                    )
-                  )}
+                  {(activeTab.type === "workbook" && editorIsEmpty
+                    ? WORKBOOK_QUICK_ACTIONS
+                    : editorIsEmpty
+                    ? CHAT_QUICK_ACTIONS_EMPTY
+                    : CHAT_QUICK_ACTIONS_EXISTING
+                  ).map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => setInput(action.prompt)}
+                      className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
+                    >
+                      {action.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
