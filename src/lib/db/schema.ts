@@ -117,6 +117,9 @@ export const documentVersions = sqliteTable("document_versions", {
   documentId: text("document_id")
     .notNull()
     .references(() => documents.id, { onDelete: "cascade" }),
+  // Nullable for pre-tabs legacy rows (migration 0002 or earlier). New snapshots
+  // created post-0003 always set tabId — writers work inside a specific tab.
+  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
   content: text("content").notNull(), // Tiptap JSON snapshot
   createdBy: text("created_by")
     .notNull()

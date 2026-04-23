@@ -4,12 +4,19 @@ import { useEffect, useState } from "react";
 
 interface Version {
   id: string;
+  tabId: string | null;
   createdBy: string | null;
   createdAt: string;
+  contentLen: number;
 }
 
 interface VersionHistoryProps {
   documentId: string;
+  // Scope history to the active tab. Writers think per-tab, and tab-scoped
+  // revert is the only safe default — a cross-tab revert would need to know
+  // which tab to write to, which this panel doesn't.
+  tabId: string | null;
+  tabTitle?: string | null;
   onRevert: (content: string) => void;
   onClose: () => void;
 }
@@ -39,6 +46,8 @@ function timeAgo(dateStr: string): string {
 
 export default function VersionHistory({
   documentId,
+  tabId,
+  tabTitle,
   onRevert,
   onClose,
 }: VersionHistoryProps) {
@@ -47,17 +56,29 @@ export default function VersionHistory({
   const [reverting, setReverting] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/documents/${documentId}/versions`)
+    if (!tabId) {
+      setVersions([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    fetch(
+      `/api/documents/${documentId}/versions?tabId=${encodeURIComponent(tabId)}`
+    )
       .then((r) => r.json())
       .then((data) => {
-        setVersions(data);
+        setVersions(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [documentId]);
+  }, [documentId, tabId]);
 
   const handleRevert = async (versionId: string) => {
-    if (!confirm("Revert to this version? Current content will be saved as a version first.")) {
+    if (
+      !confirm(
+        `Replace this tab's current content with this saved version? Your current content will be snapshotted first, so you can come back to it from history.`
+      )
+    ) {
       return;
     }
     setReverting(versionId);
@@ -82,7 +103,14 @@ export default function VersionHistory({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h3 className="font-semibold">Version History</h3>
+        <div>
+          <h3 className="font-semibold">Version History</h3>
+          {tabTitle && (
+            <p className="text-xs text-gray-500">
+              for tab: <span className="font-medium">{tabTitle}</span>
+            </p>
+          )}
+        </div>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600"
@@ -96,8 +124,8 @@ export default function VersionHistory({
 
         {!loading && versions.length === 0 && (
           <p className="text-sm text-gray-500 text-center py-8">
-            No versions saved yet. Versions are created automatically every 5
-            minutes when you edit.
+            No versions saved yet for this tab. A snapshot is taken
+            automatically at most once every 5 minutes while you edit.
           </p>
         )}
 
@@ -116,16 +144,19 @@ export default function VersionHistory({
                   ({timeAgo(v.createdAt)})
                 </span>
               </p>
-              {v.createdBy && (
-                <p className="text-xs text-gray-400">by {v.createdBy}</p>
-              )}
+              <p className="text-xs text-gray-400">
+                {v.contentLen > 0
+                  ? `${(v.contentLen / 1024).toFixed(1)} kb`
+                  : "empty"}
+                {v.createdBy ? ` • by ${v.createdBy}` : ""}
+              </p>
             </div>
             <button
               onClick={() => handleRevert(v.id)}
               disabled={reverting !== null}
               className="rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition-colors"
             >
-              {reverting === v.id ? "Reverting..." : "Revert"}
+              {reverting === v.id ? "Reverting..." : "Revert this tab"}
             </button>
           </div>
         ))}

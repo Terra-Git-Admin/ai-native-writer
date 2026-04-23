@@ -27,6 +27,7 @@ import type { EditorState } from "@tiptap/pm/state";
 // from another tab). Implementation lives in src/lib/commentMarks.ts so the
 // server seatbelt uses the same comparison.
 import { isCommentMarkOnlyDiff, isNormalisedEqual } from "@/lib/commentMarks";
+import { clientTrace } from "@/lib/clientTrace";
 
 export type TaggedBlock = {
   line: string; // full tagged string e.g. "[OL] Flutter app in V2..."
@@ -158,12 +159,10 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Thin adapter — delegates to the shared clientTrace helper which buffers +
+// POSTs to /api/client-trace so the events land in Cloud Run, not just devtools.
 function trace(event: string, data: Record<string, unknown> = {}): void {
-  try {
-    console.log("[save-trace]", { event, ts: new Date().toISOString(), ...data });
-  } catch {
-    /* swallow */
-  }
+  clientTrace(event, data);
 }
 
 interface EditorProps {
@@ -204,6 +203,11 @@ export interface EditorHandle {
   removeHighlight: (from: number, to: number) => void;
   scrollToHeading: (pos: number) => void;
   scrollToHeadingByText: (text: string) => boolean;
+  // Synchronously clears the pending debounced save and awaits a fresh PUT of
+  // the current editor content. Parent calls this before switching tabs so
+  // in-progress work is never eaten by the unmount. Resolves regardless of
+  // save success; inspect Cloud Run logs for failures.
+  flushPendingSave: () => Promise<void>;
 }
 
 const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
@@ -673,7 +677,71 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         triggerSave();
       }
     },
+    async flushPendingSave() {
+      if (!editor || !isOwner) return;
+      if (saveTimeout.current) {
+        clearTimeout(saveTimeout.current);
+        saveTimeout.current = null;
+      }
+      // Only flush if there's actually unsaved work. A "saved" state means the
+      // server already has what's in the editor — an extra PUT is pure waste.
+      if (saveStatusRef.current === "saved") return;
+      trace("client.flushPendingSave.start", {
+        docId: documentId,
+        docTabId: tabId,
+        saveStatus: saveStatusRef.current,
+      });
+      try {
+        await saveDocument(editor.getJSON());
+        trace("client.flushPendingSave.ok", {
+          docId: documentId,
+          docTabId: tabId,
+        });
+      } catch (err) {
+        trace("client.flushPendingSave.fail", {
+          docId: documentId,
+          docTabId: tabId,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
   }));
+
+  // On unmount (tab switch, navigation away, page close), fire any pending
+  // debounced save. Using sendBeacon via saveDocument isn't an option here —
+  // the fetch must run during the render cycle. For page-close we rely on
+  // clientTrace's pagehide handler + the server-side save already being in
+  // flight. For tab switches the parent should call flushPendingSave first.
+  useEffect(() => {
+    return () => {
+      if (!editor || !isOwner) return;
+      if (saveTimeout.current) {
+        clearTimeout(saveTimeout.current);
+        saveTimeout.current = null;
+      }
+      if (saveStatusRef.current !== "saved") {
+        trace("client.unmount.unsavedWork", {
+          docId: documentId,
+          docTabId: tabId,
+          saveStatus: saveStatusRef.current,
+        });
+        // Best-effort. The parent's handleTabSwitch should have awaited
+        // flushPendingSave before unmount, so this catches unmount paths
+        // that bypass the switch handler (route change, auth expiry, etc.).
+        try {
+          saveDocument(editor.getJSON());
+        } catch {
+          /* logged via trace above */
+        }
+      } else {
+        trace("client.unmount.clean", {
+          docId: documentId,
+          docTabId: tabId,
+        });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, documentId, tabId, isOwner]);
 
   // Inject a dynamic <style> tag for active comment highlighting.
   // This survives Tiptap DOM re-renders (unlike manually adding classes to mark spans).
@@ -1076,47 +1144,84 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         </div>
       )}
 
-      {/* Conflict banner — shown when poll detects structural content change from another tab */}
-      {conflictDetected && pendingServerContent && (
-        <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          <span className="flex-1">This document was updated in another window.</span>
-          <button
-            type="button"
-            onClick={() => {
-              if (editor) {
-                const localBytes = JSON.stringify(editor.getJSON()).length;
+      {/* Conflict banner — fires when the 5s poll sees the server's copy of
+          this tab differs from what's in the editor. Copy is deliberately
+          neutral ("this window" vs "saved version") because the cause is
+          often not another window — it can be a stale remount, a second
+          device, or a reviewer's tab. We show the raw byte sizes so the
+          writer can judge which version is theirs before deciding. */}
+      {conflictDetected && pendingServerContent && editor && (() => {
+        const localBytes = JSON.stringify(editor.getJSON()).length;
+        const serverBytes = JSON.stringify(pendingServerContent).length;
+        const wouldShrinkPct =
+          localBytes > 0
+            ? Math.round((1 - serverBytes / localBytes) * 100)
+            : 0;
+        const willLoseContent = wouldShrinkPct >= 10;
+        return (
+          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+            <span className="flex-1">
+              <strong>Content mismatch.</strong> This window has{" "}
+              {(localBytes / 1024).toFixed(1)} kb, the saved version has{" "}
+              {(serverBytes / 1024).toFixed(1)} kb. Choose which to keep.
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                trace("client.banner.keepLocal", {
+                  docId: documentId,
+                  docTabId: tabId,
+                  localBytes,
+                  serverBytes,
+                });
+                setConflictDetected(false);
+                setPendingServerContent(null);
+                if (isOwner) saveDocument(editor.getJSON());
+              }}
+              className="rounded bg-amber-700 px-3 py-1 font-medium text-white hover:bg-amber-800 transition-colors"
+            >
+              Keep what I see (re-save)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (willLoseContent) {
+                  const msg = `Loading the saved version will remove about ${wouldShrinkPct}% of what you currently see (${(
+                    (localBytes - serverBytes) /
+                    1024
+                  ).toFixed(1)} kb). This cannot be undone from here. Continue?`;
+                  if (!window.confirm(msg)) {
+                    trace("client.banner.applyServer.cancelled", {
+                      docId: documentId,
+                      docTabId: tabId,
+                      localBytes,
+                      serverBytes,
+                      wouldShrinkPct,
+                    });
+                    return;
+                  }
+                }
                 trace("client.banner.applyServer", {
                   docId: documentId,
-                  tabId: tabIdRef.current,
+                  docTabId: tabId,
                   localBytesDiscarded: localBytes,
+                  serverBytes,
+                  wouldShrinkPct,
                 });
-                editor.commands.setContent(pendingServerContent, { emitUpdate: false });
+                editor.commands.setContent(pendingServerContent, {
+                  emitUpdate: false,
+                });
                 lastSavedServerUpdatedAtRef.current = null;
-              }
-              setConflictDetected(false);
-              setPendingServerContent(null);
-            }}
-            className="rounded bg-white border border-amber-200 px-2 py-1 font-medium hover:bg-amber-50 transition-colors"
-          >
-            Apply their version
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              trace("client.banner.keepLocal", {
-                docId: documentId,
-                tabId: tabIdRef.current,
-              });
-              setConflictDetected(false);
-              setPendingServerContent(null);
-              if (editor && isOwner) saveDocument(editor.getJSON());
-            }}
-            className="rounded bg-amber-100 px-2 py-1 font-medium hover:bg-amber-200 transition-colors"
-          >
-            Keep mine
-          </button>
-        </div>
-      )}
+                setConflictDetected(false);
+                setPendingServerContent(null);
+              }}
+              className="rounded border border-amber-300 bg-white px-3 py-1 font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+            >
+              Load saved version
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Editor */}
       <div

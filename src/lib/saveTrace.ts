@@ -1,6 +1,14 @@
 // Structured server-side logger for the save/comment instrumentation.
-// Gated by DEBUG_SAVE_TRACE=true so it stays dark in normal operation.
-// Emits one JSON line per event — filterable in Cloud Run logs.
+// Three tiers:
+//   - logEvent:  ALWAYS ON. Use for critical lifecycle events (save start/ok/fail,
+//                tab get/put, version created). Cost is trivial at current traffic
+//                and we can never be blind to these again.
+//   - logTrace:  env-gated by DEBUG_SAVE_TRACE=true. Use for high-volume or
+//                keystroke-level events.
+//   - warnTrace: ALWAYS ON via console.warn. Use for anomalies we want visible
+//                even without structured log parsing.
+// Every call emits one JSON line with a stable prefix so Cloud Run log filters
+// by substring keep working.
 
 export function traceEnabled(): boolean {
   return process.env.DEBUG_SAVE_TRACE === "true";
@@ -8,6 +16,24 @@ export function traceEnabled(): boolean {
 
 export function seatbeltEnabled(): boolean {
   return process.env.DEBUG_SAVE_SEATBELT === "true";
+}
+
+export function logEvent(
+  event: string,
+  data: Record<string, unknown> = {}
+): void {
+  try {
+    console.log(
+      "[save-event] " +
+        JSON.stringify({
+          event,
+          ts: new Date().toISOString(),
+          ...data,
+        })
+    );
+  } catch {
+    /* never let a log failure affect the request path */
+  }
 }
 
 export function logTrace(
@@ -25,12 +51,10 @@ export function logTrace(
         })
     );
   } catch {
-    // never let a log failure affect the request path
+    /* swallow */
   }
 }
 
-// Always-on warn: for events we want visible even when the trace flag is off
-// (seatbelt firings, unexpected content shrinkage, etc.).
 export function warnTrace(
   event: string,
   data: Record<string, unknown> = {}
