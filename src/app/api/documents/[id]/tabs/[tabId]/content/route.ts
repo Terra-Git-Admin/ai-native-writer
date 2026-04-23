@@ -1,15 +1,104 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, tabs, comments } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { documents, tabs, comments, documentVersions } from "@/lib/db/schema";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import { compareDocs, extractCommentMarkIds } from "@/lib/commentMarks";
 import {
+  logEvent,
   logTrace,
   warnTrace,
   seatbeltEnabled,
   contentHash,
 } from "@/lib/saveTrace";
+
+// Per-tab version snapshot. At most one row per 5 minutes per (doc, tab) so
+// rapid typing doesn't flood the table. Prunes to last 50 per (doc, tab) so
+// long-running docs don't grow unbounded.
+async function maybeCreateTabVersion(
+  documentId: string,
+  tabId: string,
+  content: string,
+  userId: string
+): Promise<"created" | "throttled" | "skipped"> {
+  if (!content) return "skipped";
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+  const latest = await db
+    .select({ createdAt: documentVersions.createdAt })
+    .from(documentVersions)
+    .where(
+      and(
+        eq(documentVersions.documentId, documentId),
+        eq(documentVersions.tabId, tabId)
+      )
+    )
+    .orderBy(desc(documentVersions.createdAt))
+    .limit(1);
+
+  if (latest.length > 0 && latest[0].createdAt > fiveMinutesAgo) {
+    logEvent("tab.version.throttled", { documentId, tabId, userId });
+    return "throttled";
+  }
+
+  await db.insert(documentVersions).values({
+    id: nanoid(12),
+    documentId,
+    tabId,
+    content,
+    createdBy: userId,
+    createdAt: new Date(),
+  });
+
+  logEvent("tab.version.created", {
+    documentId,
+    tabId,
+    userId,
+    contentHash: contentHash(content),
+    contentLen: content.length,
+  });
+
+  // Prune beyond 50 per (doc, tab)
+  const count = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(documentVersions)
+    .where(
+      and(
+        eq(documentVersions.documentId, documentId),
+        eq(documentVersions.tabId, tabId)
+      )
+    );
+  if ((count[0]?.count ?? 0) > 50) {
+    const cutoff = await db
+      .select({ createdAt: documentVersions.createdAt })
+      .from(documentVersions)
+      .where(
+        and(
+          eq(documentVersions.documentId, documentId),
+          eq(documentVersions.tabId, tabId)
+        )
+      )
+      .orderBy(desc(documentVersions.createdAt))
+      .limit(1)
+      .offset(49);
+    if (cutoff.length > 0) {
+      await db
+        .delete(documentVersions)
+        .where(
+          and(
+            eq(documentVersions.documentId, documentId),
+            eq(documentVersions.tabId, tabId),
+            sql`${documentVersions.createdAt} < ${Math.floor(
+              cutoff[0].createdAt.getTime() / 1000
+            )}`
+          )
+        );
+    }
+  }
+
+  return "created";
+}
 
 function readTraceHeaders(req: Request) {
   return {
@@ -50,7 +139,7 @@ export async function GET(
     return NextResponse.json({ error: "Tab not found" }, { status: 404 });
   }
 
-  logTrace("tab.get.ok", {
+  logEvent("tab.get.ok", {
     docId: id,
     docTabIdPath: tabId,
     type: tab.type,
@@ -169,7 +258,8 @@ export async function PUT(
     ...trace,
   };
 
-  logTrace("tab.put.entry", entryLog);
+  // Always-on: we never want to be blind to a save landing on the server.
+  logEvent("tab.put.entry", entryLog);
 
   if (
     seatbeltEnabled() &&
@@ -223,13 +313,30 @@ export async function PUT(
     .set({ updatedAt: now })
     .where(eq(documents.id, id));
 
-  logTrace("tab.put.ok", {
+  // Snapshot the saved content as a version row — at most one per 5 minutes
+  // per (doc, tab). Owner-only, skip comment-mark-only saves (nothing to
+  // snapshot). Non-fatal: a version failure must never break the save itself.
+  if (isOwner && !commentMarkOnly && body.content) {
+    try {
+      await maybeCreateTabVersion(id, tabId, body.content, session.user.id);
+    } catch (err) {
+      warnTrace("tab.version.failed", {
+        docId: id,
+        docTabIdPath: tabId,
+        userId: session.user.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  logEvent("tab.put.ok", {
     docId: id,
     docTabIdPath: tabId,
     userId: session.user.id,
     isOwner,
     commentMarkOnly,
     updatedAt: now.toISOString(),
+    contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
     hashAfter: contentHash(body.content ?? tab.content),
     ...trace,
   });

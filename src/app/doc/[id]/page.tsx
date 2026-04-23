@@ -195,7 +195,7 @@ export default function DocumentPage() {
   }, []);
 
   const handleTabSwitch = useCallback(
-    (tabId: string, scrollToHeadingText?: string) => {
+    async (tabId: string, scrollToHeadingText?: string) => {
       // Same-tab click with a heading target: scroll immediately.
       if (tabId === activeTabId) {
         if (scrollToHeadingText) {
@@ -203,23 +203,61 @@ export default function DocumentPage() {
         }
         return;
       }
+
+      // 1. Flush any pending debounced save for the CURRENT tab before the
+      // editor unmounts. Without this, a 1-second debounced save in progress
+      // when the writer clicked a new tab was thrown away.
+      try {
+        await editorRef.current?.flushPendingSave?.();
+      } catch {
+        /* logged via client-trace */
+      }
+
+      // 2. Fetch fresh content for the TARGET tab. The `tabs` state cache is
+      // populated at page load and never refreshed by editing, so switching
+      // back to a tab previously showed a stale snapshot — the exact mechanism
+      // behind "my work disappeared when I switched tabs" and the source of
+      // the yellow-banner loop.
+      try {
+        const res = await fetch(
+          `/api/documents/${params.id}/tabs/${tabId}/content`
+        );
+        if (res.ok) {
+          const fresh = await res.json();
+          setTabs((prev) =>
+            prev.map((t) =>
+              t.id === tabId
+                ? {
+                    ...t,
+                    content: fresh.content ?? null,
+                    updatedAt: fresh.updatedAt ?? t.updatedAt,
+                  }
+                : t
+            )
+          );
+        }
+      } catch {
+        /* fall back to cached content — editor will remount with whatever we have */
+      }
+
+      // 3. Swap the active tab. Editor remount now reads the freshly-fetched
+      // activeTabContent derived from updated tabs state.
       setActiveTabId(tabId);
       setAiSelection(null);
       setAiSidebarOpen(false);
       setActiveCommentId(null);
       setPendingComment(null);
-      setActiveTabHeadings([]); // clear — editor will re-emit on remount
+      setActiveTabHeadings([]);
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tabId);
       window.history.pushState({}, "", url.toString());
-      // Defer scroll until the editor has remounted and hydrated the new tab.
       if (scrollToHeadingText) {
         setTimeout(() => {
           editorRef.current?.scrollToHeadingByText(scrollToHeadingText);
         }, 400);
       }
     },
-    [activeTabId]
+    [activeTabId, params.id]
   );
 
   const handleTabsChange = useCallback(async () => {
@@ -574,6 +612,8 @@ export default function DocumentPage() {
           <div className="w-80 border-l border-gray-200 bg-gray-50">
             <VersionHistory
               documentId={doc.id}
+              tabId={activeTabId}
+              tabTitle={activeTab?.title ?? null}
               onRevert={() => {
                 setVersionHistoryOpen(false);
                 window.location.reload();
