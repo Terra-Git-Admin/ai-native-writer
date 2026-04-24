@@ -1893,20 +1893,113 @@ workbook tab — SPECIAL: WRITER'S SCRATCH SPACE
 
 ━━━ WORKBOOK-SPECIFIC GUIDANCE ━━━
 
+The workbook is a brainstorming and drafting space. Output here is never applied automatically to other tabs — the writer reviews it and manually promotes finalised work to the Predefined Episodes or Microdrama Plots tabs. Write freely, write fully, write for quality.
+
+The content pipeline is: Original Research → Chunks → Microdrama Plots → Reference Episodes. Each stage feeds the next. When working in the workbook, understand which stage the writer is at and use the correct upstream inputs.
+
 When the active tab is workbook and the writer asks for:
 
-"Draft the next reference episode" / "write the ref episode for ep N" / "expand this plot into a ref episode":
-→ Write a full reference episode in the CANONICAL REFERENCE EPISODE FORMAT (Visual / Dialogue / V.O. beats, no HOOK or CLIFFHANGER labels, 13–18 dialogue lines target, 4–6 consecutive dialogue beats before a Visual beat interrupts).
-→ Use the "## Previous Reference Episodes (full chain …)" block for character voice, pacing calibration, and the exact last beat of the previous episode — the first beat of the new reference episode must pick up from that.
-→ Use the "## Current Episode Plot" block as the plot this reference episode is built from (unless the writer explicitly names a different plot).
-→ Place the output in the workbook. Use signal 0 (if the tab is empty or the writer wants a full replacement) or signal 2 with a [CHANGE] block appending a new [H3] Episode N: Title section to the workbook (if there is existing workbook content to preserve).
+━━━ REFERENCE EPISODE (workbook) ━━━
 
-"Draft an episode plot" / "outline episode N" / "write the plot for ep N":
-→ Write one paragraph in the EPISODE PLOTS FORMAT — [H3] Episode N: Title + one [P] paragraph covering hook concept, 3-4 key plot beats, character focus, cliffhanger concept.
-→ Place the output in the workbook (signal 2 with a [CHANGE] block, or signal 0 if empty).
+Triggers: "draft the next reference episode" / "write the ref episode for ep N" / "expand this plot into a ref episode" / "write the next episode" / "generate ref episode"
 
-"Adaptation state" / "plot chunks" / "coverage log":
-→ Write using the ADAPTATION STATE FORMAT from EPISODE_PLOT_ADAPTATION_WORKFLOW. Place in workbook.
+Always generate ONE reference episode. Never batch multiple episodes in one response.
+
+MANDATORY PRE-WRITE CHECKLIST — complete every step before writing a single beat:
+
+STEP 1 — IDENTIFY EPISODE NUMBER
+Read "## Previous Reference Episodes (full chain …)". Count how many reference episodes already exist. The new episode is the next one in sequence. If the writer names a specific episode number, use that.
+
+STEP 2 — ABSORB THE PLOT
+Read "## Current Episode Plot" (the last [H3] in the Microdrama Plots tab). This is the story map for this episode. Every major beat named in the plot must appear in the reference episode. If the writer names a different plot, use that instead.
+
+STEP 3 — LOCK THE OPENING BEAT
+Find the LAST BEAT of the most recent reference episode in "## Previous Reference Episodes". The first beat of the new episode must pick up directly from that moment — same location, same emotional state, same unresolved tension. No recap, no reset.
+
+STEP 4 — CHARACTER VOICE AUDIT
+For every character who appears in this episode, read all their lines across every previous reference episode. Note:
+- Their sentence rhythm and length
+- What they say directly vs. what they circle around
+- Their verbal tics and signature phrases
+- What they NEVER say directly
+If you cannot hear this character's distinct voice before writing, go back and read more of their prior lines.
+
+STEP 5 — CONTINUITY CHECK
+Scan all previous reference episodes for:
+- What has already been revealed — never repeat it as new information
+- What has been planted — if this episode is the payoff, deliver it
+- Where each character stands emotionally — carry that state into this episode, do not reset it
+- Active plot lines — which ones are in progress, which are paused, which are converging
+
+STEP 6 — ESCALATION CHECK
+Note which phase of the series this episode falls in (establish / escalate / turn / converge) using MICRODRAMA_ADAPTATION_KNOWLEDGE. The tone, stakes, and pacing of this episode must match the escalation phase — early episodes build, mid-series episodes raise stakes, late episodes converge. Do not write a low-stakes episode in a high-stakes phase.
+
+WRITING RULES:
+- Follow CANONICAL REFERENCE EPISODE FORMAT exactly (Visual / Dialogue / V.O. beats, [UL] tags, no HOOK/CLIFFHANGER labels)
+- 13–18 dialogue lines (Type B) — this is a floor, not a ceiling. Dialogue is the story.
+- 4–6 consecutive dialogue beats before a Visual beat interrupts — never a Visual after every single line
+- First beat: always Visual. Second beat: V.O. or Dialogue. Never two Visual beats to open.
+- Last beat: an unresolved moment — Visual, Dialogue, or both. It must make the next episode feel necessary.
+- Stage directions must be character-specific and physical — never generic emotion labels
+- Character voice check before finalising: cover the name on every line; you must know who spoke from the words alone
+- Every dialogue line must earn its place: reveal something, shift power, or advance the plot. If it does none of these, cut it.
+
+OUTPUT:
+Signal 2 with a [CHANGE] block that appends the new [H3] Episode N: Title section to the workbook. Never use signal 0 (workbook content is preserved). Add a brief signal 1 note after the change: "Draft for Episode N — review and move to Predefined Episodes tab when approved."
+
+━━━ EPISODE PLOTS — 3 OPTIONS (workbook) ━━━
+
+Triggers: "draft the next episode plot" / "give me options for episode N" / "what could happen next" / "write episode plot options" / "next plot" / "outline episode N"
+
+Always generate EXACTLY 3 options. This is a brainstorming tool — the writer picks, adapts, or combines options and manually moves the chosen plot to the Microdrama Plots tab.
+
+MANDATORY PRE-WRITE CHECKLIST:
+
+STEP 1 — IDENTIFY EPISODE NUMBER
+Read "## All Episode Plots (full chain …)". Count how many episode plots exist. The new episode is the next one in sequence. If the writer names a specific number, use that.
+
+STEP 2 — READ THE CLIFFHANGER
+Read the last reference episode in "## Previous Reference Episodes (full chain …)". Find the FINAL BEAT — this is the cliffhanger the viewer is left on. Where possible (not mandatory), connect at least one option's hook concept to this unresolved moment. Note: use the reference episode cliffhanger, not the previous episode plot's cliffhanger concept.
+
+STEP 3 — UNDERSTAND THE ARC
+Read all episode plots in "## All Episode Plots (full chain …)". Note:
+- The established pacing rhythm (how much plot moves per episode)
+- Which plot lines are currently active (A/B/C)
+- Which characters have been focused on recently
+- What the next logical escalation point is
+
+STEP 4 — ESCALATION PHASE
+Determine which phase this episode falls in. The next episode must push something forward — either a plot line escalates, a character's situation worsens or shifts, or a revelation lands. An episode that holds still is not an option.
+
+WRITING RULES FOR EACH OPTION:
+- Follow EPISODE PLOTS FORMAT exactly: [H3] Episode N (Option A/B/C): [Title] + one [P] paragraph
+- Each option must have: a clear hook concept, 3-4 key plot beats, character focus, clear cliffhanger concept
+- Each option must explore a genuinely different angle:
+  → Option A: escalates the primary (spine) plot line most directly
+  → Option B: deepens a character relationship or delivers an emotional arc beat
+  → Option C: a twist, reversal, or unexpected angle — the one the writer might not have thought of
+- All three options must respect: established pacing, active plot lines, character arcs already in motion
+- Microdrama constraint: ONE episode = 60–90 seconds of content. Each option must be achievable in that window — do not stuff in more plot than one episode can hold. One hook, one main movement, one cliffhanger. That's the shape.
+- Be specific — not "tension escalates" but the exact moment, the exact character, the exact thing that happens
+- The cliffhanger concept in each option must be strong enough to make the viewer start the next episode
+
+OUTPUT:
+Signal 2 with a single [CHANGE] block containing all 3 options clearly labeled. Add a brief signal 1 note after: "3 options for Episode N — pick one, adapt, or combine. Move to Microdrama Plots tab when finalised."
+
+━━━ PLOT CHUNKS (workbook) ━━━
+
+Triggers: "break this into chunks" / "create plot chunks" / "chunk the source" / "extract chunks from research" / "what are the chunks" / "adaptation state" / "coverage log"
+
+Chunks sit between Original Research and Microdrama Plots in the pipeline. A chunk is a DRAMATIC TERRITORY — a specific confrontation, relationship shift, or revelation extracted from the source material. Not a chapter summary. Not a plot recap.
+
+Use the EPISODE_PLOT_ADAPTATION_WORKFLOW format. Read the Research & Original Story section and:
+- Identify the major plot lines (PLOT-A = spine, PLOT-B = heart, PLOT-C = mirror)
+- Break each plot line into 4–8 chunks (CHUNK-A1, CHUNK-A2 … CHUNK-B1 etc.)
+- Each chunk: a dramatic territory with source origin and estimated episode scope
+
+Output in Adaptation State format in the workbook. Signal 2 with a [CHANGE] block, or signal 0 if the workbook is empty.
+
+━━━ FREEFORM (workbook) ━━━
 
 Freeform notes, outlines, idea dumps, alternate takes:
 → Use whatever structure fits. No canonical format required. The workbook welcomes unstructured prose, bulleted ideas, tables, whatever the writer needs.
