@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
-import { buildAIContext } from "@/lib/ai/context-engine";
+import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 
 // ─── Types ───
 
@@ -169,8 +169,10 @@ export default function AIChatSidebar({
   onSetTitle,
   onClose,
 }: AIChatSidebarProps) {
-  // Detect mode: selection → edit; otherwise → chat (conversational, intent-driven)
-  const mode: Mode = selection ? "edit" : "chat";
+  // Edit selection mode temporarily disabled — pending use case definition.
+  // To re-enable: flip editModeEnabled to true (or restore: selection ? "edit" : "chat")
+  const editModeEnabled = false as boolean;
+  const mode: Mode = editModeEnabled && selection ? "edit" : "chat";
 
   // messages = current AI conversation context (reset per mode change)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -237,20 +239,30 @@ export default function AIChatSidebar({
     }
   }, [historyLoaded]);
 
-  // On mode change: reset AI context, persist mode divider
+  // On mode change: reset AI context, persist mode divider.
+  // Keyed on `selection` because that's what drives mode, but we only act
+  // when the *mode* actually flips — not on every cursor selection change.
   useEffect(() => {
-    if (prevModeRef.current !== null && prevModeRef.current !== mode) {
-      const entry: HistoryEntry = {
-        type: "mode-change",
-        mode,
-        timestamp: Date.now(),
-      };
-      setHistory((prev) => [...prev, entry]);
-      persistEntry(entry);
-    }
+    const prevMode = prevModeRef.current;
     prevModeRef.current = mode;
 
-    // Reset current conversation state (not history)
+    if (prevMode === null) {
+      // Initial mount — set model, don't reset (no prior state to clear).
+      onSetModel("gemini-3.1-pro-preview");
+      onSetThinking(false);
+      return;
+    }
+
+    if (prevMode === mode) return; // selection changed but mode didn't — do nothing
+
+    const entry: HistoryEntry = {
+      type: "mode-change",
+      mode,
+      timestamp: Date.now(),
+    };
+    setHistory((prev) => [...prev, entry]);
+    persistEntry(entry);
+
     setMessages([]);
     setInput("");
     setError(null);
@@ -260,7 +272,6 @@ export default function AIChatSidebar({
     setFeedbackApplied(false);
     setTimeout(() => inputRef.current?.focus(), 50);
 
-    // Auto-set model: always use gemini-3.1-pro; never auto-enable thinking
     onSetModel("gemini-3.1-pro-preview");
     onSetThinking(false);
   }, [selection]);
@@ -522,6 +533,65 @@ export default function AIChatSidebar({
     setChanges(null);
   };
 
+  const handleFormatDocument = useCallback(async () => {
+    if (isStreaming) return;
+    setIsStreaming(true);
+    setStreamingText("");
+    setError(null);
+
+    const liveContent = editorRef.current?.getContentJSON() ?? null;
+    const activeTagged = tiptapJsonToTagged(liveContent) || tiptapJsonToTagged(activeTab.content);
+
+    const userMessage = `## Active Tab — ${activeTab.title} (${activeTab.type})\n${activeTagged || "(empty)"}`;
+
+    const userEntry: HistoryEntry = { type: "message", role: "user", content: "Format document", mode: "format" as Mode };
+    setHistory((prev) => [...prev, userEntry]);
+    persistEntry(userEntry);
+
+    try {
+      const res = await fetch("/api/ai/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: userMessage }],
+          mode: "format",
+          modelId,
+          thinking: false,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Format failed");
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          accumulated += decoder.decode(value, { stream: true });
+          setStreamingText(accumulated);
+        }
+      }
+
+      if (accumulated) {
+        onApplyDraft(accumulated);
+        const assistantEntry: HistoryEntry = { type: "message", role: "assistant", content: "Document has been reformatted.", mode: "format" as Mode };
+        setHistory((prev) => [...prev, assistantEntry]);
+        persistEntry(assistantEntry);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Format failed");
+    } finally {
+      setIsStreaming(false);
+      setStreamingText("");
+    }
+  }, [isStreaming, modelId, editorRef, activeTab, onApplyDraft, persistEntry]);
+
   // Reset review state whenever a new set of changes arrives
   useEffect(() => {
     setReviewMode(null);
@@ -683,6 +753,13 @@ export default function AIChatSidebar({
           </div>
         )}
 
+        {/* Error display */}
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         {/* Flow A: Before/After diff */}
         {mode === "edit" && hasTaggedContent && !isStreaming && !editApplied && (
           <div className="space-y-3 pt-2">
@@ -840,6 +917,19 @@ export default function AIChatSidebar({
             className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
           >
             Apply all ({changes.length})
+          </button>
+        </div>
+      )}
+
+      {/* Format document — structured tabs only */}
+      {!editorIsEmpty && (
+        <div className="border-t border-gray-100 px-3 pt-2">
+          <button
+            onClick={handleFormatDocument}
+            disabled={isStreaming}
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 transition-colors"
+          >
+            Format document
           </button>
         </div>
       )}
