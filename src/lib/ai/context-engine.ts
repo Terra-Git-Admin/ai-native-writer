@@ -19,6 +19,15 @@
 // For microdrama_plots tabs (plot editing, not ref-ep generation):
 //   - Previous 3 + upcoming 3 [H3] plots in the tab for local continuity.
 //   - Last 3 reference episodes paired by episode number for realised tone.
+//
+// For workbook tabs (writer's free-form scratch space):
+//   - The FULL chain of previous reference episodes from the Predefined
+//     Episodes tab. Writers draft new reference episodes in the workbook
+//     and need every prior one for voice and continuity.
+//   - The FULL chain of episode plots from the Microdrama Plots tab.
+//   - The LAST episode plot called out explicitly as the "current" one —
+//     i.e. the plot the next reference episode is most likely being
+//     expanded from.
 
 import type { TabRow } from "@/components/editor/TabRail";
 
@@ -356,6 +365,34 @@ export function buildAIContext(args: BuildContextArgs): string {
       }
 
       sections.push(`## Currently Editing — "${current.title}"\nThis is the plot the writer is working on.`);
+    }
+  } else if (activeTab.type === "workbook") {
+    // Workbook is the writer's scratch space. Give it full access to every
+    // other canonical tab so the writer can draft reference episodes, plot
+    // paragraphs, notes — anything — without leaving the tab.
+    if (refEpisodeTagged) {
+      const refSections = splitTabByH3(refEpisodeTagged);
+      if (refSections.length > 0) {
+        sections.push(
+          `## Previous Reference Episodes (full chain — all ${refSections.length}, from the Predefined Episodes tab)\n${refSections
+            .map((s) => s.content)
+            .join("\n\n")}`
+        );
+      }
+    }
+    if (episodePlotTagged) {
+      const plotSections = splitTabByH3(episodePlotTagged);
+      if (plotSections.length > 0) {
+        sections.push(
+          `## All Episode Plots (full chain — all ${plotSections.length}, from the Microdrama Plots tab)\n${plotSections
+            .map((s) => s.content)
+            .join("\n\n")}`
+        );
+        const lastPlot = plotSections[plotSections.length - 1];
+        sections.push(
+          `## Current Episode Plot (last [H3] in the Microdrama Plots tab — the most recently finalised plot. When the writer asks to draft the next reference episode in this workbook, this is the plot it expands from)\n${lastPlot.content}`
+        );
+      }
     }
   }
 

@@ -61,14 +61,17 @@ Typed tabs you will encounter (every doc has exactly one of the five canonical t
 - characters: all character profiles
 - microdrama_plots (titled "Microdrama Plots"): EVERY microdrama plot lives INSIDE this one tab as [H3] Episode N: Title + [P] story-map blocks
 - predefined_episodes (titled "Predefined Episodes"): EVERY reference episode lives INSIDE this one tab as [H3] Episode N: Title + full canonical format
-- workbook: Adaptation State tracking — plot lines, chunk statuses, episode coverage log. Writers generate its initial contents via the AI sidebar and edit freely.
+- workbook: WRITER'S FREE-FORM SCRATCH SPACE. Writers use this tab for anything in progress — rough reference episodes, plot drafts, adaptation state tracking, writing notes, alternate takes, anything. Content shape is unrestricted; the writer picks what fits what they're doing. The workbook also has read access to every other canonical tab, so AI work done here can pull full context from the Predefined Episodes, Microdrama Plots, Characters, and Original Research tabs.
 - research (legacy "Research (archive)"): source material from before the canonical tabs existed. Read-only reference; do not write here.
 - custom: free-form tabs the writer created
 
 The writer's context block structure:
 1. "## Document Tabs" — manifest of tab names + types (awareness only, do not try to write to them)
 2. "## Series Logline" + "## Original Plotline" + "## Characters" — baseline context, always included when those tabs exist
-3. Recipe-specific blocks when editing a reference episode or plot — "## Previous Reference Episodes (full chain …)" (every prior ref episode when the writer is in the predefined_episodes tab), "## Episode Plot to Generate From" (the last plot in the Microdrama Plots tab, the one the next ref episode is built from), "## Previous Episode Plots" / "## Upcoming Episode Plots" / "## Most Recent Reference Episodes" (when the writer is in the microdrama_plots tab)
+3. Recipe-specific blocks depending on active tab:
+   - predefined_episodes tab → "## Previous Reference Episodes (full chain …)" (every prior ref episode) + "## Episode Plot to Generate From" (the last plot in the Microdrama Plots tab, the one the next ref episode is built from)
+   - microdrama_plots tab → "## Previous Episode Plots" / "## Upcoming Episode Plots" / "## Most Recent Reference Episodes"
+   - workbook tab → "## Previous Reference Episodes (full chain …)" (every ref episode from the Predefined Episodes tab) + "## All Episode Plots (full chain …)" (every plot from the Microdrama Plots tab) + "## Current Episode Plot" (the last [H3] in Microdrama Plots — the most recently finalised plot, the one the next ref episode is most likely expanded from)
 4. "## Active Tab — [name] ([type])" — the content of the tab being edited. This is your canvas.
 5. "## Selected Text" + "## Instruction" (EDIT mode) OR "## Message" (CHAT mode)
 
@@ -76,7 +79,8 @@ TAB BOUNDARY RULES:
 - All output targets the ACTIVE TAB only. Never produce content that belongs in a different tab.
 - If the writer asks for something that belongs in a different tab (e.g. they're on Microdrama Plots and ask you to "write the full reference episode"), use [CLARIFY] and ask: "Do you want to switch to the Predefined Episodes tab for this, or should I write a plot-level outline here?"
 - When appending a new reference episode or plot, add a new [H3] at the end of the active tab's content — never modify other [H3] blocks unless explicitly asked.
-- "Previous Reference Episodes", "Episode Plot to Generate From", "Previous/Upcoming Episode Plots", "Most Recent Reference Episodes" are all READ-ONLY context blocks — use them to maintain continuity, do not rewrite them.
+- "Previous Reference Episodes", "Episode Plot to Generate From", "All Episode Plots", "Current Episode Plot", "Previous/Upcoming Episode Plots", "Most Recent Reference Episodes" are all READ-ONLY context blocks — use them to maintain continuity, do not rewrite them.
+- EXCEPTION for the workbook tab: the writer uses it as a free-form scratch space, so content types that would normally belong in other tabs (reference episodes, plot paragraphs, adaptation state, notes) are all allowed here. Apply the canonical format for whatever the writer is drafting, but never refuse to write in the workbook because the content type "belongs" elsewhere.
 `;
 
 // ─── Clarification Protocol (shared across all prompts) ───
@@ -1434,7 +1438,7 @@ TAB CONTENT RULES — each tab type holds one content shape, never mix them:
 - microdrama_plots tab: [H3] Episode N: Title + [P] one-paragraph story map (hook concept, beats, character focus, cliffhanger concept). NEVER full beat-by-beat scripts, dialogue lines, HOOK/CLIFFHANGER labels, or reference episode format.
 - predefined_episodes tab: [H3] Episode N: Title + full canonical format (beat list with Visual/Dialogue/V.O. beats). NEVER plot paragraph summaries.
 - research tab (legacy archive): source material copied verbatim. Never write adapted content here.
-- workbook tab: Adaptation State contents only (Series Spine, Source Analysis, Pacing Framework, Plot Lines, Characters, Beat Timeline, Episode Coverage Log).
+- workbook tab: writer's scratch space. Accepts any content shape — rough reference episodes, plot drafts, adaptation state, writing notes, alternate takes. Apply the canonical format for whatever content type the writer is drafting (ref-episode format for ref episodes, plot-paragraph format for plots, etc.) but do not refuse to write a content type here because it "belongs" in another tab.
 - If the writer is on the wrong tab for what they're asking, use [CLARIFY] before acting.
 
 TERM RECOGNITION — these map to the predefined_episodes tab (NOT the microdrama_plots tab):
@@ -1880,10 +1884,34 @@ characters tab
 - Contains: [H3] Name — Role + [P] physical / personality / voice / relationships blocks
 - NEVER contains: plot or episode content
 
-workbook tab
-- Contains: Adaptation State content — Series Spine, Source Analysis, Pacing Framework, Plot Lines, Characters, Beat Timeline, Episode Coverage Log
-- Purpose: living state of the adaptation — what plot chunks are upcoming, in progress, complete
-- NEVER contains: reference episodes or full plot summaries
+workbook tab — SPECIAL: WRITER'S SCRATCH SPACE
+- Contains: ANYTHING the writer is drafting — rough reference episodes, plot paragraphs, adaptation state, writing notes, alternate takes, outlines, anything. No fixed shape.
+- Purpose: free-form staging area where writers iterate before promoting finalised work into Microdrama Plots or Predefined Episodes.
+- Content shape: whatever the writer asks for. Apply the canonical format of the content type being drafted (ref-episode format for ref episodes, one-paragraph plot format for plots, Adaptation State format for adaptation state). Multiple content types can coexist in the same workbook tab.
+- Context access: the workbook sees the FULL chain of existing Predefined Episodes and the FULL chain of Microdrama Plots in its context block, in addition to the usual Characters / Original Research / Logline baseline. Use these when drafting.
+- NEVER refuse a content type because it "belongs" in another tab — if the writer is on the workbook, deliver the requested content here.
+
+━━━ WORKBOOK-SPECIFIC GUIDANCE ━━━
+
+When the active tab is workbook and the writer asks for:
+
+"Draft the next reference episode" / "write the ref episode for ep N" / "expand this plot into a ref episode":
+→ Write a full reference episode in the CANONICAL REFERENCE EPISODE FORMAT (Visual / Dialogue / V.O. beats, no HOOK or CLIFFHANGER labels, 13–18 dialogue lines target, 4–6 consecutive dialogue beats before a Visual beat interrupts).
+→ Use the "## Previous Reference Episodes (full chain …)" block for character voice, pacing calibration, and the exact last beat of the previous episode — the first beat of the new reference episode must pick up from that.
+→ Use the "## Current Episode Plot" block as the plot this reference episode is built from (unless the writer explicitly names a different plot).
+→ Place the output in the workbook. Use signal 0 (if the tab is empty or the writer wants a full replacement) or signal 2 with a [CHANGE] block appending a new [H3] Episode N: Title section to the workbook (if there is existing workbook content to preserve).
+
+"Draft an episode plot" / "outline episode N" / "write the plot for ep N":
+→ Write one paragraph in the EPISODE PLOTS FORMAT — [H3] Episode N: Title + one [P] paragraph covering hook concept, 3-4 key plot beats, character focus, cliffhanger concept.
+→ Place the output in the workbook (signal 2 with a [CHANGE] block, or signal 0 if empty).
+
+"Adaptation state" / "plot chunks" / "coverage log":
+→ Write using the ADAPTATION STATE FORMAT from EPISODE_PLOT_ADAPTATION_WORKFLOW. Place in workbook.
+
+Freeform notes, outlines, idea dumps, alternate takes:
+→ Use whatever structure fits. No canonical format required. The workbook welcomes unstructured prose, bulleted ideas, tables, whatever the writer needs.
+
+When the writer is NOT on the workbook tab, apply the normal tab-boundary rules:
 
 TERM RECOGNITION — map these to the correct tab before acting:
 "Predefined episodes" / "full episodes" / "scripted episodes" / "sample episodes" → predefined_episodes tab
@@ -1891,7 +1919,7 @@ TERM RECOGNITION — map these to the correct tab before acting:
 "Source material" / "original story" / "research" → research tab
 "Adaptation state" / "plot chunks" / "coverage log" → workbook tab
 
-If the active tab doesn't match what the writer is asking for, use signal 1 and ask them to switch tabs — do not write to the wrong tab.
+If the active tab is NOT the workbook AND it doesn't match what the writer is asking for, use signal 1 and ask them to switch tabs — do not write to the wrong tab. (The workbook is exempt from this rule; it accepts any content type.)
 
 SCOPE SHIFT DETECTION IN CHAT:
 When the conversation history shows the writer was focused on a specific tab (e.g., microdrama_plots) and the new message requests something that could apply to that tab OR to a different tab:
