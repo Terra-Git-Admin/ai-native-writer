@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, dbFileStats } from "@/lib/db";
 import { documents, tabs, comments, documentVersions } from "@/lib/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -57,6 +57,17 @@ async function maybeCreateTabVersion(
     userId,
     contentHash: contentHash(content),
     contentLen: content.length,
+  });
+
+  // Fingerprint log — cross-check that snapshot write advanced local files.
+  // Paired with tab.put.fingerprint so we can tell in logs whether both tab
+  // content AND version snapshots are landing on disk, not just in memory.
+  logEvent("tab.version.fingerprint", {
+    documentId,
+    tabId,
+    contentHash: contentHash(content),
+    contentLen: content.length,
+    ...dbFileStats(),
   });
 
   // Prune beyond 50 per (doc, tab)
@@ -339,6 +350,17 @@ export async function PUT(
     contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
     hashAfter: contentHash(body.content ?? tab.content),
     ...trace,
+  });
+
+  // Fingerprint log — cross-check that write advanced local DB files. Paired
+  // with tab.version.fingerprint. If saves land in memory only (gcsfuse buffer
+  // not flushing), walMtime will stop advancing while tab.put.ok still fires.
+  logEvent("tab.put.fingerprint", {
+    docId: id,
+    docTabIdPath: tabId,
+    hashAfter: contentHash(body.content ?? tab.content),
+    contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
+    ...dbFileStats(),
   });
 
   return NextResponse.json({ ok: true, updatedAt: now.toISOString() });
