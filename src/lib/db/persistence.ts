@@ -243,8 +243,18 @@ async function backupOnce(
   durationMs: number;
 }> {
   const t0 = Date.now();
-  const snapshotPath = `${livePath}.snapshot`;
-  const gzPath = `${livePath}.snapshot.gz`;
+  // Snapshots and gzipped uploads always go to local /tmp, not next to
+  // livePath. Earlier revisions put the snapshot in the same directory
+  // as livePath; if livePath sat on a gcsfuse mount (legacy migration
+  // setup), the SQLite online backup wrote 32 MB through gcsfuse with
+  // OutOfOrderError fallbacks and made each backup take 15+ seconds
+  // while uploads stalled behind the slow read. Pinning the transient
+  // files to /tmp keeps the hot path on real local disk regardless of
+  // where the live DB happens to live.
+  const SCRATCH_DIR = process.env.BACKUP_SCRATCH_DIR || "/tmp";
+  await fs.mkdir(SCRATCH_DIR, { recursive: true }).catch(() => {});
+  const snapshotPath = path.join(SCRATCH_DIR, "writer.db.snapshot");
+  const gzPath = path.join(SCRATCH_DIR, "writer.db.snapshot.gz");
 
   // 1. Online backup (no lock on writers — SQLite copies pages incrementally).
   const tBackup0 = Date.now();
