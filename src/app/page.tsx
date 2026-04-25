@@ -31,6 +31,8 @@ export default function Home() {
     words: number;
     lines: number;
   } | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     fetch("/api/documents")
@@ -45,14 +47,42 @@ export default function Home() {
   const myDocs = docs.filter((d) => d.ownerId === session?.user?.id);
   const otherDocs = docs.filter((d) => d.ownerId !== session?.user?.id);
 
+  // Doc creation must NEVER silently fail. The previous version destructured
+  // `id` from the response without checking res.ok — when POST returned
+  // 500 (e.g. due to a DB write failure), `id` was undefined and the user
+  // got navigated to /doc/undefined which then redirected back to /. That
+  // looked like "the new-document button doesn't work" and was invisible
+  // for hours. Surface the real error.
   const createDocument = async () => {
-    const res = await fetch("/api/documents", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const { id } = await res.json();
-    router.push(`/doc/${id}`);
+    setCreateError(null);
+    setCreating(true);
+    try {
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        setCreateError(
+          `Could not create document (HTTP ${res.status}). ${body.slice(0, 240) || "No response body."}`
+        );
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { id?: string };
+      if (!data.id) {
+        setCreateError(
+          "Could not create document — server returned a 200 with no document id. Check Cloud Run logs."
+        );
+        return;
+      }
+      router.push(`/doc/${data.id}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCreateError(`Network error creating document: ${msg}`);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleDeleteClick = async (docId: string) => {
@@ -181,20 +211,37 @@ export default function Home() {
                 <h2 className="text-lg font-semibold">Your Documents</h2>
                 <button
                   onClick={createDocument}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
+                  disabled={creating}
+                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  + New Document
+                  {creating ? "Creating..." : "+ New Document"}
                 </button>
               </div>
+
+              {createError && (
+                <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <span className="flex-1">
+                    <strong>New document failed.</strong> {createError}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCreateError(null)}
+                    className="rounded bg-white border border-red-200 px-2 py-1 font-medium hover:bg-red-100 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
 
               {myDocs.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 py-10 text-center">
                   <p className="text-gray-500">No documents yet</p>
                   <button
                     onClick={createDocument}
-                    className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                    disabled={creating}
+                    className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
                   >
-                    Create your first document
+                    {creating ? "Creating..." : "Create your first document"}
                   </button>
                 </div>
               ) : (
