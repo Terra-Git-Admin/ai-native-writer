@@ -1,7 +1,20 @@
 #!/usr/bin/env node
 // Container startup bootstrap. Runs BEFORE the Next.js server starts.
 // Purpose: get the canonical writer.db onto local /tmp before the app
-// opens it. Bypasses gcsfuse entirely — talks directly to GCS.
+// opens it. Bypasses gcsfuse entirely.
+//
+// IMPORTANT: this script uses ZERO external npm dependencies. It relies
+// only on Node built-ins (https, fs, zlib). Node's standalone build trace
+// for the Next.js app does NOT include arbitrary scripts under /scripts/,
+// so importing @google-cloud/storage from here would mean copying the
+// whole package + its transitive deps into the runtime image. Easier to
+// just talk to GCS over HTTP.
+//
+// Auth path: Cloud Run's metadata server provides an OAuth token for the
+// service account. We fetch a token, then call the GCS JSON API.
+// Locally outside Cloud Run: skip the metadata fetch, fall back to the
+// app's `gcloud auth application-default login` token via env var
+// GOOGLE_OAUTH_TOKEN if you want to test it.
 //
 // Order of operations:
 //   1. If DATABASE_PATH already exists locally → skip (warm restart).
@@ -9,22 +22,9 @@
 //   3. If GCS object missing AND legacy gcsfuse path has a writer.db →
 //      copy it as a one-time migration seed.
 //   4. Otherwise leave the path empty so SQLite creates a fresh db.
-//
-// Logs every step with a [bootstrap] prefix so Cloud Run filters can
-// isolate startup events.
-//
-// Env vars:
-//   DATABASE_PATH       (default: /tmp/writer.db)
-//   GCS_BUCKET          (default: ai-native-writer-db)
-//   GCS_DB_OBJECT       (default: snapshots/writer.db.gz)
-//   LEGACY_DB_PATH      (default: /app/data/writer.db) — gcsfuse mount
-//   BOOTSTRAP_REQUIRED  (default: false) — if "true", exit non-zero
-//                        when GCS download fails AND legacy is missing.
-//                        Use this once we've cut over fully to ensure
-//                        we never silently start with a fresh empty db.
 
-import { Storage } from "@google-cloud/storage";
-import { createReadStream, createWriteStream, existsSync } from "fs";
+import https from "https";
+import { createWriteStream, createReadStream, existsSync, statSync } from "fs";
 import { mkdir, stat, copyFile, unlink } from "fs/promises";
 import { dirname } from "path";
 import { createGunzip } from "zlib";
@@ -43,6 +43,133 @@ function log(event, fields = {}) {
   );
 }
 
+// Fetch an OAuth access token from Cloud Run's metadata server.
+// Returns null on failure (e.g. running locally outside GCP).
+function getMetadataToken() {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        host: "metadata.google.internal",
+        path: "/computeMetadata/v1/instance/service-accounts/default/token",
+        method: "GET",
+        headers: { "Metadata-Flavor": "Google" },
+        timeout: 5000,
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode !== 200) {
+            resolve(null);
+            return;
+          }
+          try {
+            const j = JSON.parse(body);
+            resolve(j.access_token || null);
+          } catch {
+            resolve(null);
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(null);
+    });
+    // Important: actually emit the request — we forgot a .end() before
+    // and node hung silently, which manifested as the bootstrap stalling.
+    req.end();
+  });
+}
+
+// HEAD-equivalent: GET object metadata via JSON API. Returns parsed
+// metadata or null when the object is missing or unreachable.
+function getObjectMetadata(bucket, object, token) {
+  return new Promise((resolve) => {
+    const path = `/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}`;
+    const req = https.request(
+      {
+        host: "storage.googleapis.com",
+        path,
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 30000,
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => {
+          if (res.statusCode === 404) {
+            resolve({ status: 404 });
+            return;
+          }
+          if (res.statusCode !== 200) {
+            resolve({ status: res.statusCode, body });
+            return;
+          }
+          try {
+            resolve({ status: 200, meta: JSON.parse(body) });
+          } catch {
+            resolve({ status: 200, meta: null });
+          }
+        });
+      }
+    );
+    req.on("error", (err) => resolve({ status: 0, err: err.message }));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve({ status: 0, err: "timeout" });
+    });
+    req.end();
+  });
+}
+
+// Stream-download the object body (alt=media) to a local path.
+function downloadObject(bucket, object, token, dstPath) {
+  return new Promise((resolve, reject) => {
+    const path = `/storage/v1/b/${encodeURIComponent(bucket)}/o/${encodeURIComponent(object)}?alt=media`;
+    const req = https.request(
+      {
+        host: "storage.googleapis.com",
+        path,
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 120000,
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          let body = "";
+          res.on("data", (c) => (body += c));
+          res.on("end", () =>
+            reject(new Error(`download status ${res.statusCode}: ${body.slice(0, 200)}`))
+          );
+          return;
+        }
+        const out = createWriteStream(dstPath);
+        res.pipe(out);
+        out.on("finish", () => resolve(undefined));
+        out.on("error", reject);
+        res.on("error", reject);
+      }
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("download timeout"));
+    });
+    req.end();
+  });
+}
+
+async function gunzipFile(srcPath, dstPath) {
+  await pipeline(
+    createReadStream(srcPath),
+    createGunzip(),
+    createWriteStream(dstPath)
+  );
+}
+
 async function main() {
   log("start", {
     databasePath: DATABASE_PATH,
@@ -55,31 +182,64 @@ async function main() {
   await mkdir(dirname(DATABASE_PATH), { recursive: true });
 
   if (existsSync(DATABASE_PATH)) {
-    const s = await stat(DATABASE_PATH);
-    log("local.exists", {
-      path: DATABASE_PATH,
-      bytes: s.size,
-      mtime: s.mtimeMs,
-    });
+    const s = statSync(DATABASE_PATH);
+    log("local.exists", { path: DATABASE_PATH, bytes: s.size, mtime: s.mtimeMs });
     log("done", { source: "local-warm" });
     return;
   }
 
   // Try GCS first.
-  let gcsResult = await tryGcsDownload();
-
-  if (gcsResult.ok) {
-    log("done", { source: "gcs", ...gcsResult });
-    return;
+  const token = await getMetadataToken();
+  if (!token) {
+    log("metadata.no_token", {
+      reason: "metadata server unreachable or returned non-200",
+    });
+  } else {
+    const t0 = Date.now();
+    const tmpGz = `${DATABASE_PATH}.boot.gz`;
+    const meta = await getObjectMetadata(GCS_BUCKET, GCS_DB_OBJECT, token);
+    if (meta.status === 200) {
+      try {
+        await downloadObject(GCS_BUCKET, GCS_DB_OBJECT, token, tmpGz);
+        const gzStat = statSync(tmpGz);
+        await gunzipFile(tmpGz, DATABASE_PATH);
+        const finalStat = statSync(DATABASE_PATH);
+        await unlink(tmpGz).catch(() => {});
+        log("gcs.download.ok", {
+          bucket: GCS_BUCKET,
+          object: GCS_DB_OBJECT,
+          generation: String(meta.meta?.generation ?? ""),
+          metageneration: String(meta.meta?.metageneration ?? ""),
+          reportedSha:
+            meta.meta?.metadata?.sha256 ?? null,
+          gzBytes: gzStat.size,
+          bytes: finalStat.size,
+          durationMs: Date.now() - t0,
+        });
+        log("done", { source: "gcs" });
+        return;
+      } catch (err) {
+        log("gcs.download.fail", {
+          err: err instanceof Error ? err.message : String(err),
+          durationMs: Date.now() - t0,
+        });
+      }
+    } else if (meta.status === 404) {
+      log("gcs.unavailable", { reason: "object-not-found" });
+    } else {
+      log("gcs.unavailable", {
+        reason: "metadata-fetch-failed",
+        status: meta.status,
+        err: meta.err ?? null,
+      });
+    }
   }
-
-  log("gcs.unavailable", { reason: gcsResult.reason });
 
   // Legacy migration fallback.
   if (existsSync(LEGACY_DB_PATH)) {
     const t0 = Date.now();
     await copyFile(LEGACY_DB_PATH, DATABASE_PATH);
-    const s = await stat(DATABASE_PATH);
+    const s = statSync(DATABASE_PATH);
     log("legacy.copied", {
       from: LEGACY_DB_PATH,
       to: DATABASE_PATH,
@@ -100,63 +260,10 @@ async function main() {
   log("done", { source: "fresh" });
 }
 
-async function tryGcsDownload() {
-  const t0 = Date.now();
-  try {
-    const storage = new Storage();
-    const bucket = storage.bucket(GCS_BUCKET);
-    const file = bucket.file(GCS_DB_OBJECT);
-
-    const [exists] = await file.exists();
-    if (!exists) {
-      return { ok: false, reason: "object-not-found" };
-    }
-
-    const tmpGz = `${DATABASE_PATH}.boot.gz`;
-    await file.download({ destination: tmpGz });
-    const [meta] = await file.getMetadata();
-    const gzStat = await stat(tmpGz);
-
-    await pipeline(
-      createReadStream(tmpGz),
-      createGunzip(),
-      createWriteStream(DATABASE_PATH)
-    );
-    const finalStat = await stat(DATABASE_PATH);
-
-    await unlink(tmpGz).catch(() => {});
-
-    log("gcs.download.ok", {
-      bucket: GCS_BUCKET,
-      object: GCS_DB_OBJECT,
-      generation: String(meta.generation ?? ""),
-      metageneration: String(meta.metageneration ?? ""),
-      reportedSha:
-        (meta.metadata && meta.metadata.sha256) || null,
-      gzBytes: gzStat.size,
-      bytes: finalStat.size,
-      durationMs: Date.now() - t0,
-    });
-    return {
-      ok: true,
-      generation: String(meta.generation ?? ""),
-      bytes: finalStat.size,
-      durationMs: Date.now() - t0,
-    };
-  } catch (err) {
-    log("gcs.download.fail", {
-      err: err instanceof Error ? err.message : String(err),
-      durationMs: Date.now() - t0,
-    });
-    return { ok: false, reason: "exception" };
-  }
-}
-
 main().catch((err) => {
   log("uncaught", {
     err: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack?.slice(0, 500) : null,
   });
-  // Don't fail the container on bootstrap exceptions unless required —
-  // the app will start fresh, which is recoverable, vs. infinite restart loop.
   if (BOOTSTRAP_REQUIRED) process.exit(1);
 });
