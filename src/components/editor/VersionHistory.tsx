@@ -165,8 +165,7 @@ export default function VersionHistory({
 
         {!loading && versions.length === 0 && (
           <p className="text-sm text-gray-500 text-center py-8">
-            No versions saved yet for this tab. A snapshot is taken
-            automatically at most once every 5 minutes while you edit.
+            No versions saved yet for this tab.
           </p>
         )}
 
