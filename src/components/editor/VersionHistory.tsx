@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { clientTrace } from "@/lib/clientTrace";
 
 interface Version {
   id: string;
@@ -9,6 +10,13 @@ interface Version {
   createdAt: string;
   contentLen: number;
 }
+
+// How often to refetch the version list while the panel is open. Saves can
+// create new version rows at any time (the server allows one snapshot per 5
+// minutes per tab), and without polling the panel showed stale data — writers
+// reported "the latest version history is at 1:06 PM" while the DB had a
+// fresher row from a save at 1:32 PM. Bug repro: 27 Apr 2026.
+const VERSION_LIST_POLL_MS = 15_000;
 
 interface VersionHistoryProps {
   documentId: string;
@@ -53,25 +61,56 @@ export default function VersionHistory({
 }: VersionHistoryProps) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [reverting, setReverting] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!tabId) {
-      setVersions([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    fetch(
-      `/api/documents/${documentId}/versions?tabId=${encodeURIComponent(tabId)}`
-    )
-      .then((r) => r.json())
-      .then((data) => {
-        setVersions(Array.isArray(data) ? data : []);
+  // Wrap the fetch so it can run on mount, on poll tick, and on manual click.
+  // `silent=true` skips the loading flicker on background polls.
+  const fetchVersions = useCallback(
+    async (silent: boolean) => {
+      if (!tabId) {
+        setVersions([]);
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [documentId, tabId]);
+        return;
+      }
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
+      try {
+        const res = await fetch(
+          `/api/documents/${documentId}/versions?tabId=${encodeURIComponent(tabId)}`
+        );
+        const data = await res.json();
+        const list: Version[] = Array.isArray(data) ? data : [];
+        setVersions(list);
+        clientTrace("client.versionHistory.fetch.ok", {
+          docId: documentId,
+          docTabId: tabId,
+          rowCount: list.length,
+          latestCreatedAt: list[0]?.createdAt ?? null,
+          silent,
+        });
+      } catch (err) {
+        clientTrace("client.versionHistory.fetch.fail", {
+          docId: documentId,
+          docTabId: tabId,
+          err: err instanceof Error ? err.message : String(err),
+          silent,
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [documentId, tabId]
+  );
+
+  useEffect(() => {
+    fetchVersions(false);
+    if (!tabId) return;
+    // Background poll while the panel is open. Stops on unmount or tab change.
+    const handle = setInterval(() => fetchVersions(true), VERSION_LIST_POLL_MS);
+    return () => clearInterval(handle);
+  }, [fetchVersions, tabId]);
 
   const handleRevert = async (versionId: string) => {
     if (
@@ -111,12 +150,28 @@ export default function VersionHistory({
             </p>
           )}
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              clientTrace("client.versionHistory.refresh.click", {
+                docId: documentId,
+                docTabId: tabId,
+              });
+              fetchVersions(false);
+            }}
+            disabled={loading || refreshing}
+            title="Refresh version list"
+            className="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">

@@ -931,6 +931,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           localContent
         );
 
+        // Pre-compute the own-save match so it appears in BOTH the skip path
+        // and the conflict path. Lets us diff in logs whether the gate worked
+        // on a given tick. The 27 Apr 2026 false-banner bug presented as
+        // updatedAtMatch=false on every tick despite an immediately-prior
+        // successful save — caused by sub-second millis being truncated
+        // to .000Z on the server's GET response (server fix shipped same PR).
+        const updatedAtMatch =
+          !!lastSavedServerUpdatedAtRef.current &&
+          data.updatedAt === lastSavedServerUpdatedAtRef.current;
+
         const pollCtx = {
           reqId,
           docId: documentId,
@@ -939,6 +949,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           saveStatus: saveStatusRef.current,
           refUpdatedAt: lastSavedServerUpdatedAtRef.current,
           serverUpdatedAt: data.updatedAt,
+          updatedAtMatch,
           localHash: contentHash(localStr),
           serverHash: contentHash(serverStr),
           localBytes: localStr.length,
@@ -970,11 +981,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
 
         // Skip if this updatedAt is the one we just saved (avoids a race where
-        // the poll response arrives just after our save but before the next edit)
-        if (
-          lastSavedServerUpdatedAtRef.current &&
-          data.updatedAt === lastSavedServerUpdatedAtRef.current
-        ) {
+        // the poll response arrives just after our save but before the next
+        // edit). Equality is by string match — see the note on `updatedAtMatch`
+        // above for the millisecond-truncation gotcha that broke this gate.
+        if (updatedAtMatch) {
           trace("client.poll.skip.ownSave", pollCtx);
           return;
         }

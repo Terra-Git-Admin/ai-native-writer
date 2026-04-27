@@ -309,7 +309,16 @@ export async function PUT(
     });
   }
 
-  const now = new Date();
+  // tabs.updatedAt is `integer({ mode: "timestamp" })` — SECONDS precision in
+  // SQLite. The next GET reads back `new Date(seconds * 1000)`, which
+  // serialises with `.000Z`. If we returned `new Date().toISOString()` here
+  // it would carry sub-second millis (e.g. `.247Z`) — the two strings would
+  // never compare equal on the client. The poll's `skip.ownSave` check would
+  // fail every time, the content compare would fall through, and any edit
+  // made in the 5-second poll gap would trigger a false "Content mismatch"
+  // banner. Truncate to seconds here so the PUT response matches the next
+  // GET response exactly. (Bug repro: 27 Apr 2026, doc 1VEYHPRkgiDD.)
+  const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   await db
     .update(tabs)
     .set({
