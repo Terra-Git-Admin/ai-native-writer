@@ -61,11 +61,11 @@ export default function VersionHistory({
 }: VersionHistoryProps) {
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [reverting, setReverting] = useState<string | null>(null);
 
-  // Wrap the fetch so it can run on mount, on poll tick, and on manual click.
-  // `silent=true` skips the loading flicker on background polls.
+  // Wrap the fetch so it can run on mount and on poll tick. `silent=true`
+  // skips the loading flicker on background polls so the list updates
+  // invisibly when a new row appears.
   const fetchVersions = useCallback(
     async (silent: boolean) => {
       if (!tabId) {
@@ -74,7 +74,6 @@ export default function VersionHistory({
         return;
       }
       if (!silent) setLoading(true);
-      else setRefreshing(true);
       try {
         const res = await fetch(
           `/api/documents/${documentId}/versions?tabId=${encodeURIComponent(tabId)}`
@@ -98,7 +97,6 @@ export default function VersionHistory({
         });
       } finally {
         setLoading(false);
-        setRefreshing(false);
       }
     },
     [documentId, tabId]
@@ -108,6 +106,10 @@ export default function VersionHistory({
     fetchVersions(false);
     if (!tabId) return;
     // Background poll while the panel is open. Stops on unmount or tab change.
+    // No manual refresh button — writers found it confusing because clicking
+    // it appeared to do nothing on idle ticks (the auto-poll had already
+    // fetched the same data 0-15s ago). The list now silently updates
+    // whenever a new row appears.
     const handle = setInterval(() => fetchVersions(true), VERSION_LIST_POLL_MS);
     return () => clearInterval(handle);
   }, [fetchVersions, tabId]);
@@ -150,28 +152,12 @@ export default function VersionHistory({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              clientTrace("client.versionHistory.refresh.click", {
-                docId: documentId,
-                docTabId: tabId,
-              });
-              fetchVersions(false);
-            }}
-            disabled={loading || refreshing}
-            title="Refresh version list"
-            className="text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            &times;
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600"
+        >
+          &times;
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-2">

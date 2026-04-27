@@ -13,20 +13,38 @@ import {
   contentHash,
 } from "@/lib/saveTrace";
 
-// Per-tab version snapshot. At most one row per 5 minutes per (doc, tab) so
-// rapid typing doesn't flood the table. Prunes to last 50 per (doc, tab) so
-// long-running docs don't grow unbounded.
+// Per-tab version snapshot.
+//
+// Two paths in:
+// 1. Auto-debounced save (`force=false`, default): at most one row per 5
+//    minutes per (doc, tab) so rapid typing doesn't flood the table.
+// 2. User-intent checkpoint (`force=true`): tab-switch flush, manual Ctrl+S.
+//    Bypasses the throttle. Writers asked for a snapshot at every "I'm done
+//    with this for now" or "save this version please" gesture.
+//
+// In both paths we de-duplicate against the last row's content — switching
+// tabs A→B→A with no edits in between should not generate three identical
+// snapshots. Prunes to last 200 per (doc, tab) so long-running docs don't
+// grow unbounded.
+const TAB_VERSION_HISTORY_LIMIT = 200;
 async function maybeCreateTabVersion(
   documentId: string,
   tabId: string,
   content: string,
-  userId: string
-): Promise<"created" | "throttled" | "skipped"> {
+  userId: string,
+  options?: { force?: boolean; reason?: string }
+): Promise<"created" | "throttled" | "skipped" | "duplicate"> {
   if (!content) return "skipped";
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const force = !!options?.force;
+  const reason = options?.reason ?? null;
 
+  // Pull the last row's createdAt AND content. Content is needed for the
+  // duplicate guard — see comment above.
   const latest = await db
-    .select({ createdAt: documentVersions.createdAt })
+    .select({
+      createdAt: documentVersions.createdAt,
+      content: documentVersions.content,
+    })
     .from(documentVersions)
     .where(
       and(
@@ -37,9 +55,23 @@ async function maybeCreateTabVersion(
     .orderBy(desc(documentVersions.createdAt))
     .limit(1);
 
-  if (latest.length > 0 && latest[0].createdAt > fiveMinutesAgo) {
-    logEvent("tab.version.throttled", { documentId, tabId, userId });
-    return "throttled";
+  if (latest.length > 0 && latest[0].content === content) {
+    logEvent("tab.version.skip.duplicate", {
+      documentId,
+      tabId,
+      userId,
+      force,
+      reason,
+    });
+    return "duplicate";
+  }
+
+  if (!force) {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    if (latest.length > 0 && latest[0].createdAt > fiveMinutesAgo) {
+      logEvent("tab.version.throttled", { documentId, tabId, userId });
+      return "throttled";
+    }
   }
 
   await db.insert(documentVersions).values({
@@ -55,6 +87,8 @@ async function maybeCreateTabVersion(
     documentId,
     tabId,
     userId,
+    force,
+    reason,
     contentHash: contentHash(content),
     contentLen: content.length,
   });
@@ -70,7 +104,9 @@ async function maybeCreateTabVersion(
     ...dbFileStats(),
   });
 
-  // Prune beyond 50 per (doc, tab)
+  // Prune beyond TAB_VERSION_HISTORY_LIMIT per (doc, tab). Bumped from 50 to
+  // 200 since tab-switch + manual save now create force-version rows in
+  // addition to the throttled auto-saves.
   const count = await db
     .select({ count: sql<number>`COUNT(*)` })
     .from(documentVersions)
@@ -80,7 +116,7 @@ async function maybeCreateTabVersion(
         eq(documentVersions.tabId, tabId)
       )
     );
-  if ((count[0]?.count ?? 0) > 50) {
+  if ((count[0]?.count ?? 0) > TAB_VERSION_HISTORY_LIMIT) {
     const cutoff = await db
       .select({ createdAt: documentVersions.createdAt })
       .from(documentVersions)
@@ -92,7 +128,7 @@ async function maybeCreateTabVersion(
       )
       .orderBy(desc(documentVersions.createdAt))
       .limit(1)
-      .offset(49);
+      .offset(TAB_VERSION_HISTORY_LIMIT - 1);
     if (cutoff.length > 0) {
       await db
         .delete(documentVersions)
@@ -200,6 +236,15 @@ export async function PUT(
   const body = await req.json();
   const isOwner = doc.ownerId === session.user.id;
   const commentMarkOnly = Boolean(body.commentMarkOnly);
+  // Caller-provided "this is an explicit user checkpoint" hints. The client
+  // sets forceVersion=true on tab-switch flush and Ctrl+S so the version
+  // snapshot bypasses the 5-min throttle. `versionReason` is purely for
+  // log correlation — the server doesn't validate it.
+  const forceVersion = Boolean(body.forceVersion);
+  const versionReason =
+    typeof body.versionReason === "string" && body.versionReason
+      ? body.versionReason
+      : null;
 
   if (!isOwner && !commentMarkOnly) {
     logTrace("tab.put.403", {
@@ -338,7 +383,10 @@ export async function PUT(
   // snapshot). Non-fatal: a version failure must never break the save itself.
   if (isOwner && !commentMarkOnly && body.content) {
     try {
-      await maybeCreateTabVersion(id, tabId, body.content, session.user.id);
+      await maybeCreateTabVersion(id, tabId, body.content, session.user.id, {
+        force: forceVersion,
+        reason: versionReason ?? undefined,
+      });
     } catch (err) {
       warnTrace("tab.version.failed", {
         docId: id,

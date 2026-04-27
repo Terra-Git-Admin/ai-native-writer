@@ -704,7 +704,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         saveStatus: saveStatusRef.current,
       });
       try {
-        await saveDocument(editor.getJSON());
+        // Tab-switch is an explicit "I'm done with this for now" gesture.
+        // Force a version snapshot so the writer can always come back to
+        // exactly this state — even if it's only 30s after the last
+        // throttled snapshot.
+        await saveDocument(editor.getJSON(), {
+          forceVersion: true,
+          reason: "tab-switch",
+        });
         trace("client.flushPendingSave.ok", {
           docId: documentId,
           docTabId: tabId,
@@ -806,7 +813,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   }, [editor, onHeadingsChange]);
 
   const saveDocument = useCallback(
-    async (content: object) => {
+    async (
+      content: object,
+      opts?: { forceVersion?: boolean; reason?: string }
+    ) => {
       const reqId = newId();
       const contentStr = JSON.stringify(content);
       const tStart =
@@ -819,12 +829,22 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         isOwner,
         bytes: contentStr.length,
         hash: contentHash(contentStr),
+        forceVersion: !!opts?.forceVersion,
+        versionReason: opts?.reason ?? null,
       });
       setSaveStatus("saving");
       try {
         const payload: Record<string, unknown> = { content: contentStr };
         // Non-owners can only save comment mark changes (server enforces too).
         if (!isOwner) payload.commentMarkOnly = true;
+        // Owner-only checkpoints. forceVersion bypasses the server-side
+        // 5-min throttle so the version row appears immediately. Used for
+        // tab-switch flush + Ctrl+S — both deliberate "save this state"
+        // gestures from the writer.
+        if (isOwner && opts?.forceVersion) {
+          payload.forceVersion = true;
+          payload.versionReason = opts.reason ?? "force";
+        }
         const res = await fetch(
           `/api/documents/${documentId}/tabs/${tabId}/content`,
           {
@@ -1013,13 +1033,23 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     return () => clearInterval(interval);
   }, [editor, documentId, tabId, isOwner]);
 
-  // Keyboard shortcut for manual save
+  // Keyboard shortcut for manual save (Ctrl+S / Cmd+S). Cancels the pending
+  // debounce so we don't double-fire, then sends a force-version save so the
+  // writer's deliberate "save this version" intent always lands in version
+  // history regardless of the 5-min throttle.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "s") {
         e.preventDefault();
         if (editor && isOwner) {
-          saveDocument(editor.getJSON());
+          if (saveTimeout.current) {
+            clearTimeout(saveTimeout.current);
+            saveTimeout.current = null;
+          }
+          saveDocument(editor.getJSON(), {
+            forceVersion: true,
+            reason: "manual-save",
+          });
         }
       }
     };
