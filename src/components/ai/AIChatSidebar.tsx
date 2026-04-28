@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import WorkbookActions from "@/components/ai/WorkbookActions";
 
 // ─── Types ───
 
@@ -77,18 +78,11 @@ const CHAT_QUICK_ACTIONS_EXISTING = [
   },
 ];
 
-// Shown when the writer opens the sidebar with the Workbook tab active and
-// the tab still empty. The generation prompt fills a full Adaptation State
-// section per DOCUMENT_STYLE_GUIDE's ADAPTATION STATE FORMAT, pulling from
-// the doc's existing Original Research, Characters, and Microdrama Plots.
-// Writers can also type their own prompt or edit the active tab manually.
-const WORKBOOK_QUICK_ACTIONS = [
-  {
-    label: "Generate Adaptation State",
-    prompt:
-      "Generate a complete Adaptation State section for this Workbook tab, following the ADAPTATION STATE FORMAT in the style guide. Populate Series Spine, Source Analysis, Pacing Framework, Plot Lines, and Characters from the Original Research, Characters, and Microdrama Plots tabs. Leave Beat Timeline and Episode Coverage Log empty — writers fill those as episodes are generated. Output the full Workbook body with [H1] Workbook at the top and [H2]/[H3]/[UL] structure per the format.",
-  },
-];
+// Note: the previous "Generate Adaptation State" workbook quick-action has
+// been replaced by the WorkbookActions panel (durable, server-side jobs for
+// Plot Chunks / Next Episode Plot / Next Reference Episode). The component
+// renders at the top of the messages area whenever the active tab is
+// workbook, so legacy quick-action buttons no longer ship here.
 
 interface ParsedChange {
   id: number;
@@ -647,6 +641,24 @@ export default function AIChatSidebar({
         </button>
       </div>
 
+      {/* Workbook actions — durable AI jobs (Plot Chunks / Next Episode Plot
+          / Next Reference Episode). Lives outside the scroll area so the
+          panel stays visible at the top regardless of chat history length. */}
+      {activeTab.type === "workbook" && (
+        <WorkbookActions
+          documentId={documentId}
+          tabId={activeTab.id}
+          modelId={modelId}
+          thinking={thinking}
+          getCurrentTagged={() =>
+            tiptapJsonToTagged(
+              editorRef.current?.getContentJSON() ?? activeTab.content
+            )
+          }
+          applyMergedContent={(taggedContent) => onApplyDraft(taggedContent)}
+        />
+      )}
+
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {/* Empty state */}
@@ -658,28 +670,28 @@ export default function AIChatSidebar({
             {mode === "chat" && (
               <div className="flex flex-col gap-3">
                 <p className="text-center text-gray-400">
-                  {activeTab.type === "workbook" && editorIsEmpty
-                    ? "Workbook is empty. Generate the Adaptation State to get started, or type your own prompt."
+                  {activeTab.type === "workbook"
+                    ? "Use a workbook action above, or type your own prompt below."
                     : editorIsEmpty
                     ? "What would you like to do?"
                     : "What would you like to work on?"}
                 </p>
-                <div className="flex flex-col gap-2">
-                  {(activeTab.type === "workbook" && editorIsEmpty
-                    ? WORKBOOK_QUICK_ACTIONS
-                    : editorIsEmpty
-                    ? CHAT_QUICK_ACTIONS_EMPTY
-                    : CHAT_QUICK_ACTIONS_EXISTING
-                  ).map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={() => setInput(action.prompt)}
-                      className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
+                {activeTab.type !== "workbook" && (
+                  <div className="flex flex-col gap-2">
+                    {(editorIsEmpty
+                      ? CHAT_QUICK_ACTIONS_EMPTY
+                      : CHAT_QUICK_ACTIONS_EXISTING
+                    ).map((action) => (
+                      <button
+                        key={action.label}
+                        onClick={() => setInput(action.prompt)}
+                        className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

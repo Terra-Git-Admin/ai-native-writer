@@ -243,8 +243,11 @@ export default function DocumentPage() {
       // 3. Swap the active tab. Editor remount now reads the freshly-fetched
       // activeTabContent derived from updated tabs state.
       setActiveTabId(tabId);
+      // Clear edit selection (it was for the previous tab's editor) but
+      // KEEP the AI sidebar open across tab switches — the writer expects
+      // the assistant to follow them as they navigate. The sidebar component
+      // re-scopes its state to the new (documentId, activeTabId) on its own.
       setAiSelection(null);
-      setAiSidebarOpen(false);
       setActiveCommentId(null);
       setPendingComment(null);
       setActiveTabHeadings([]);

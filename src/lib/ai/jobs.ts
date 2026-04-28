@@ -28,6 +28,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { db, getDb } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { getAIModel } from "@/lib/ai/providers";
+import { getAction, resolveSystemPrompt } from "@/lib/ai/actions";
 import { logEvent } from "@/lib/saveTrace";
 
 export type PromptKind =
@@ -180,12 +181,12 @@ async function runJob(id: string): Promise<void> {
   logEvent("ai_job.run.start", { id, promptKind: job.promptKind });
 
   try {
-    const systemPrompt = await getSystemPrompt(job.promptKind as PromptKind);
-    const userMessage = await loadContext(
-      job.promptKind as PromptKind,
-      job.documentId,
-      job.tabId
-    );
+    const action = getAction(job.promptKind as PromptKind);
+    const systemPrompt = await resolveSystemPrompt(action);
+    const userMessage = await action.loadContext({
+      documentId: job.documentId,
+      tabId: job.tabId,
+    });
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });
 
@@ -298,25 +299,3 @@ export async function recoverOrphanJobs(): Promise<number> {
   return orphans.length;
 }
 
-// ─── Stubs for chunk D ───
-//
-// These produce real output so the machinery is end-to-end testable on a
-// real model call. Chunk D replaces them with the action-specific context
-// loaders + system prompts (Plot Chunks, Next Episode Plot, Next Reference
-// Episode).
-
-async function getSystemPrompt(kind: PromptKind): Promise<string> {
-  // STUB: replaced in chunk D with full per-action system prompts pulled
-  // from src/lib/ai/prompts.ts (or the prompts table for editability).
-  return `You are an AI assistant for a vertical mobile microdrama scriptwriting tool. The user has triggered the action "${kind}". Acknowledge the action and produce a short placeholder response describing what you would generate. The full per-action prompts ship in chunk D.`;
-}
-
-async function loadContext(
-  kind: PromptKind,
-  documentId: string,
-  tabId: string | null
-): Promise<string> {
-  // STUB: replaced in chunk D with action-specific context loaders that
-  // read the relevant tabs and assemble the input.
-  return `Action: ${kind}\nDocument: ${documentId}\nTab: ${tabId ?? "(none)"}\n\nThis is a placeholder context payload. Chunk D wires real context loading.`;
-}
