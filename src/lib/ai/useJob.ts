@@ -68,16 +68,9 @@ export function useJob(args: UseJobArgs) {
 
     es.addEventListener("token", (e) => {
       const evt = e as MessageEvent<string>;
-      let chunk = evt.data;
-      // The SSE spec wraps strings in JSON when we send via JSON.stringify.
-      // Server sends both raw chunks (already-stringified JSON) and full
-      // payloads — try parsing as JSON, fall back to raw.
-      try {
-        const parsed = JSON.parse(chunk);
-        if (typeof parsed === "string") chunk = parsed;
-      } catch {
-        // raw chunk
-      }
+      // Server always JSON.stringifies before sending so newlines survive
+      // the SSE wire format. Token events carry a JSON-encoded string.
+      const chunk = JSON.parse(evt.data) as string;
       setState((prev) => ({
         ...prev,
         status: "running",

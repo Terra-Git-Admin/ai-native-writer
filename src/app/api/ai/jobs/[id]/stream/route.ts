@@ -75,8 +75,12 @@ export async function GET(
       const sendEvent = (event: string, data: unknown) => {
         if (closed) return;
         try {
-          const payload =
-            typeof data === "string" ? data : JSON.stringify(data);
+          // ALWAYS JSON-stringify. SSE uses '\n' as a record separator;
+          // a raw string with newlines would break the wire format and
+          // the client would see only the first line of every event.
+          // Encoding via JSON.stringify escapes newlines as \n inside a
+          // single-line JSON string, which the client JSON-parses back.
+          const payload = JSON.stringify(data);
           controller.enqueue(
             encoder.encode(`event: ${event}\ndata: ${payload}\n\n`)
           );

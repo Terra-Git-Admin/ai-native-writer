@@ -89,12 +89,13 @@ export interface CreateJobOpts {
 // from the caller's perspective — the POST handler returns the job id and
 // the SSE endpoint subscribes separately.
 export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
-  // Per-tab block: refuse if any pending|running job exists in this
-  // (documentId, tabId). Frontend surfaces this as the "Block & toast" UX.
+  // Per-document block: refuse if ANY pending|running job exists in this
+  // document, regardless of which tab originated it. The user model is
+  // "one AI generation at a time per doc" — the chat thread is doc-scoped
+  // so multiple concurrent jobs would fight for the same chat surface.
   const existing = await db.query.aiJobs.findFirst({
     where: and(
       eq(aiJobs.documentId, opts.documentId),
-      eq(aiJobs.tabId, opts.tabId),
       inArray(aiJobs.status, ["pending", "running"])
     ),
   });

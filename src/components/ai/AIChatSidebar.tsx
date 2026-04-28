@@ -4,7 +4,10 @@ import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
-import WorkbookActions from "@/components/ai/WorkbookActions";
+import WorkbookActions, {
+  WORKBOOK_ACTION_LABELS,
+} from "@/components/ai/WorkbookActions";
+import { useJob, type JobKind } from "@/lib/ai/useJob";
 
 // ─── Types ───
 
@@ -89,6 +92,15 @@ interface ParsedChange {
   location: string;
   original: string;
   suggested: string;
+}
+
+function aiJobStatusLabel(s: string): string {
+  if (s === "starting") return "Starting…";
+  if (s === "running") return "Generating…";
+  if (s === "completed") return "Done";
+  if (s === "failed") return "Failed";
+  if (s === "cancelled") return "Cancelled";
+  return s;
 }
 
 function stripTagsForDisplay(text: string): string {
@@ -190,6 +202,45 @@ export default function AIChatSidebar({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevModeRef = useRef<Mode | null>(null);
+
+  // ─── Durable AI job (Plot Chunks / Next Episode Plot / Next Reference
+  //     Episode). Lives at this component level so the active-job UI
+  //     survives tab switches. The active-job message renders inline in
+  //     the chat thread for visual consistency with regular chat.
+  const aiJob = useJob({
+    documentId,
+    tabId: activeTab.id, // tabId is just for traceability on the row; concurrency is doc-scoped server-side
+    modelId,
+    thinking,
+  });
+  const isAIBusy =
+    aiJob.state.status === "starting" || aiJob.state.status === "running";
+
+  const handleStartJob = useCallback(
+    async (kind: JobKind) => {
+      if (isAIBusy || isStreaming) return;
+      const r = await aiJob.start(kind);
+      if (!r.ok) {
+        setError(r.error ?? "Could not start AI job.");
+      }
+    },
+    [aiJob, isAIBusy, isStreaming]
+  );
+
+  const handleAppendJobToWorkbook = useCallback(() => {
+    if (aiJob.state.status !== "completed" || !aiJob.state.output) return;
+    if (activeTab.type !== "workbook") {
+      setError("Switch to the Workbook tab to append this output.");
+      return;
+    }
+    const current =
+      tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? activeTab.content);
+    const merged = current.trim()
+      ? `${current.trim()}\n\n${aiJob.state.output.trim()}`
+      : aiJob.state.output.trim();
+    onApplyDraft(merged);
+    aiJob.reset();
+  }, [aiJob, activeTab, editorRef, onApplyDraft]);
 
   // Persist a history entry to the server
   const persistEntry = useCallback(
@@ -641,22 +692,12 @@ export default function AIChatSidebar({
         </button>
       </div>
 
-      {/* Workbook actions — durable AI jobs (Plot Chunks / Next Episode Plot
-          / Next Reference Episode). Lives outside the scroll area so the
-          panel stays visible at the top regardless of chat history length. */}
+      {/* Workbook action buttons — only visible when on workbook tab.
+          Job state lives in this parent component so the active-job UI
+          (rendered inline in the chat thread below) stays alive across
+          tab switches. */}
       {activeTab.type === "workbook" && (
-        <WorkbookActions
-          documentId={documentId}
-          tabId={activeTab.id}
-          modelId={modelId}
-          thinking={thinking}
-          getCurrentTagged={() =>
-            tiptapJsonToTagged(
-              editorRef.current?.getContentJSON() ?? activeTab.content
-            )
-          }
-          applyMergedContent={(taggedContent) => onApplyDraft(taggedContent)}
-        />
+        <WorkbookActions isAIBusy={isAIBusy} onStart={handleStartJob} />
       )}
 
       {/* Messages area */}
@@ -739,6 +780,104 @@ export default function AIChatSidebar({
             </div>
           );
         })}
+
+        {/* Active AI job (Plot Chunks / Next Episode Plot / Next Reference
+            Episode). Renders as a chat-style message pair so the visual
+            language matches the regular chat flow. Survives tab switches
+            because the hook lives at the parent (AIChatSidebar) level. */}
+        {aiJob.state.status !== "idle" && (
+          <>
+            {aiJob.state.kind && (
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-indigo-600 text-white">
+                  {WORKBOOK_ACTION_LABELS[aiJob.state.kind]}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-white border border-indigo-200 text-gray-800 space-y-2">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                  <span className="text-indigo-700">
+                    {aiJob.state.kind ? WORKBOOK_ACTION_LABELS[aiJob.state.kind] : "AI"}
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 normal-case">
+                    {aiJobStatusLabel(aiJob.state.status)}
+                  </span>
+                </div>
+
+                {aiJob.state.error && (
+                  <div className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 normal-case">
+                    {aiJob.state.error}
+                  </div>
+                )}
+
+                {aiJob.state.output && (
+                  <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-gray-800">
+                    {aiJob.state.output}
+                  </pre>
+                )}
+
+                {(aiJob.state.status === "starting" ||
+                  aiJob.state.status === "running") &&
+                  !aiJob.state.output && (
+                    <div className="flex items-center gap-2 text-xs text-indigo-600 normal-case">
+                      <span className="flex gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </span>
+                      Generating
+                    </div>
+                  )}
+
+                {/* Inline action buttons — match the visual rhythm of the
+                    regular chat's Apply/Reject patterns */}
+                <div className="flex gap-2 pt-1">
+                  {(aiJob.state.status === "starting" ||
+                    aiJob.state.status === "running") && (
+                    <button
+                      onClick={aiJob.cancel}
+                      className="flex-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {aiJob.state.status === "completed" && aiJob.state.output && (
+                    <>
+                      <button
+                        onClick={aiJob.reset}
+                        className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Discard
+                      </button>
+                      {activeTab.type === "workbook" ? (
+                        <button
+                          onClick={handleAppendJobToWorkbook}
+                          className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                        >
+                          Append to workbook
+                        </button>
+                      ) : (
+                        <span className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-center text-[11px] text-gray-500">
+                          Switch to Workbook to append
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {(aiJob.state.status === "failed" ||
+                    aiJob.state.status === "cancelled") && (
+                    <button
+                      onClick={aiJob.reset}
+                      className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Current streaming content */}
         {isStreaming && streamingText && (
@@ -938,7 +1077,7 @@ export default function AIChatSidebar({
         <div className="border-t border-gray-100 px-3 pt-2">
           <button
             onClick={handleFormatDocument}
-            disabled={isStreaming}
+            disabled={isStreaming || isAIBusy}
             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 transition-colors"
           >
             Format document
@@ -946,17 +1085,24 @@ export default function AIChatSidebar({
         </div>
       )}
 
-      {/* Input — always visible, disabled during streaming */}
+      {/* Input — always visible, disabled during streaming or while a
+          workbook job is running. Single-AI-lock: no chat sends while
+          a Plot Chunks / Next Episode Plot / Next Reference Episode
+          generation is in flight. */}
       <div className="border-t border-gray-200 p-3 space-y-2">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={placeholder}
+            placeholder={
+              isAIBusy
+                ? "AI is generating — wait for the current job to finish or cancel it."
+                : placeholder
+            }
             rows={3}
-            disabled={isStreaming}
+            disabled={isStreaming || isAIBusy}
             className={`w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
-              isStreaming
+              isStreaming || isAIBusy
                 ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                 : "border-gray-300 bg-white"
             }`}
@@ -974,10 +1120,10 @@ export default function AIChatSidebar({
           />
           <button
             onClick={handleSubmit}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || isAIBusy || !input.trim()}
             className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            {isStreaming ? "Generating..." : "Send"}
+            {isStreaming ? "Generating..." : isAIBusy ? "AI busy" : "Send"}
           </button>
           <div className="flex justify-center">
             <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
