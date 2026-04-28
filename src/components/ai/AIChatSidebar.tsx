@@ -21,8 +21,8 @@ interface ChatMessage {
 }
 
 type HistoryEntry =
-  | { type: "mode-change"; mode: Mode; timestamp: number }
-  | { type: "message"; role: "user" | "assistant"; content: string; mode: Mode };
+  | { type: "mode-change"; id?: string; mode: Mode; timestamp: number }
+  | { type: "message"; id?: string; role: "user" | "assistant"; content: string; mode: Mode };
 
 const MODE_LABELS: Record<Mode, string> = {
   edit: "Edit Selection",
@@ -192,34 +192,135 @@ export default function AIChatSidebar({
     aiJob.reset();
   }, [aiJob, activeTab, editorRef, onApplyDraft]);
 
-  // Persist a history entry to the server
+  const persistedJobIdRef = useRef<string | null>(null);
+  // Tracks the rows persisted for the most recent completed job — so Discard
+  // (which fires on the same jobId) can delete the same rows it just wrote.
+  // Reset to null whenever a new job starts, or after deletion.
+  const lastJobEntryIdsRef = useRef<{
+    jobId: string;
+    userId: string | null;
+    assistantId: string | null;
+  } | null>(null);
+
+  // Discard the active completed job AND remove its persisted entries from
+  // chat history. The persist effect captures both row IDs into
+  // lastJobEntryIdsRef so we can target them precisely. Filter local state
+  // first (instant UX), then fire DELETEs (best-effort).
+  const handleDiscardJob = useCallback(() => {
+    const tracked = lastJobEntryIdsRef.current;
+    if (tracked && tracked.jobId === aiJob.state.jobId) {
+      const { userId, assistantId } = tracked;
+      setHistory((prev) =>
+        prev.filter((e) => {
+          if (e.type !== "message" || !e.id) return true;
+          return e.id !== userId && e.id !== assistantId;
+        })
+      );
+      if (userId) {
+        fetch(`/api/ai/chat-history?id=${userId}`, { method: "DELETE" }).catch(
+          () => {}
+        );
+      }
+      if (assistantId) {
+        fetch(`/api/ai/chat-history?id=${assistantId}`, {
+          method: "DELETE",
+        }).catch(() => {});
+      }
+      lastJobEntryIdsRef.current = null;
+    }
+    aiJob.reset();
+  }, [aiJob]);
+
+  // Clear the entire chat history for this document. Confirmation handled
+  // by the caller (window.confirm in the header button). Local state is
+  // cleared instantly; server DELETE is best-effort.
+  const handleClearHistory = useCallback(() => {
+    setHistory([]);
+    setMessages([]);
+    setStreamingText("");
+    setError(null);
+    lastJobEntryIdsRef.current = null;
+    fetch(`/api/ai/chat-history?documentId=${documentId}`, {
+      method: "DELETE",
+    }).catch(() => {});
+  }, [documentId]);
+
+  // Persist a history entry to the server. Returns the row id on success
+  // (so callers that need to delete the row later — e.g. Discard — can
+  // remember it). Failures resolve to null; they're non-fatal.
   const persistEntry = useCallback(
-    (entry: HistoryEntry) => {
-      fetch("/api/ai/chat-history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentId,
-          entryType: entry.type === "mode-change" ? "mode-change" : "message",
-          role: entry.type === "message" ? entry.role : null,
-          content: entry.type === "message" ? entry.content : null,
-          mode: entry.mode,
-        }),
-      }).catch(() => {}); // fire and forget
+    async (entry: HistoryEntry): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/ai/chat-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documentId,
+            entryType: entry.type === "mode-change" ? "mode-change" : "message",
+            role: entry.type === "message" ? entry.role : null,
+            content: entry.type === "message" ? entry.content : null,
+            mode: entry.mode,
+          }),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { id?: string };
+        return data.id ?? null;
+      } catch {
+        return null;
+      }
     },
     [documentId]
   );
+
+  // Persist completed workbook-action results to chat history. Fires once per
+  // jobId on the running→completed transition. Both the user-trigger label and
+  // the assistant output are recorded as `mode: "chat"` entries so they land
+  // alongside regular chat messages and survive reload, Discard, or Append.
+  // (Decision 28 Apr: option (b) — all outputs persist; Discard then deletes.)
+  // Captures the persisted row IDs into lastJobEntryIdsRef so Discard can
+  // remove the same rows from chat history that this effect just wrote.
+  useEffect(() => {
+    if (aiJob.state.status !== "completed") return;
+    if (!aiJob.state.jobId || !aiJob.state.kind || !aiJob.state.output) return;
+    if (persistedJobIdRef.current === aiJob.state.jobId) return;
+    persistedJobIdRef.current = aiJob.state.jobId;
+
+    const jobId = aiJob.state.jobId;
+    const userEntry: HistoryEntry = {
+      type: "message",
+      role: "user",
+      content: WORKBOOK_ACTION_LABELS[aiJob.state.kind],
+      mode: "chat",
+    };
+    const assistantEntry: HistoryEntry = {
+      type: "message",
+      role: "assistant",
+      content: aiJob.state.output,
+      mode: "chat",
+    };
+
+    (async () => {
+      const userId = await persistEntry(userEntry);
+      const assistantId = await persistEntry(assistantEntry);
+      lastJobEntryIdsRef.current = { jobId, userId, assistantId };
+      setHistory((prev) => [
+        ...prev,
+        { ...userEntry, id: userId ?? undefined },
+        { ...assistantEntry, id: assistantId ?? undefined },
+      ]);
+    })();
+  }, [aiJob.state.status, aiJob.state.jobId, aiJob.state.kind, aiJob.state.output, persistEntry]);
 
   // Load history from server on mount
   useEffect(() => {
     fetch(`/api/ai/chat-history?documentId=${documentId}`)
       .then((r) => r.json())
-      .then((entries: { entryType: string; role: string | null; content: string | null; mode: string; createdAt: string }[]) => {
+      .then((entries: { id: string; entryType: string; role: string | null; content: string | null; mode: string; createdAt: string }[]) => {
         if (!Array.isArray(entries)) return;
         const loaded: HistoryEntry[] = entries.map((e) =>
           e.entryType === "mode-change"
-            ? { type: "mode-change" as const, mode: e.mode as Mode, timestamp: new Date(e.createdAt).getTime() }
-            : { type: "message" as const, role: e.role as "user" | "assistant", content: e.content || "", mode: e.mode as Mode }
+            ? { type: "mode-change" as const, id: e.id, mode: e.mode as Mode, timestamp: new Date(e.createdAt).getTime() }
+            : { type: "message" as const, id: e.id, role: e.role as "user" | "assistant", content: e.content || "", mode: e.mode as Mode }
         );
         setHistory(loaded);
         setHistoryLoaded(true);
@@ -634,12 +735,53 @@ export default function AIChatSidebar({
             {modeLabel}
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 text-lg"
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-1">
+          {!editorIsEmpty && activeTab.type !== "workbook" && (
+            <button
+              onClick={handleFormatDocument}
+              disabled={isStreaming || isAIBusy}
+              title="Restructure this tab to its canonical format"
+              className="rounded px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Format
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (history.length === 0) return;
+              if (window.confirm("Clear all chat history for this document? This cannot be undone.")) {
+                handleClearHistory();
+              }
+            }}
+            disabled={history.length === 0 || isAIBusy || isStreaming}
+            title="Clear chat history"
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg"
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
       {/* Workbook action buttons — only visible when on workbook tab.
@@ -779,7 +921,7 @@ export default function AIChatSidebar({
                   {aiJob.state.status === "completed" && aiJob.state.output && (
                     <>
                       <button
-                        onClick={aiJob.reset}
+                        onClick={handleDiscardJob}
                         className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                       >
                         Discard
@@ -1006,19 +1148,6 @@ export default function AIChatSidebar({
         </div>
       )}
 
-      {/* Format document — structured tabs only */}
-      {!editorIsEmpty && (
-        <div className="border-t border-gray-100 px-3 pt-2">
-          <button
-            onClick={handleFormatDocument}
-            disabled={isStreaming || isAIBusy}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 transition-colors"
-          >
-            Format document
-          </button>
-        </div>
-      )}
-
       {/* Input — always visible, disabled during streaming or while a
           workbook job is running. Single-AI-lock: no chat sends while
           a Plot Chunks / Next Episode Plot / Next Reference Episode
@@ -1109,8 +1238,9 @@ function AssistantMessage({
   } else if (mode === "edit" && isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
     // Don't show raw tagged content in chat for current edit — it's in the diff view
     displayContent = "";
-  } else if (mode === "edit" && !isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
-    // History entry — show clean AFTER content (tags stripped)
+  } else if (!isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
+    // History entry — show clean content (tags stripped). Covers edit-mode
+    // history entries AND persisted workbook-action results (chat mode).
     displayContent = stripTagsForDisplay(content);
   } else if (content.includes("[CHANGE")) {
     if (isLast) {

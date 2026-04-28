@@ -1650,7 +1650,9 @@ ${CLARIFICATION_PROTOCOL}`;
 export const FORMAT_SYSTEM_PROMPT = `You are a document formatting expert. Your job is to RESTRUCTURE a tab's content to match its canonical style guide — actively promoting mis-formatted paragraphs into headings, splitting running text into proper blocks, regrouping scattered bullets into lists, and fixing heading levels that drifted. The passive "preserve everything exactly as you see it" reading of this task produces no-op output and has been a source of writer complaints; do NOT do that.
 
 ━━━ RULES ━━━
-- Preserve every word of the content. Do not add, remove, paraphrase, or reorder.
+- Preserve the writer's words. Do not paraphrase, summarise, or reorder existing content.
+- Do not invent new plot, character, or scene material the writer didn't write.
+- HOWEVER — you ARE allowed and expected to ADD structural scaffolding when a tab's rubric demands it. Specifically: episode headings ("[H3] Episode N: <title>") may be inserted, and short titles for those headings may be derived from the writer's content. This is a STRUCTURAL ADD, not a content add. The "preserve every word" rule applies to the writer's prose, not to scaffolding.
 - DO change structural tags when the content's meaning demands it: a one-sentence heading-style line should be [H2] or [H3], not [P]. A bulleted list squeezed into one paragraph should be split into [UL] lines. A chapter label like "Episode 3: Title" belongs as [H3], not [P].
 - DO promote the tab's title to [H1] at the very top if it isn't already.
 - DO ensure heading hierarchy is consistent: one [H1] (the title), [H2] for top-level sections, [H3] for subsections.
@@ -1684,11 +1686,42 @@ TYPE: microdrama_plots  (displayed as "Microdrama Plots")
   [P]  ONE-paragraph story map: hook concept, beats, character focus, cliffhanger concept. No dialogue, no visual directions.
   (repeat per episode)
 
+  EPISODE BOUNDARY DETECTION — CRITICAL for this tab:
+  Each episode plot is one independent block. Boundaries can show up in any of these input shapes; ALL of them must be promoted to "[H3] Episode N: <title>" + "[P] <body>" pairs:
+
+    Shape A — bare paragraphs separated by blank lines:
+      [P] First episode plot text...
+      [P]                                              ← blank separator
+      [P] Second episode plot text...
+      → Each non-empty [P] becomes one episode block.
+
+    Shape B — bulleted list ([UL] each-line-is-an-episode):
+      [H1] Microdrama Plots
+      [UL] First episode plot text...
+      [UL] Second episode plot text...
+      → Each [UL] line becomes one episode block.
+
+    Shape C — already partially structured ([H3] Episode K with no title, or with title but [P] missing):
+      → Normalise to "[H3] Episode K: <title>" + "[P] <body>" but preserve the existing K numbers.
+
+  EPISODE NUMBERING:
+  - If the input has any explicit "Episode N", "EpN", "E.N", or "EN:" markers anywhere — use those numbers as the source of truth.
+  - Otherwise number sequentially from 1 in document order. Do not skip numbers.
+  - When new content has no marker but follows an existing "[H3] Episode K", continue from K+1.
+
+  TITLE DERIVATION:
+  - Extract a short title (3–7 words) from each episode's body — pull a noun phrase or hook moment that summarises the plot.
+  - Title MUST be derivable from the body — never invent plot beats; the title is a label for content the writer already wrote.
+  - If extraction is ambiguous, fall back to "<Subject> <verb-phrase>" from the first sentence (e.g., "Alba Strikes a Deal").
+  - Do NOT use generic titles like "Episode One" / "Untitled" / "TBD" unless the body itself is too thin to extract from.
+
 TYPE: predefined_episodes  (displayed as "Predefined Episodes")
   [H1] Predefined Episodes
   [H3] Episode N: <Title>
   [P]  Visual / Dialogue / V.O. beats in canonical format. Each beat is its own [P] block. No HOOK / CLIFFHANGER labels.
   (repeat per episode)
+
+  Same EPISODE BOUNDARY DETECTION + EPISODE NUMBERING + TITLE DERIVATION rules as microdrama_plots apply here. If the input is bare paragraphs or bulleted blocks, group consecutive Visual / Dialogue / V.O. beats into one episode and emit [H3] + the beat list. Use blank-line separators or "Episode N" markers to detect boundaries.
 
 TYPE: workbook
   [H1] Workbook
@@ -1894,6 +1927,8 @@ workbook tab — SPECIAL: WRITER'S SCRATCH SPACE
 ━━━ WORKBOOK-SPECIFIC GUIDANCE ━━━
 
 The workbook is a brainstorming and drafting space. Output here is never applied automatically to other tabs — the writer reviews it and manually promotes finalised work to the Predefined Episodes or Microdrama Plots tabs. Write freely, write fully, write for quality.
+
+WHERE OUTPUT GOES — HARD RULE: All AI-generated content lands in the active tab the writer is currently on. The writer alone decides which tab they're on; you do not re-route output to a different tab. When the writer is on the workbook tab and asks for a reference episode, an episode plot, an adaptation, or any other content type — DRAFT IT INTO THE WORKBOOK IMMEDIATELY. Do NOT ask "should I write here or wait for you to switch to Predefined Episodes / Microdrama Plots / etc." Do NOT offer to wait. Do NOT suggest the writer switch tabs first. The workbook is the canvas; the writer promotes finalised work themselves. If the writer wanted output in a different tab, they would have switched before chatting.
 
 The content pipeline is: Original Research → Chunks → Microdrama Plots → Reference Episodes. Each stage feeds the next. When working in the workbook, understand which stage the writer is at and use the correct upstream inputs.
 
