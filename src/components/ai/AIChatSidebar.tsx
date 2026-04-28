@@ -7,7 +7,9 @@ import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import WorkbookActions, {
   WORKBOOK_ACTION_LABELS,
 } from "@/components/ai/WorkbookActions";
-import { useJob, type JobKind } from "@/lib/ai/useJob";
+import type { useJob, JobKind } from "@/lib/ai/useJob";
+
+type AIJobController = ReturnType<typeof useJob>;
 
 // ─── Types ───
 
@@ -30,62 +32,11 @@ const MODE_LABELS: Record<Mode, string> = {
   chat: "Chat",
 };
 
-const IMPORT_CONVERT_ACTION = {
-  label: "Import & convert this document",
-  prompt:
-    "Please read this document and convert it into the standard series format. Map each section to the correct heading (Series Overview, Characters, Episode Plots, Reference Episodes). Where content exists, convert it to the correct format. Where a section is missing or blank, leave it blank — do not invent anything. Preserve all research and original story material verbatim in a Research & Original Story section at the bottom.",
-};
-
-const CHAT_QUICK_ACTIONS_EMPTY = [
-  {
-    label: "Create a new story",
-    prompt: "I want to create a new story. Help me get started.",
-  },
-  IMPORT_CONVERT_ACTION,
-  {
-    label: "Start from a story idea",
-    prompt:
-      "I have a story idea. Let me describe it and you can help me develop it into a full series.",
-  },
-];
-
-const CHAT_QUICK_ACTIONS_EXISTING = [
-  IMPORT_CONVERT_ACTION,
-  {
-    label: "Start episode plot adaptation",
-    prompt:
-      "Start episode plot adaptation. Please analyse the Research & Original Story section and begin.",
-  },
-  {
-    label: "Add a reference episode",
-    prompt:
-      "I want to add a new reference episode. Help me write it in the correct format.",
-  },
-  {
-    label: "Update the episode plots",
-    prompt: "I want to review and update the episode plots section.",
-  },
-  {
-    label: "Improve the dialogue",
-    prompt: "Help me improve the dialogue across the episodes.",
-  },
-  {
-    label: "Generate dialogue outline",
-    prompt:
-      "Generate a dialogue outline from all the reference episodes — extract every dialogue line, group by character voice, and build a relationship matrix showing how each pair of characters speak to each other.",
-  },
-  {
-    label: "Check grammar",
-    prompt:
-      "Check grammar. Scan the entire document for spelling mistakes, grammar errors, and punctuation issues. Fix only objective errors — do not change any story content, vocabulary, or writing style.",
-  },
-];
-
+// All legacy quick-action buttons have been removed (per writer feedback —
+// too many options were confusing). Workbook gets durable server-side
+// actions via WorkbookActions; other tabs get the free-form chat input.
 // Note: the previous "Generate Adaptation State" workbook quick-action has
-// been replaced by the WorkbookActions panel (durable, server-side jobs for
-// Plot Chunks / Next Episode Plot / Next Reference Episode). The component
-// renders at the top of the messages area whenever the active tab is
-// workbook, so legacy quick-action buttons no longer ship here.
+// been replaced by the WorkbookActions panel (durable, server-side jobs).
 
 interface ParsedChange {
   id: number;
@@ -147,6 +98,10 @@ interface AIChatSidebarProps {
   editorIsEmpty: boolean;
   modelId: string;
   thinking: boolean;
+  // Durable workbook-action job. Owned by the doc page so it survives
+  // sidebar open/close. The sidebar reads state, dispatches start/cancel/
+  // reset through the controller.
+  aiJob: AIJobController;
   onApplyEdit: (taggedAIResponse: string) => void;
   onRejectEdit: () => void;
   onApplyDraft: (content: string) => void;
@@ -159,6 +114,7 @@ interface AIChatSidebarProps {
 
 export default function AIChatSidebar({
   documentId,
+  aiJob,
   tabs,
   activeTab,
   editorRef,
@@ -203,16 +159,10 @@ export default function AIChatSidebar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevModeRef = useRef<Mode | null>(null);
 
-  // ─── Durable AI job (Plot Chunks / Next Episode Plot / Next Reference
-  //     Episode). Lives at this component level so the active-job UI
-  //     survives tab switches. The active-job message renders inline in
-  //     the chat thread for visual consistency with regular chat.
-  const aiJob = useJob({
-    documentId,
-    tabId: activeTab.id, // tabId is just for traceability on the row; concurrency is doc-scoped server-side
-    modelId,
-    thinking,
-  });
+  // ─── Durable AI job — owned by the doc page (passed in as a prop)
+  // so it survives AI-sidebar open/close. The hook's EventSource keeps
+  // streaming tokens even when this component unmounts; reopening the
+  // sidebar shows whatever progress accumulated in the meantime.
   const isAIBusy =
     aiJob.state.status === "starting" || aiJob.state.status === "running";
 
@@ -709,31 +659,11 @@ export default function AIChatSidebar({
               <p className="text-center">Describe how to edit the selected text.</p>
             )}
             {mode === "chat" && (
-              <div className="flex flex-col gap-3">
-                <p className="text-center text-gray-400">
-                  {activeTab.type === "workbook"
-                    ? "Use a workbook action above, or type your own prompt below."
-                    : editorIsEmpty
-                    ? "What would you like to do?"
-                    : "What would you like to work on?"}
-                </p>
-                {activeTab.type !== "workbook" && (
-                  <div className="flex flex-col gap-2">
-                    {(editorIsEmpty
-                      ? CHAT_QUICK_ACTIONS_EMPTY
-                      : CHAT_QUICK_ACTIONS_EXISTING
-                    ).map((action) => (
-                      <button
-                        key={action.label}
-                        onClick={() => setInput(action.prompt)}
-                        className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <p className="text-center text-gray-400">
+                {activeTab.type === "workbook"
+                  ? "Use a workbook action above, or type your own prompt below."
+                  : "Type your prompt below."}
+              </p>
             )}
           </div>
         )}
@@ -813,7 +743,11 @@ export default function AIChatSidebar({
 
                 {aiJob.state.output && (
                   <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-gray-800">
-                    {aiJob.state.output}
+                    {/* Strip structural tags ([H1] [P] [UL] etc.) for display
+                        only. The raw tagged text is preserved in
+                        aiJob.state.output for Append-to-workbook so the
+                        editor can re-parse the structure. */}
+                    {stripTagsForDisplay(aiJob.state.output)}
                   </pre>
                 )}
 

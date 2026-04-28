@@ -9,6 +9,7 @@ import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
+import { useJob } from "@/lib/ai/useJob";
 
 interface DocumentData {
   id: string;
@@ -67,6 +68,18 @@ export default function DocumentPage() {
   >([]);
   const [selectedModelId, setSelectedModelId] = useState("");
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
+
+  // Durable AI job (workbook actions: Plot Chunks / Next Episode Plot /
+  // Next Reference Episode). Hoisted to the doc-page level so the
+  // EventSource and accumulated output survive AI-sidebar open/close —
+  // closing the sidebar should NOT abort an in-flight generation. The
+  // hook's cleanup only fires when the user navigates away from the doc.
+  const aiJob = useJob({
+    documentId: params.id,
+    tabId: activeTabId ?? "",
+    modelId: selectedModelId,
+    thinking: thinkingEnabled,
+  });
 
   const AI_SIDEBAR_DEFAULT = 460;
   const AI_SIDEBAR_MIN = 320;
@@ -569,6 +582,7 @@ export default function DocumentPage() {
               editorIsEmpty={editorRef.current?.isEmpty() ?? !activeTabContent}
               modelId={selectedModelId}
               thinking={thinkingEnabled}
+              aiJob={aiJob}
               onApplyEdit={(taggedAIResponse) => {
                 if (aiSelection) {
                   editorRef.current?.removeHighlight(aiSelection.from, aiSelection.to);

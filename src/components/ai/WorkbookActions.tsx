@@ -14,13 +14,11 @@ interface WorkbookActionsProps {
   onStart: (kind: JobKind) => void;
 }
 
+// Plot Chunks is intentionally hidden from this menu pending a prompt
+// quality pass — see backlog. The server still accepts plot_chunks via
+// /api/ai/jobs and the prompt remains in lib/ai/prompts.ts so it can
+// be re-enabled by adding the entry back here once tuned.
 const ACTIONS: { kind: JobKind; label: string; description: string }[] = [
-  {
-    kind: "plot_chunks",
-    label: "Create Plot Chunks",
-    description:
-      "Propose plot chunks (one beat each) that can play across the next ~5 episodes.",
-  },
   {
     kind: "next_episode_plot",
     label: "Create Next Episode Plot",
