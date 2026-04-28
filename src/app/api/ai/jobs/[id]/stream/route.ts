@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { aiJobs, documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getActiveRunner } from "@/lib/ai/jobs";
+import { logEvent } from "@/lib/saveTrace";
 
 // GET /api/ai/jobs/[id]/stream — Server-Sent Events stream of token, status,
 // and terminal events for a job.
@@ -95,11 +96,28 @@ export async function GET(
       // Retry briefly (up to ~500ms) so the runner has a chance to
       // appear before we declare the job evicted.
       let runner = getActiveRunner(id);
+      logEvent("ai_job.stream.entry", {
+        id,
+        runnerPresent: !!runner,
+        jobStatus: job.status,
+      });
       if (!runner && (job.status === "pending" || job.status === "running")) {
         for (let i = 0; i < 10; i++) {
           await new Promise((r) => setTimeout(r, 50));
           runner = getActiveRunner(id);
-          if (runner) break;
+          if (runner) {
+            logEvent("ai_job.stream.runner_appeared", {
+              id,
+              afterAttempts: i + 1,
+            });
+            break;
+          }
+        }
+        if (!runner) {
+          logEvent("ai_job.stream.runner_never_appeared", {
+            id,
+            jobStatus: job.status,
+          });
         }
       }
 

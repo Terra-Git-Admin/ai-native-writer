@@ -53,7 +53,19 @@ export interface JobRunner {
   buffer: string;
 }
 
-const activeJobs = new Map<string, JobRunner>();
+// Pin the active-jobs map to globalThis so it survives Next.js / Turbopack
+// HMR module reloads in dev. Without this, every edit to this file would
+// reset the map, and a request handled by a freshly-reloaded module would
+// see an empty map even when another module instance has live runners.
+// In production this is a no-op (modules don't reload).
+//
+// Same pattern Drizzle/Prisma recommend for their client singletons in the
+// Next.js App Router.
+const _g = globalThis as unknown as {
+  __aiNativeWriter_activeJobs?: Map<string, JobRunner>;
+};
+const activeJobs: Map<string, JobRunner> = (_g.__aiNativeWriter_activeJobs ??=
+  new Map());
 
 // How long an entry lingers in activeJobs after terminal status. Lets a
 // browser that reconnected just after completion replay from memory rather
@@ -148,6 +160,7 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
     promptKind: opts.promptKind,
     modelId: opts.modelId,
     thinking: opts.thinking,
+    activeJobsSize: activeJobs.size,
   });
 
   // Kick off the LLM call. Errors inside runJob are handled there — never
