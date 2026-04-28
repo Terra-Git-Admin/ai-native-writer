@@ -114,6 +114,14 @@ export function useJob(args: UseJobArgs) {
         }));
         es.close();
         eventSourceRef.current = null;
+        // Defense in depth: if the SSE bailed because of an evicted-runner
+        // race or any other transient server condition, the DB row may
+        // still say pending|running — which would block any new job in
+        // this doc via the per-doc concurrency check. Fire a cancel to
+        // heal the row. Best-effort, ignore failures.
+        fetch(`/api/ai/jobs/${jobId}/cancel`, { method: "POST" }).catch(
+          () => {}
+        );
       }
       // Network blip: do nothing — EventSource auto-reconnects. If the
       // server has truly gone away, the next 'error' with data will fire.

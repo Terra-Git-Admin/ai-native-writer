@@ -38,7 +38,7 @@ export async function POST(
     });
   }
 
-  const cancelled = cancelJob(id);
+  const cancelled = await cancelJob(id);
   return new Response(JSON.stringify({ cancelled }), {
     status: 200,
     headers: { "Content-Type": "application/json" },

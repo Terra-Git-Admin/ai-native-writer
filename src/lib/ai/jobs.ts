@@ -85,9 +85,17 @@ export interface CreateJobOpts {
   userId: string;
 }
 
-// Insert the row, then kick off the runner. The runner is fire-and-forget
-// from the caller's perspective — the POST handler returns the job id and
-// the SSE endpoint subscribes separately.
+// Insert the row, register the runner in the in-memory map SYNCHRONOUSLY,
+// then kick off the LLM call asynchronously. The caller's SSE subscriber
+// races us, so the runner MUST be in the map before this function
+// returns — otherwise the subscriber sees `getActiveRunner === undefined`
+// + `status === 'pending'` and emits subscribe_after_runner_evicted.
+//
+// Order matters:
+//   1. DB block-check (refuse if a job is already running in this doc)
+//   2. DB insert (persist the pending row)
+//   3. Build runner + set in activeJobs (synchronous — closes the race)
+//   4. Fire-and-forget the LLM call
 export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
   // Per-document block: refuse if ANY pending|running job exists in this
   // document, regardless of which tab originated it. The user model is
@@ -118,6 +126,21 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
     createdAt: now,
   });
 
+  // Synchronous runner registration. Closes the race window: any SSE
+  // subscriber that arrives now will find this runner, attach listeners,
+  // and replay the buffer (initially empty) before tokens start flowing.
+  const controller = new AbortController();
+  const emitter = new EventEmitter();
+  emitter.setMaxListeners(50);
+  const runner: JobRunner = {
+    id,
+    controller,
+    emitter,
+    status: "pending",
+    buffer: "",
+  };
+  activeJobs.set(id, runner);
+
   logEvent("ai_job.create", {
     id,
     documentId: opts.documentId,
@@ -127,9 +150,9 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
     thinking: opts.thinking,
   });
 
-  // Kick off the runner. Errors inside runJob are handled there — never
+  // Kick off the LLM call. Errors inside runJob are handled there — never
   // throw out to the caller.
-  void runJob(id);
+  void runJob(id, runner);
 
   return { id };
 }
@@ -138,39 +161,61 @@ export function getActiveRunner(id: string): JobRunner | undefined {
   return activeJobs.get(id);
 }
 
-export function cancelJob(id: string): boolean {
+// Cancel a job. Best-effort across two layers:
+//   1. Live runner present? Abort the streaming LLM call. Its catch arm
+//      writes status='cancelled' to the DB.
+//   2. No live runner but DB still says pending|running? Mark cancelled
+//      directly. Heals stranded rows that would otherwise block future
+//      jobs in this document via the per-doc concurrency check.
+//
+// Returns true if any cancellation effect was applied (controller aborted
+// OR DB row updated). Idempotent — calling on an already-terminal row
+// returns false without side effects.
+export async function cancelJob(id: string): Promise<boolean> {
   const runner = activeJobs.get(id);
-  if (!runner) return false;
-  if (runner.status !== "running" && runner.status !== "pending") return false;
-  runner.controller.abort();
-  return true;
+  if (
+    runner &&
+    (runner.status === "running" || runner.status === "pending")
+  ) {
+    runner.controller.abort();
+    return true;
+  }
+
+  // No live runner OR the runner is already terminal-but-still-in-map
+  // for the TTL window. If the DB says still pending|running, heal it.
+  const updated = await db
+    .update(aiJobs)
+    .set({
+      status: "cancelled",
+      failureReason: "cancelled_without_runner",
+      completedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(aiJobs.id, id),
+        inArray(aiJobs.status, ["pending", "running"])
+      )
+    )
+    .returning({ id: aiJobs.id });
+  return updated.length > 0;
 }
 
 // Run a job to completion. Streams tokens to the in-memory EventEmitter
 // for live SSE subscribers, accumulates the full result in runner.buffer,
 // and writes terminal state to the DB once.
-async function runJob(id: string): Promise<void> {
+//
+// The runner is built and registered in activeJobs by createJob (sync),
+// so by the time runJob is invoked the map already has it. We just look
+// up the row, transition to running, and start the LLM call.
+async function runJob(id: string, runner: JobRunner): Promise<void> {
   const job = await db.query.aiJobs.findFirst({ where: eq(aiJobs.id, id) });
   if (!job) {
     logEvent("ai_job.run.missing_row", { id });
+    activeJobs.delete(id);
     return;
   }
 
-  const controller = new AbortController();
-  const emitter = new EventEmitter();
-  // EventEmitter default max listeners is 10. Multiple browser tabs/windows
-  // could subscribe to the same job; raise the bound so we don't trip the
-  // dev-time leak warning.
-  emitter.setMaxListeners(50);
-
-  const runner: JobRunner = {
-    id,
-    controller,
-    emitter,
-    status: "running",
-    buffer: "",
-  };
-  activeJobs.set(id, runner);
+  runner.status = "running";
 
   const startedAt = new Date();
   await db
@@ -178,7 +223,7 @@ async function runJob(id: string): Promise<void> {
     .set({ status: "running", startedAt })
     .where(eq(aiJobs.id, id));
 
-  emitter.emit("status", "running");
+  runner.emitter.emit("status", "running");
   logEvent("ai_job.run.start", { id, promptKind: job.promptKind });
 
   try {
@@ -197,7 +242,7 @@ async function runJob(id: string): Promise<void> {
       model,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
-      abortSignal: controller.signal,
+      abortSignal: runner.controller.signal,
     };
     if (job.thinking) {
       streamOptions.providerOptions = {
@@ -210,7 +255,7 @@ async function runJob(id: string): Promise<void> {
 
     for await (const chunk of result.textStream) {
       runner.buffer += chunk;
-      emitter.emit("token", chunk);
+      runner.emitter.emit("token", chunk);
     }
 
     // Stream completed without error.
@@ -226,7 +271,7 @@ async function runJob(id: string): Promise<void> {
       })
       .where(eq(aiJobs.id, id));
 
-    emitter.emit("done", {
+    runner.emitter.emit("done", {
       content: runner.buffer,
       completedAt: completedAt.toISOString(),
     });
@@ -236,14 +281,16 @@ async function runJob(id: string): Promise<void> {
       contentLength: runner.buffer.length,
     });
   } catch (err) {
-    if (controller.signal.aborted) {
+    if (runner.controller.signal.aborted) {
       runner.status = "cancelled";
       const completedAt = new Date();
       await db
         .update(aiJobs)
         .set({ status: "cancelled", completedAt })
         .where(eq(aiJobs.id, id));
-      emitter.emit("cancelled", { completedAt: completedAt.toISOString() });
+      runner.emitter.emit("cancelled", {
+        completedAt: completedAt.toISOString(),
+      });
       logEvent("ai_job.run.cancelled", { id });
     } else {
       runner.status = "failed";
@@ -257,7 +304,10 @@ async function runJob(id: string): Promise<void> {
           completedAt,
         })
         .where(eq(aiJobs.id, id));
-      emitter.emit("error", { reason, completedAt: completedAt.toISOString() });
+      runner.emitter.emit("error", {
+        reason,
+        completedAt: completedAt.toISOString(),
+      });
       logEvent("ai_job.run.failed", { id, reason });
     }
   } finally {

@@ -89,7 +89,19 @@ export async function GET(
         }
       };
 
-      const runner = getActiveRunner(id);
+      // Resolve the runner. createJob registers it synchronously now,
+      // but Node's request multiplexing can still squeeze a stream-GET
+      // in between createJob's `void runJob()` and runJob's first await.
+      // Retry briefly (up to ~500ms) so the runner has a chance to
+      // appear before we declare the job evicted.
+      let runner = getActiveRunner(id);
+      if (!runner && (job.status === "pending" || job.status === "running")) {
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          runner = getActiveRunner(id);
+          if (runner) break;
+        }
+      }
 
       if (!runner) {
         // No live runner. Reconstruct from DB.
@@ -109,9 +121,10 @@ export async function GET(
         } else if (job.status === "cancelled") {
           sendEvent("cancelled", { completedAt: job.completedAt });
         } else {
-          // Runner gone but DB still says pending|running. Could only happen
-          // if the runner crashed without updating DB (rare; instrumentation
-          // boot recovery should heal these). Treat as a transient error.
+          // Runner gone but DB still says pending|running after the retry
+          // window. Either runJob crashed before its catch arm could
+          // update the DB, or instrumentation boot recovery hasn't fired
+          // yet. Treat as a transient error.
           sendEvent("error", { reason: "subscribe_after_runner_evicted" });
         }
         closeOnce();
