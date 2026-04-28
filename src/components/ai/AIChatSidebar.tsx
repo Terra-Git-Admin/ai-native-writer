@@ -4,6 +4,12 @@ import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import WorkbookActions, {
+  WORKBOOK_ACTION_LABELS,
+} from "@/components/ai/WorkbookActions";
+import type { useJob, JobKind } from "@/lib/ai/useJob";
+
+type AIJobController = ReturnType<typeof useJob>;
 
 // ─── Types ───
 
@@ -15,8 +21,8 @@ interface ChatMessage {
 }
 
 type HistoryEntry =
-  | { type: "mode-change"; mode: Mode; timestamp: number }
-  | { type: "message"; role: "user" | "assistant"; content: string; mode: Mode };
+  | { type: "mode-change"; id?: string; mode: Mode; timestamp: number }
+  | { type: "message"; id?: string; role: "user" | "assistant"; content: string; mode: Mode };
 
 const MODE_LABELS: Record<Mode, string> = {
   edit: "Edit Selection",
@@ -26,75 +32,26 @@ const MODE_LABELS: Record<Mode, string> = {
   chat: "Chat",
 };
 
-const IMPORT_CONVERT_ACTION = {
-  label: "Import & convert this document",
-  prompt:
-    "Please read this document and convert it into the standard series format. Map each section to the correct heading (Series Overview, Characters, Episode Plots, Reference Episodes). Where content exists, convert it to the correct format. Where a section is missing or blank, leave it blank — do not invent anything. Preserve all research and original story material verbatim in a Research & Original Story section at the bottom.",
-};
-
-const CHAT_QUICK_ACTIONS_EMPTY = [
-  {
-    label: "Create a new story",
-    prompt: "I want to create a new story. Help me get started.",
-  },
-  IMPORT_CONVERT_ACTION,
-  {
-    label: "Start from a story idea",
-    prompt:
-      "I have a story idea. Let me describe it and you can help me develop it into a full series.",
-  },
-];
-
-const CHAT_QUICK_ACTIONS_EXISTING = [
-  IMPORT_CONVERT_ACTION,
-  {
-    label: "Start episode plot adaptation",
-    prompt:
-      "Start episode plot adaptation. Please analyse the Research & Original Story section and begin.",
-  },
-  {
-    label: "Add a reference episode",
-    prompt:
-      "I want to add a new reference episode. Help me write it in the correct format.",
-  },
-  {
-    label: "Update the episode plots",
-    prompt: "I want to review and update the episode plots section.",
-  },
-  {
-    label: "Improve the dialogue",
-    prompt: "Help me improve the dialogue across the episodes.",
-  },
-  {
-    label: "Generate dialogue outline",
-    prompt:
-      "Generate a dialogue outline from all the reference episodes — extract every dialogue line, group by character voice, and build a relationship matrix showing how each pair of characters speak to each other.",
-  },
-  {
-    label: "Check grammar",
-    prompt:
-      "Check grammar. Scan the entire document for spelling mistakes, grammar errors, and punctuation issues. Fix only objective errors — do not change any story content, vocabulary, or writing style.",
-  },
-];
-
-// Shown when the writer opens the sidebar with the Workbook tab active and
-// the tab still empty. The generation prompt fills a full Adaptation State
-// section per DOCUMENT_STYLE_GUIDE's ADAPTATION STATE FORMAT, pulling from
-// the doc's existing Original Research, Characters, and Microdrama Plots.
-// Writers can also type their own prompt or edit the active tab manually.
-const WORKBOOK_QUICK_ACTIONS = [
-  {
-    label: "Generate Adaptation State",
-    prompt:
-      "Generate a complete Adaptation State section for this Workbook tab, following the ADAPTATION STATE FORMAT in the style guide. Populate Series Spine, Source Analysis, Pacing Framework, Plot Lines, and Characters from the Original Research, Characters, and Microdrama Plots tabs. Leave Beat Timeline and Episode Coverage Log empty — writers fill those as episodes are generated. Output the full Workbook body with [H1] Workbook at the top and [H2]/[H3]/[UL] structure per the format.",
-  },
-];
+// All legacy quick-action buttons have been removed (per writer feedback —
+// too many options were confusing). Workbook gets durable server-side
+// actions via WorkbookActions; other tabs get the free-form chat input.
+// Note: the previous "Generate Adaptation State" workbook quick-action has
+// been replaced by the WorkbookActions panel (durable, server-side jobs).
 
 interface ParsedChange {
   id: number;
   location: string;
   original: string;
   suggested: string;
+}
+
+function aiJobStatusLabel(s: string): string {
+  if (s === "starting") return "Starting…";
+  if (s === "running") return "Generating…";
+  if (s === "completed") return "Done";
+  if (s === "failed") return "Failed";
+  if (s === "cancelled") return "Cancelled";
+  return s;
 }
 
 function stripTagsForDisplay(text: string): string {
@@ -141,6 +98,10 @@ interface AIChatSidebarProps {
   editorIsEmpty: boolean;
   modelId: string;
   thinking: boolean;
+  // Durable workbook-action job. Owned by the doc page so it survives
+  // sidebar open/close. The sidebar reads state, dispatches start/cancel/
+  // reset through the controller.
+  aiJob: AIJobController;
   onApplyEdit: (taggedAIResponse: string) => void;
   onRejectEdit: () => void;
   onApplyDraft: (content: string) => void;
@@ -153,6 +114,7 @@ interface AIChatSidebarProps {
 
 export default function AIChatSidebar({
   documentId,
+  aiJob,
   tabs,
   activeTab,
   editorRef,
@@ -197,34 +159,168 @@ export default function AIChatSidebar({
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevModeRef = useRef<Mode | null>(null);
 
-  // Persist a history entry to the server
+  // ─── Durable AI job — owned by the doc page (passed in as a prop)
+  // so it survives AI-sidebar open/close. The hook's EventSource keeps
+  // streaming tokens even when this component unmounts; reopening the
+  // sidebar shows whatever progress accumulated in the meantime.
+  const isAIBusy =
+    aiJob.state.status === "starting" || aiJob.state.status === "running";
+
+  const handleStartJob = useCallback(
+    async (kind: JobKind) => {
+      if (isAIBusy || isStreaming) return;
+      const r = await aiJob.start(kind);
+      if (!r.ok) {
+        setError(r.error ?? "Could not start AI job.");
+      }
+    },
+    [aiJob, isAIBusy, isStreaming]
+  );
+
+  const handleAppendJobToWorkbook = useCallback(() => {
+    if (aiJob.state.status !== "completed" || !aiJob.state.output) return;
+    if (activeTab.type !== "workbook") {
+      setError("Switch to the Workbook tab to append this output.");
+      return;
+    }
+    const current =
+      tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? activeTab.content);
+    const merged = current.trim()
+      ? `${current.trim()}\n\n${aiJob.state.output.trim()}`
+      : aiJob.state.output.trim();
+    onApplyDraft(merged);
+    aiJob.reset();
+  }, [aiJob, activeTab, editorRef, onApplyDraft]);
+
+  const persistedJobIdRef = useRef<string | null>(null);
+  // Tracks the rows persisted for the most recent completed job — so Discard
+  // (which fires on the same jobId) can delete the same rows it just wrote.
+  // Reset to null whenever a new job starts, or after deletion.
+  const lastJobEntryIdsRef = useRef<{
+    jobId: string;
+    userId: string | null;
+    assistantId: string | null;
+  } | null>(null);
+
+  // Discard the active completed job AND remove its persisted entries from
+  // chat history. The persist effect captures both row IDs into
+  // lastJobEntryIdsRef so we can target them precisely. Filter local state
+  // first (instant UX), then fire DELETEs (best-effort).
+  const handleDiscardJob = useCallback(() => {
+    const tracked = lastJobEntryIdsRef.current;
+    if (tracked && tracked.jobId === aiJob.state.jobId) {
+      const { userId, assistantId } = tracked;
+      setHistory((prev) =>
+        prev.filter((e) => {
+          if (e.type !== "message" || !e.id) return true;
+          return e.id !== userId && e.id !== assistantId;
+        })
+      );
+      if (userId) {
+        fetch(`/api/ai/chat-history?id=${userId}`, { method: "DELETE" }).catch(
+          () => {}
+        );
+      }
+      if (assistantId) {
+        fetch(`/api/ai/chat-history?id=${assistantId}`, {
+          method: "DELETE",
+        }).catch(() => {});
+      }
+      lastJobEntryIdsRef.current = null;
+    }
+    aiJob.reset();
+  }, [aiJob]);
+
+  // Clear the entire chat history for this document. Confirmation handled
+  // by the caller (window.confirm in the header button). Local state is
+  // cleared instantly; server DELETE is best-effort.
+  const handleClearHistory = useCallback(() => {
+    setHistory([]);
+    setMessages([]);
+    setStreamingText("");
+    setError(null);
+    lastJobEntryIdsRef.current = null;
+    fetch(`/api/ai/chat-history?documentId=${documentId}`, {
+      method: "DELETE",
+    }).catch(() => {});
+  }, [documentId]);
+
+  // Persist a history entry to the server. Returns the row id on success
+  // (so callers that need to delete the row later — e.g. Discard — can
+  // remember it). Failures resolve to null; they're non-fatal.
   const persistEntry = useCallback(
-    (entry: HistoryEntry) => {
-      fetch("/api/ai/chat-history", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          documentId,
-          entryType: entry.type === "mode-change" ? "mode-change" : "message",
-          role: entry.type === "message" ? entry.role : null,
-          content: entry.type === "message" ? entry.content : null,
-          mode: entry.mode,
-        }),
-      }).catch(() => {}); // fire and forget
+    async (entry: HistoryEntry): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/ai/chat-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            documentId,
+            entryType: entry.type === "mode-change" ? "mode-change" : "message",
+            role: entry.type === "message" ? entry.role : null,
+            content: entry.type === "message" ? entry.content : null,
+            mode: entry.mode,
+          }),
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { id?: string };
+        return data.id ?? null;
+      } catch {
+        return null;
+      }
     },
     [documentId]
   );
+
+  // Persist completed workbook-action results to chat history. Fires once per
+  // jobId on the running→completed transition. Both the user-trigger label and
+  // the assistant output are recorded as `mode: "chat"` entries so they land
+  // alongside regular chat messages and survive reload, Discard, or Append.
+  // (Decision 28 Apr: option (b) — all outputs persist; Discard then deletes.)
+  // Captures the persisted row IDs into lastJobEntryIdsRef so Discard can
+  // remove the same rows from chat history that this effect just wrote.
+  useEffect(() => {
+    if (aiJob.state.status !== "completed") return;
+    if (!aiJob.state.jobId || !aiJob.state.kind || !aiJob.state.output) return;
+    if (persistedJobIdRef.current === aiJob.state.jobId) return;
+    persistedJobIdRef.current = aiJob.state.jobId;
+
+    const jobId = aiJob.state.jobId;
+    const userEntry: HistoryEntry = {
+      type: "message",
+      role: "user",
+      content: WORKBOOK_ACTION_LABELS[aiJob.state.kind],
+      mode: "chat",
+    };
+    const assistantEntry: HistoryEntry = {
+      type: "message",
+      role: "assistant",
+      content: aiJob.state.output,
+      mode: "chat",
+    };
+
+    (async () => {
+      const userId = await persistEntry(userEntry);
+      const assistantId = await persistEntry(assistantEntry);
+      lastJobEntryIdsRef.current = { jobId, userId, assistantId };
+      setHistory((prev) => [
+        ...prev,
+        { ...userEntry, id: userId ?? undefined },
+        { ...assistantEntry, id: assistantId ?? undefined },
+      ]);
+    })();
+  }, [aiJob.state.status, aiJob.state.jobId, aiJob.state.kind, aiJob.state.output, persistEntry]);
 
   // Load history from server on mount
   useEffect(() => {
     fetch(`/api/ai/chat-history?documentId=${documentId}`)
       .then((r) => r.json())
-      .then((entries: { entryType: string; role: string | null; content: string | null; mode: string; createdAt: string }[]) => {
+      .then((entries: { id: string; entryType: string; role: string | null; content: string | null; mode: string; createdAt: string }[]) => {
         if (!Array.isArray(entries)) return;
         const loaded: HistoryEntry[] = entries.map((e) =>
           e.entryType === "mode-change"
-            ? { type: "mode-change" as const, mode: e.mode as Mode, timestamp: new Date(e.createdAt).getTime() }
-            : { type: "message" as const, role: e.role as "user" | "assistant", content: e.content || "", mode: e.mode as Mode }
+            ? { type: "mode-change" as const, id: e.id, mode: e.mode as Mode, timestamp: new Date(e.createdAt).getTime() }
+            : { type: "message" as const, id: e.id, role: e.role as "user" | "assistant", content: e.content || "", mode: e.mode as Mode }
         );
         setHistory(loaded);
         setHistoryLoaded(true);
@@ -639,13 +735,62 @@ export default function AIChatSidebar({
             {modeLabel}
           </p>
         </div>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 text-lg"
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-1">
+          {!editorIsEmpty && activeTab.type !== "workbook" && (
+            <button
+              onClick={handleFormatDocument}
+              disabled={isStreaming || isAIBusy}
+              title="Restructure this tab to its canonical format"
+              className="rounded px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              Format
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (history.length === 0) return;
+              if (window.confirm("Clear all chat history for this document? This cannot be undone.")) {
+                handleClearHistory();
+              }
+            }}
+            disabled={history.length === 0 || isAIBusy || isStreaming}
+            title="Clear chat history"
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-lg"
+          >
+            &times;
+          </button>
+        </div>
       </div>
+
+      {/* Workbook action buttons — only visible when on workbook tab.
+          Job state lives in this parent component so the active-job UI
+          (rendered inline in the chat thread below) stays alive across
+          tab switches. */}
+      {activeTab.type === "workbook" && (
+        <WorkbookActions isAIBusy={isAIBusy} onStart={handleStartJob} />
+      )}
 
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -656,31 +801,11 @@ export default function AIChatSidebar({
               <p className="text-center">Describe how to edit the selected text.</p>
             )}
             {mode === "chat" && (
-              <div className="flex flex-col gap-3">
-                <p className="text-center text-gray-400">
-                  {activeTab.type === "workbook" && editorIsEmpty
-                    ? "Workbook is empty. Generate the Adaptation State to get started, or type your own prompt."
-                    : editorIsEmpty
-                    ? "What would you like to do?"
-                    : "What would you like to work on?"}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {(activeTab.type === "workbook" && editorIsEmpty
-                    ? WORKBOOK_QUICK_ACTIONS
-                    : editorIsEmpty
-                    ? CHAT_QUICK_ACTIONS_EMPTY
-                    : CHAT_QUICK_ACTIONS_EXISTING
-                  ).map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={() => setInput(action.prompt)}
-                      className="text-left px-3 py-2 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 text-gray-700 transition-colors"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <p className="text-center text-gray-400">
+                {activeTab.type === "workbook"
+                  ? "Use a workbook action above, or type your own prompt below."
+                  : "Type your prompt below."}
+              </p>
             )}
           </div>
         )}
@@ -727,6 +852,108 @@ export default function AIChatSidebar({
             </div>
           );
         })}
+
+        {/* Active AI job (Plot Chunks / Next Episode Plot / Next Reference
+            Episode). Renders as a chat-style message pair so the visual
+            language matches the regular chat flow. Survives tab switches
+            because the hook lives at the parent (AIChatSidebar) level. */}
+        {aiJob.state.status !== "idle" && (
+          <>
+            {aiJob.state.kind && (
+              <div className="flex justify-end">
+                <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-indigo-600 text-white">
+                  {WORKBOOK_ACTION_LABELS[aiJob.state.kind]}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-start">
+              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-white border border-indigo-200 text-gray-800 space-y-2">
+                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                  <span className="text-indigo-700">
+                    {aiJob.state.kind ? WORKBOOK_ACTION_LABELS[aiJob.state.kind] : "AI"}
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 normal-case">
+                    {aiJobStatusLabel(aiJob.state.status)}
+                  </span>
+                </div>
+
+                {aiJob.state.error && (
+                  <div className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 normal-case">
+                    {aiJob.state.error}
+                  </div>
+                )}
+
+                {aiJob.state.output && (
+                  <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-gray-800">
+                    {/* Strip structural tags ([H1] [P] [UL] etc.) for display
+                        only. The raw tagged text is preserved in
+                        aiJob.state.output for Append-to-workbook so the
+                        editor can re-parse the structure. */}
+                    {stripTagsForDisplay(aiJob.state.output)}
+                  </pre>
+                )}
+
+                {(aiJob.state.status === "starting" ||
+                  aiJob.state.status === "running") &&
+                  !aiJob.state.output && (
+                    <div className="flex items-center gap-2 text-xs text-indigo-600 normal-case">
+                      <span className="flex gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </span>
+                      Generating
+                    </div>
+                  )}
+
+                {/* Inline action buttons — match the visual rhythm of the
+                    regular chat's Apply/Reject patterns */}
+                <div className="flex gap-2 pt-1">
+                  {(aiJob.state.status === "starting" ||
+                    aiJob.state.status === "running") && (
+                    <button
+                      onClick={aiJob.cancel}
+                      className="flex-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {aiJob.state.status === "completed" && aiJob.state.output && (
+                    <>
+                      <button
+                        onClick={handleDiscardJob}
+                        className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Discard
+                      </button>
+                      {activeTab.type === "workbook" ? (
+                        <button
+                          onClick={handleAppendJobToWorkbook}
+                          className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                        >
+                          Append to workbook
+                        </button>
+                      ) : (
+                        <span className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-center text-[11px] text-gray-500">
+                          Switch to Workbook to append
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {(aiJob.state.status === "failed" ||
+                    aiJob.state.status === "cancelled") && (
+                    <button
+                      onClick={aiJob.reset}
+                      className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Dismiss
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Current streaming content */}
         {isStreaming && streamingText && (
@@ -921,30 +1148,24 @@ export default function AIChatSidebar({
         </div>
       )}
 
-      {/* Format document — structured tabs only */}
-      {!editorIsEmpty && (
-        <div className="border-t border-gray-100 px-3 pt-2">
-          <button
-            onClick={handleFormatDocument}
-            disabled={isStreaming}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700 disabled:opacity-40 transition-colors"
-          >
-            Format document
-          </button>
-        </div>
-      )}
-
-      {/* Input — always visible, disabled during streaming */}
+      {/* Input — always visible, disabled during streaming or while a
+          workbook job is running. Single-AI-lock: no chat sends while
+          a Plot Chunks / Next Episode Plot / Next Reference Episode
+          generation is in flight. */}
       <div className="border-t border-gray-200 p-3 space-y-2">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={placeholder}
+            placeholder={
+              isAIBusy
+                ? "AI is generating — wait for the current job to finish or cancel it."
+                : placeholder
+            }
             rows={3}
-            disabled={isStreaming}
+            disabled={isStreaming || isAIBusy}
             className={`w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
-              isStreaming
+              isStreaming || isAIBusy
                 ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                 : "border-gray-300 bg-white"
             }`}
@@ -962,10 +1183,10 @@ export default function AIChatSidebar({
           />
           <button
             onClick={handleSubmit}
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || isAIBusy || !input.trim()}
             className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            {isStreaming ? "Generating..." : "Send"}
+            {isStreaming ? "Generating..." : isAIBusy ? "AI busy" : "Send"}
           </button>
           <div className="flex justify-center">
             <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
@@ -1017,8 +1238,9 @@ function AssistantMessage({
   } else if (mode === "edit" && isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
     // Don't show raw tagged content in chat for current edit — it's in the diff view
     displayContent = "";
-  } else if (mode === "edit" && !isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
-    // History entry — show clean AFTER content (tags stripped)
+  } else if (!isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
+    // History entry — show clean content (tags stripped). Covers edit-mode
+    // history entries AND persisted workbook-action results (chat mode).
     displayContent = stripTagsForDisplay(content);
   } else if (content.includes("[CHANGE")) {
     if (isLast) {

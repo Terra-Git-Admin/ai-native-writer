@@ -167,6 +167,60 @@ export const aiSettings = sqliteTable("ai_settings", {
     .$defaultFn(() => new Date()),
 });
 
+// Durable AI generation jobs. Each job is one button press of an action like
+// "Create Plot Chunks". Lives server-side so the work survives tab switches
+// and page reloads. On boot, orphan running rows are healed to status='failed'
+// with reason='instance_restart' (instrumentation.ts).
+//
+// Designed for low write count: 1 INSERT (create) + 1 UPDATE (complete or
+// fail or cancel) per job. Token streaming is in-memory only; the DB never
+// sees per-token writes.
+export const aiJobs = sqliteTable("ai_jobs", {
+  id: text("id").primaryKey(),
+  documentId: text("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  // Originating tab. Used for UI scoping ("which tab's chat surfaces this
+  // result") and debug audit. Nullable for non-tab-bound future jobs.
+  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
+  // 'plot_chunks' | 'next_episode_plot' | 'next_reference_episode'. Brainstorm
+  // Dialogues lands as a 4th value in v2.
+  promptKind: text("prompt_kind").notNull(),
+  // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'.
+  status: text("status").notNull().default("pending"),
+  modelId: text("model_id").notNull(),
+  thinking: integer("thinking", { mode: "boolean" }).notNull().default(false),
+  // JSON snapshot of the inputs that fed the LLM call (audit + debug).
+  contextSnapshot: text("context_snapshot"),
+  // JSON-encoded result. { content: string } for v1.
+  resultJson: text("result_json"),
+  failureReason: text("failure_reason"),
+  // User who initiated the job. References users.id; cascade-delete with user.
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  startedAt: integer("started_at", { mode: "timestamp" }),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+});
+
+export const aiJobsRelations = relations(aiJobs, ({ one }) => ({
+  document: one(documents, {
+    fields: [aiJobs.documentId],
+    references: [documents.id],
+  }),
+  tab: one(tabs, {
+    fields: [aiJobs.tabId],
+    references: [tabs.id],
+  }),
+  creator: one(users, {
+    fields: [aiJobs.createdBy],
+    references: [users.id],
+  }),
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
