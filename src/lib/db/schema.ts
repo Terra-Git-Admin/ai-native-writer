@@ -78,17 +78,18 @@ export const tabs = sqliteTable("tabs", {
     .notNull()
     .references(() => documents.id, { onDelete: "cascade" }),
   title: text("title").notNull().default("Untitled"),
-  // 'custom' | 'series_overview' | 'characters' | 'microdrama_plots'
-  // | 'predefined_episodes' | 'workbook'. Legacy values 'episode_plot',
-  // 'reference_episode', 'research' are migrated in place by the heal path
-  // on first tab fetch post-PR feat/fixed-tab-structure.
+  // 'custom' | 'series_overview' | 'characters' | 'series_skeleton' |
+  // 'microdrama_plots' | 'predefined_episodes' | 'workbook'. Legacy values
+  // 'episode_plot', 'reference_episode', 'research' are migrated in place by
+  // the heal path on first tab fetch post-PR feat/fixed-tab-structure.
   type: text("type").notNull().default("custom"),
   sequenceNumber: integer("sequence_number"),
   content: text("content"),
   position: integer("position").notNull().default(0),
-  // The five canonical tabs (Original Research, Characters, Microdrama Plots,
-  // Predefined Episodes, Workbook) are seeded for every doc and flagged
-  // protected so title/type cannot be edited and the row cannot be deleted.
+  // The six canonical tabs (Original Research, Characters, Series Skeleton,
+  // Microdrama Plots, Predefined Episodes, Workbook) are seeded for every
+  // doc and flagged protected so title/type cannot be edited and the row
+  // cannot be deleted.
   isProtected: integer("is_protected", { mode: "boolean" })
     .notNull()
     .default(false),

@@ -47,6 +47,7 @@ export interface Action {
 interface DocumentTabs {
   seriesOverview?: { id: string; type: string; content: string | null; title: string };
   characters?: { id: string; type: string; content: string | null; title: string };
+  seriesSkeleton?: { id: string; type: string; content: string | null; title: string };
   microdramaPlots?: { id: string; type: string; content: string | null; title: string };
   predefinedEpisodes?: { id: string; type: string; content: string | null; title: string };
   workbook?: { id: string; type: string; content: string | null; title: string };
@@ -61,11 +62,24 @@ async function loadDocumentTabs(documentId: string): Promise<DocumentTabs> {
     const slim = { id: r.id, type: r.type, content: r.content, title: r.title };
     if (r.type === "series_overview") out.seriesOverview = slim;
     else if (r.type === "characters") out.characters = slim;
+    else if (r.type === "series_skeleton") out.seriesSkeleton = slim;
     else if (r.type === "microdrama_plots") out.microdramaPlots = slim;
     else if (r.type === "predefined_episodes") out.predefinedEpisodes = slim;
     else if (r.type === "workbook") out.workbook = slim;
   }
   return out;
+}
+
+// Test whether a tab's tagged content actually contains a usable Series
+// Skeleton — not just an empty [H1] placeholder. The Microdrama Plot agent
+// refuses if this returns false.
+function hasUsableSkeleton(taggedContent: string): boolean {
+  const stripped = taggedContent.replace(/\s/g, "");
+  if (stripped.length < 200) return false;
+  // Real skeletons have at least one phase-breakdown [H3] and a Cast section
+  const hasPhase = /\[H3\]\s*Phase\s+\d/i.test(taggedContent);
+  const hasCast = /\[H2\]\s*Cast/i.test(taggedContent);
+  return hasPhase || hasCast;
 }
 
 // Plot Chunks input: last 10 microdrama plots + episode 1 for premise anchor
@@ -181,10 +195,24 @@ Task: Generate plot chunks that propose how key story beats can play out across 
 }
 
 // ─── next_episode_plot ───
+//
+// One-episode-at-a-time microdrama plot agent. Reads the canonical Series
+// Skeleton tab (refuses if not present) + ALL existing microdrama plots
+// (no truncation — full chain) + characters + last reference episode (for
+// cliffhanger pickup). Outputs ONE [H3] for the next episode.
 
 async function loadNextEpisodePlotContext(input: ActionInput): Promise<string> {
   const { documentId } = input;
   const docTabs = await loadDocumentTabs(documentId);
+
+  const skeletonTagged = tiptapJsonToTagged(
+    docTabs.seriesSkeleton?.content ?? null
+  );
+  if (!hasUsableSkeleton(skeletonTagged)) {
+    throw new Error(
+      "Series Skeleton tab is empty or incomplete. Run the Create Series Skeleton agent first, finalise the output in the Workbook, then paste the polished version into the Series Skeleton tab — the Microdrama Plot agent reads from that tab as the authoritative spine."
+    );
+  }
 
   const plotsTagged = tiptapJsonToTagged(
     docTabs.microdramaPlots?.content ?? null
@@ -194,23 +222,42 @@ async function loadNextEpisodePlotContext(input: ActionInput): Promise<string> {
     docTabs.characters?.content ?? null
   );
 
-  const nextEpisodeNumber = plotSections.length + 1;
-  const plotInput = selectPlotInput(plotSections);
+  // For cliffhanger pickup: read the last reference episode if any exists.
+  // The new episode plot's hook should imply the previous episode's
+  // cliffhanger since they're back-to-back in the writer's mind.
+  const refTagged = tiptapJsonToTagged(
+    docTabs.predefinedEpisodes?.content ?? null
+  );
+  const refSections = splitTabByH3(refTagged);
+  const lastRefEp = refSections[refSections.length - 1];
 
-  return `## Previous microdrama plots (last 10 + episode 1 for premise anchor)
+  const nextEpisodeNumber = plotSections.length + 1;
+  const phaseNumber = Math.min(9, Math.ceil(nextEpisodeNumber / 5));
+
+  return `## Series Skeleton (AUTHORITATIVE — the spine, character arcs, and phase breakdown for this 45-episode show)
+${skeletonTagged}
+
+## All Existing Microdrama Plots (full chain — every episode plotted so far, no truncation)
 ${
-  plotInput.length > 0
-    ? plotInput.map((s) => s.content).join("\n\n")
-    : "(no plots exist yet — this will be Episode 1; build from the research and logline)"
+  plotSections.length > 0
+    ? plotSections.map((s) => s.content).join("\n\n")
+    : "(no plots exist yet — this will be Episode 1; build from the skeleton's Phase 1 plan)"
 }
 
-## Characters
+## Characters (canonical)
 ${charactersTagged || "(empty)"}
 
-Task: Propose ONE single option for Episode ${nextEpisodeNumber}. Continue the established pacing rhythm. Output exactly one [H3] block in the microdrama plot format — no alternatives, no commentary.`;
+## Last Reference Episode (for cliffhanger pickup — your hook implies the cliffhanger here)
+${lastRefEp ? lastRefEp.content : "(none yet — your hook can open cold without picking up from a prior cliffhanger)"}
+
+Task: Propose ONE microdrama plot for Episode ${nextEpisodeNumber}. This episode falls in Phase ${phaseNumber} of the skeleton — read that phase's setup-payoff plan and information-state notes carefully. Output exactly ONE [H3] Episode ${nextEpisodeNumber} block in the per-spec microdrama plot format. No alternatives, no commentary, no preamble.`;
 }
 
 // ─── next_reference_episode ───
+//
+// Always expands the LAST microdrama plot in the tab into a full reference
+// episode. Other episodes (re-generation, mid-series patching) are handled
+// via chat per the writer's direction — this agent is single-purpose.
 
 async function loadNextReferenceEpisodeContext(
   input: ActionInput
@@ -225,13 +272,23 @@ async function loadNextReferenceEpisodeContext(
 
   if (plotSections.length === 0) {
     throw new Error(
-      "No microdrama plots exist yet. Create the next episode plot first."
+      "No microdrama plots exist yet. Create the next episode plot first — this agent expands the LATEST microdrama plot into a full reference episode."
     );
   }
 
   const lastPlot = plotSections[plotSections.length - 1];
   const targetEpisodeNumber =
     lastPlot.title.match(/episode\s+(\d+)/i)?.[1] ?? `${plotSections.length}`;
+
+  // Input-quality guard: refuse if the latest plot body is too thin to
+  // expand reliably. Catches the "single letter plot triggers full-scene
+  // hallucination" failure mode noted in the cross-tab assistant backlog.
+  const plotBody = lastPlot.content.replace(/\s/g, "");
+  if (plotBody.length < 60) {
+    throw new Error(
+      `Latest microdrama plot (Episode ${targetEpisodeNumber}) is too thin (${plotBody.length} chars after whitespace strip). Fill in the plot body before generating a reference episode — otherwise the agent will hallucinate scenes that aren't in your plan.`
+    );
+  }
 
   const refTagged = tiptapJsonToTagged(
     docTabs.predefinedEpisodes?.content ?? null
@@ -242,20 +299,20 @@ async function loadNextReferenceEpisodeContext(
     docTabs.characters?.content ?? null
   );
 
-  return `## Episode Plot to Generate From (last [H3] in Microdrama Plots — this is the only plot that matters)
+  return `## Latest Microdrama Plot (the one and only plot to expand — last [H3] in Microdrama Plots tab)
 ${lastPlot.content}
 
-## Previous Reference Episodes (full chain — match voice + continuity, your first beat picks up from the LAST beat of the most recent reference episode)
+## Previous Reference Episodes (full chain — your voice + continuity reference, your first beat picks up from the LAST beat of the most recent reference episode below)
 ${
   refSections.length > 0
     ? refSections.map((s) => s.content).join("\n\n")
     : "(none yet — this is the first reference episode; open with the scene the plot opens on)"
 }
 
-## Characters
+## Characters (canonical voice profiles — use these to write distinct dialogue)
 ${charactersTagged || "(empty)"}
 
-Task: Expand the Episode Plot above into a full reference episode for Episode ${targetEpisodeNumber} in canonical Visual / Dialogue / V.O. format. Output exactly one [H3] block — no preamble.`;
+Task: Expand the Latest Microdrama Plot above into ONE full reference episode for Episode ${targetEpisodeNumber} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetEpisodeNumber} block. No preamble, no commentary, no alternatives. The reference episode realises the plot — every beat in the plot must surface in the episode.`;
 }
 
 // ─── format_tab ───
