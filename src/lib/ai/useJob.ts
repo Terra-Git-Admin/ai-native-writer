@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type JobKind =
   | "plot_chunks"
   | "next_episode_plot"
-  | "next_reference_episode";
+  | "next_reference_episode"
+  | "format_tab"
+  | "series_skeleton";
 
 export type JobStatus =
   | "idle"
@@ -21,6 +23,11 @@ export interface JobState {
   status: JobStatus;
   output: string;
   error: string | null;
+  // Tab the job was started against. Snapshotted at start() time and frozen
+  // for the lifetime of the job — never reactively updated from args.tabId.
+  // The apply path reads this so cross-tab writes route to the origin tab,
+  // not whatever tab is active when the user clicks Apply.
+  originTabId: string | null;
 }
 
 const IDLE: JobState = {
@@ -29,6 +36,7 @@ const IDLE: JobState = {
   status: "idle",
   output: "",
   error: null,
+  originTabId: null,
 };
 
 interface UseJobArgs {
@@ -59,7 +67,7 @@ export function useJob(args: UseJobArgs) {
     };
   }, []);
 
-  const subscribe = useCallback((jobId: string, kind: JobKind) => {
+  const subscribe = useCallback((jobId: string, kind: JobKind, originTabId: string) => {
     // Close any prior subscription.
     eventSourceRef.current?.close();
 
@@ -139,6 +147,7 @@ export function useJob(args: UseJobArgs) {
       status: "starting",
       output: "",
       error: null,
+      originTabId,
     });
   }, []);
 
@@ -152,13 +161,17 @@ export function useJob(args: UseJobArgs) {
         };
       }
 
+      // Snapshot origin tab at start time. The hook's args.tabId is reactive
+      // (re-renders when the user switches tabs), but a job's origin must
+      // not change after it's been created.
+      const originTabId = args.tabId;
       try {
         const res = await fetch("/api/ai/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             documentId: args.documentId,
-            tabId: args.tabId,
+            tabId: originTabId,
             promptKind: kind,
             modelId: args.modelId,
             thinking: args.thinking,
@@ -174,7 +187,7 @@ export function useJob(args: UseJobArgs) {
           };
         }
         const data = (await res.json()) as { id: string };
-        subscribe(data.id, kind);
+        subscribe(data.id, kind, originTabId);
         return { ok: true };
       } catch (err) {
         return {

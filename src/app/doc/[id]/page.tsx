@@ -3,13 +3,22 @@
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
-import Editor, { EditorHandle, TaggedBlock, HeadingItem } from "@/components/editor/Editor";
+import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
 import { useJob } from "@/lib/ai/useJob";
+import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
+
+export type ApplyToTabResult = {
+  ok: boolean;
+  reason?: string;
+  landedTabId?: string;
+  fellBack?: boolean;
+};
 
 interface DocumentData {
   id: string;
@@ -35,14 +44,6 @@ export default function DocumentPage() {
     useState<NodeJS.Timeout | null>(null);
 
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
-  const [aiSelection, setAiSelection] = useState<{
-    text: string;
-    taggedText: string;
-    taggedBlocks: TaggedBlock[];
-    from: number;
-    to: number;
-    surroundingContext: string;
-  } | null>(null);
 
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -256,11 +257,9 @@ export default function DocumentPage() {
       // 3. Swap the active tab. Editor remount now reads the freshly-fetched
       // activeTabContent derived from updated tabs state.
       setActiveTabId(tabId);
-      // Clear edit selection (it was for the previous tab's editor) but
       // KEEP the AI sidebar open across tab switches — the writer expects
       // the assistant to follow them as they navigate. The sidebar component
       // re-scopes its state to the new (documentId, activeTabId) on its own.
-      setAiSelection(null);
       setActiveCommentId(null);
       setPendingComment(null);
       setActiveTabHeadings([]);
@@ -299,21 +298,88 @@ export default function DocumentPage() {
     [params.id, titleSaveTimeout]
   );
 
-  const handleAIEditRequest = useCallback(
-    (
-      displayText: string,
-      taggedText: string,
-      taggedBlocks: TaggedBlock[],
-      from: number,
-      to: number,
-      surroundingContext: string
-    ) => {
-      setAiSelection({ text: displayText, taggedText, taggedBlocks, from, to, surroundingContext });
-      setAiSidebarOpen(true);
-      setCommentSidebarOpen(false);
-      editorRef.current?.highlightSelection(from, to, "#bbf7d0");
+  // Route AI output to its origin tab. Same-tab uses the live editor
+  // (picks up unsaved edits); cross-tab uses the tab-content PUT endpoint
+  // (durable, version-snapshotted). Falls back to workbook if origin tab
+  // was deleted; returns reason="target_tab_missing" if no workbook either.
+  // Caller is the AIChatSidebar — see onApplyToTab in the JSX below.
+  const applyToTab = useCallback(
+    async (
+      originTabId: string,
+      taggedContent: string,
+      mode: "replace" | "append"
+    ): Promise<ApplyToTabResult> => {
+      let target = tabs.find((t) => t.id === originTabId);
+      let fellBack = false;
+      if (!target) {
+        target = tabs.find((t) => t.type === "workbook");
+        fellBack = true;
+      }
+      if (!target) {
+        return { ok: false, reason: "target_tab_missing", fellBack };
+      }
+      const targetTabId = target.id;
+
+      // Same tab as the active editor: write through editorRef so the
+      // user sees the change immediately and any unsaved live edits in
+      // the active editor are merged correctly for append mode.
+      if (targetTabId === activeTabId) {
+        let content = taggedContent;
+        if (mode === "append") {
+          const liveJson =
+            editorRef.current?.getContentJSON() ?? target.content ?? null;
+          const liveTagged = tiptapJsonToTagged(liveJson);
+          content = liveTagged.trim()
+            ? `${liveTagged.trim()}\n\n${taggedContent.trim()}`
+            : taggedContent.trim();
+        }
+        editorRef.current?.setFullContent(content);
+        return { ok: true, landedTabId: targetTabId, fellBack };
+      }
+
+      // Cross-tab: build merged tagged text, parse to Tiptap JSON, PUT.
+      let outgoing = taggedContent;
+      if (mode === "append") {
+        const existingTagged = tiptapJsonToTagged(target.content ?? null);
+        outgoing = existingTagged.trim()
+          ? `${existingTagged.trim()}\n\n${taggedContent.trim()}`
+          : taggedContent.trim();
+      }
+      const doc = taggedTextToTiptapDoc(outgoing);
+      const jsonString = JSON.stringify(doc);
+      const res = await fetch(
+        `/api/documents/${params.id}/tabs/${targetTabId}/content`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: jsonString,
+            forceVersion: true,
+            versionReason: "ai_apply",
+          }),
+        }
+      );
+      if (!res.ok) {
+        return {
+          ok: false,
+          reason: `put_failed_${res.status}`,
+          landedTabId: targetTabId,
+          fellBack,
+        };
+      }
+      // Sync local tabs cache so the rail and future tab-switches see the
+      // updated content without a refetch round-trip. handleTabSwitch still
+      // re-fetches on switch, so cache staleness here is best-effort only.
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === targetTabId
+            ? { ...t, content: jsonString, updatedAt: new Date() }
+            : t
+        )
+      );
+      return { ok: true, landedTabId: targetTabId, fellBack };
     },
-    []
+    [tabs, activeTabId, params.id]
   );
 
   const handleAddComment = useCallback(
@@ -532,7 +598,6 @@ export default function DocumentPage() {
           initialContent={activeTabContent}
           isOwner={doc.isOwner}
           activeCommentId={activeCommentId}
-          onAIEditRequest={doc.isOwner ? handleAIEditRequest : undefined}
           onAddComment={handleAddComment}
           onCommentMarkClick={handleCommentMarkClick}
           onHeadingsChange={setActiveTabHeadings}
@@ -578,32 +643,17 @@ export default function DocumentPage() {
               tabs={tabs}
               activeTab={activeTab}
               editorRef={editorRef}
-              selection={aiSelection}
               editorIsEmpty={editorRef.current?.isEmpty() ?? !activeTabContent}
               modelId={selectedModelId}
               thinking={thinkingEnabled}
               aiJob={aiJob}
-              onApplyEdit={(taggedAIResponse) => {
-                if (aiSelection) {
-                  editorRef.current?.removeHighlight(aiSelection.from, aiSelection.to);
-                  editorRef.current?.replaceRange(
-                    taggedAIResponse,
-                    aiSelection.taggedBlocks,
-                    aiSelection.from,
-                    aiSelection.to
-                  );
+              onApplyToTab={applyToTab}
+              onFlushPendingSave={async () => {
+                try {
+                  await editorRef.current?.flushPendingSave?.();
+                } catch {
+                  /* logged via client-trace */
                 }
-              }}
-              onRejectEdit={() => {
-                if (aiSelection) {
-                  editorRef.current?.removeHighlight(aiSelection.from, aiSelection.to);
-                }
-              }}
-              onApplyDraft={(content) => {
-                editorRef.current?.setFullContent(content);
-              }}
-              onApplyChange={(original, suggested) => {
-                editorRef.current?.findAndReplace(original, suggested);
               }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}
@@ -616,11 +666,7 @@ export default function DocumentPage() {
                 });
               }}
               onClose={() => {
-                if (aiSelection) {
-                  editorRef.current?.removeHighlight(aiSelection.from, aiSelection.to);
-                }
                 setAiSidebarOpen(false);
-                setAiSelection(null);
               }}
             />
           </div>

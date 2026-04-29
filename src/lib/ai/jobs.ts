@@ -34,7 +34,9 @@ import { logEvent } from "@/lib/saveTrace";
 export type PromptKind =
   | "plot_chunks"
   | "next_episode_plot"
-  | "next_reference_episode";
+  | "next_reference_episode"
+  | "format_tab"
+  | "series_skeleton";
 
 export type JobStatus =
   | "pending"
@@ -144,6 +146,12 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
   const controller = new AbortController();
   const emitter = new EventEmitter();
   emitter.setMaxListeners(50);
+  // Default 'error' listener so emitting 'error' never throws
+  // ERR_UNHANDLED_ERROR. Without this, a job that fails BEFORE any SSE
+  // subscriber attaches (e.g., the LLM call fails fast on auth/decryption)
+  // crashes the whole process. The DB row still records the failure; the
+  // SSE endpoint reads it from there on subscriber attach.
+  emitter.on("error", () => {});
   const runner: JobRunner = {
     id,
     controller,

@@ -37,6 +37,7 @@ export interface SectionTab {
     | "custom"
     | "series_overview"
     | "characters"
+    | "series_skeleton"
     | "microdrama_plots"
     | "predefined_episodes"
     | "workbook"

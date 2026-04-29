@@ -4,10 +4,12 @@ import { documents, tabs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createJob, JobBlockedError, type PromptKind } from "@/lib/ai/jobs";
 
-const VALID_KINDS: ReadonlySet<PromptKind> = new Set([
+const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "plot_chunks",
   "next_episode_plot",
   "next_reference_episode",
+  "format_tab",
+  "series_skeleton",
 ]);
 
 interface CreateJobBody {

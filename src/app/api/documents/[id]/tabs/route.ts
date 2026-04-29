@@ -13,6 +13,7 @@ const VALID_TYPES: readonly string[] = [
   "custom",
   "series_overview",
   "characters",
+  "series_skeleton",
   "episode_plot",
   "reference_episode",
   "research",

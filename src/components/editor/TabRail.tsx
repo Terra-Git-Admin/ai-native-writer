@@ -6,6 +6,7 @@ export type TabType =
   | "custom"
   | "series_overview"
   | "characters"
+  | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
   | "workbook"
@@ -34,6 +35,10 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
     className: "bg-purple-100 text-purple-700",
   },
   characters: { label: "Characters", className: "bg-blue-100 text-blue-700" },
+  series_skeleton: {
+    label: "Series Skeleton",
+    className: "bg-rose-100 text-rose-700",
+  },
   microdrama_plots: {
     label: "Microdrama Plots",
     className: "bg-amber-100 text-amber-700",

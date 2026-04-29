@@ -20,6 +20,12 @@ interface WorkbookActionsProps {
 // be re-enabled by adding the entry back here once tuned.
 const ACTIONS: { kind: JobKind; label: string; description: string }[] = [
   {
+    kind: "series_skeleton",
+    label: "Create Series Skeleton",
+    description:
+      "Distill source material + existing plots into a 45-episode skeleton: Series Summary, Cast (2-4 primaries), Plotline Architecture (1 spine + branches that converge), 9-phase Phase Breakdown with setup-payoff tracking, Character Arc Evolution, Structural Audit.",
+  },
+  {
     kind: "next_episode_plot",
     label: "Create Next Episode Plot",
     description:
@@ -59,8 +65,13 @@ export default function WorkbookActions({
   );
 }
 
+// Display label for any AI job kind. Some (workbook actions) appear in the
+// workbook button list above; others (format_tab) are header buttons. The map
+// is a job-kind dictionary, not a "things shown in the workbook menu" list.
 export const WORKBOOK_ACTION_LABELS: Record<JobKind, string> = {
   plot_chunks: "Create Plot Chunks",
   next_episode_plot: "Create Next Episode Plot",
   next_reference_episode: "Create Next Reference Episode",
+  format_tab: "Format Tab",
+  series_skeleton: "Create Series Skeleton",
 };
