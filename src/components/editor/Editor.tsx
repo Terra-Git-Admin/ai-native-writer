@@ -21,13 +21,16 @@ import {
   forwardRef,
 } from "react";
 import EditorToolbar from "./EditorToolbar";
-import type { EditorState } from "@tiptap/pm/state";
 // Used by the poll to decide whether to auto-apply server content (comment-mark
 // sync from a reviewer is safe) or surface a conflict banner (structural edit
 // from another tab). Implementation lives in src/lib/commentMarks.ts so the
 // server seatbelt uses the same comparison.
 import { isCommentMarkOnlyDiff, isNormalisedEqual } from "@/lib/commentMarks";
 import { clientTrace } from "@/lib/clientTrace";
+import {
+  parseTaggedLines,
+  taggedTextToTiptapDoc,
+} from "@/lib/editor/tagged-parser";
 
 export type TaggedBlock = {
   line: string; // full tagged string e.g. "[OL] Flutter app in V2..."
@@ -39,123 +42,6 @@ export interface HeadingItem {
   level: 1 | 2 | 3;
   text: string;
   pos: number; // ProseMirror doc position of the heading node
-}
-
-// Walk the selection and extract each block as a tagged line, recording positions.
-function extractTaggedBlocks(state: EditorState, from: number, to: number): TaggedBlock[] {
-  const blocks: TaggedBlock[] = [];
-  state.doc.nodesBetween(from, to, (node, pos, parent) => {
-    if (node.type.name === "listItem") {
-      const tag = parent?.type.name === "orderedList" ? "[OL]" : "[UL]";
-      const text = node.textContent.trim();
-      if (text) {
-        blocks.push({
-          line: `${tag} ${text}`,
-          from: pos,
-          to: pos + node.nodeSize,
-        });
-      }
-      return false;
-    }
-    if (node.type.name === "heading") {
-      const text = node.textContent.trim();
-      if (text) {
-        blocks.push({
-          line: `[H${node.attrs.level}] ${text}`,
-          from: pos,
-          to: pos + node.nodeSize,
-        });
-      }
-      return false;
-    }
-    if (node.type.name === "paragraph" && parent?.type.name !== "listItem") {
-      const text = node.textContent.trim();
-      if (text) {
-        blocks.push({
-          line: `[P] ${text}`,
-          from: pos,
-          to: pos + node.nodeSize,
-        });
-      }
-      return false;
-    }
-    return true;
-  });
-  return blocks;
-}
-
-// Parse the AI's tagged output into Tiptap JSON nodes.
-function parseTaggedLines(lines: string[]): object[] {
-  const nodes: object[] = [];
-  let listType: "orderedList" | "bulletList" | null = null;
-  let listItems: string[] = [];
-
-  const flushList = () => {
-    if (listType && listItems.length > 0) {
-      nodes.push({
-        type: listType,
-        content: listItems.map((t) => ({
-          type: "listItem",
-          content: [{ type: "paragraph", content: [{ type: "text", text: t }] }],
-        })),
-      });
-      listItems = [];
-      listType = null;
-    }
-  };
-
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line) continue;
-    const ol = line.match(/^\[OL\]\s*(.+)/i);
-    const ul = line.match(/^\[UL\]\s*(.+)/i);
-    const h = line.match(/^\[H([1-6])\]\s*(.+)/i);
-    const p = line.match(/^\[P\]\s*(.+)/i);
-
-    if (ol) {
-      if (listType !== "orderedList") flushList();
-      listType = "orderedList";
-      listItems.push(ol[1]);
-    } else if (ul) {
-      if (listType !== "bulletList") flushList();
-      listType = "bulletList";
-      listItems.push(ul[1]);
-    } else if (h) {
-      flushList();
-      // Clamp to H1-H3 so AI-returned [H4]+ don't render headings the writer
-      // can't easily format back with the toolbar (which only goes to H3).
-      const raw = parseInt(h[1]);
-      const level = raw > 3 ? 3 : raw < 1 ? 1 : raw;
-      nodes.push({
-        type: "heading",
-        attrs: { level },
-        content: [{ type: "text", text: h[2] }],
-      });
-    } else if (p) {
-      flushList();
-      nodes.push({
-        type: "paragraph",
-        content: [{ type: "text", text: p[1] }],
-      });
-    } else {
-      // Untagged fallback — strip any leading [TAG] prefix the AI emitted that
-      // our known tags didn't match (e.g. [BQ], [CODE], [NOTE]). Without this
-      // the bracketed marker leaks into the paragraph as literal text, which
-      // writers have hit in practice. Also strip markdown bullet/number/bold
-      // markers while we're here.
-      const t = line
-        .replace(/^\[[A-Z0-9_-]+\]\s*/i, "")
-        .replace(/^[-*•]\s+/, "")
-        .replace(/^\d+[.)]\s+/, "")
-        .replace(/\*\*/g, "");
-      if (t) {
-        flushList();
-        nodes.push({ type: "paragraph", content: [{ type: "text", text: t }] });
-      }
-    }
-  }
-  flushList();
-  return nodes;
 }
 
 // djb2 hash of arbitrary string — used to correlate client-side content state
@@ -183,14 +69,6 @@ interface EditorProps {
   initialContent: string | null;
   isOwner: boolean;
   activeCommentId: string | null;
-  onAIEditRequest?: (
-    displayText: string,
-    taggedText: string,
-    taggedBlocks: TaggedBlock[],
-    from: number,
-    to: number,
-    surroundingContext: string
-  ) => void;
   onAddComment?: (commentMarkId: string, quotedText: string, from: number, to: number) => void;
   onCommentMarkClick?: (commentMarkId: string) => void;
   onHeadingsChange?: (headings: HeadingItem[]) => void;
@@ -229,7 +107,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     initialContent,
     isOwner,
     activeCommentId,
-    onAIEditRequest,
     onAddComment,
     onCommentMarkClick,
     onHeadingsChange,
@@ -443,23 +320,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     setFullContent(content: string) {
       if (!editor) return;
-      // Parse tagged lines into Tiptap JSON, then set as content
-      const lines = content.split("\n").filter((l) => l.trim());
-      const hasStructuralTags = lines.some((l) =>
-        /^\[(?:H\d|OL|UL|P|HR)\]/.test(l)
-      );
-      if (hasStructuralTags) {
-        const nodes = parseTaggedLines(lines);
-        editor.commands.setContent({ type: "doc", content: nodes as [] });
-      } else {
-        // Plain text — wrap paragraphs
-        const paragraphs = content
-          .split("\n\n")
-          .filter((p) => p.trim())
-          .map((p) => `<p>${p.trim()}</p>`)
-          .join("");
-        editor.commands.setContent(paragraphs || "<p></p>");
-      }
+      const doc = taggedTextToTiptapDoc(content);
+      editor.commands.setContent(doc as { type: "doc"; content: [] });
       triggerSave();
     },
     highlightSelection(from: number, to: number, color: string) {
@@ -1057,45 +919,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     return () => document.removeEventListener("keydown", handler);
   }, [editor, isOwner, saveDocument]);
 
-  const handleAIEdit = useCallback(() => {
-    if (!editor || !onAIEditRequest) return;
-    const { from, to } = editor.state.selection;
-    const displayText = editor.state.doc.textBetween(from, to, "\n");
-    if (!displayText.trim()) return;
-
-    const taggedBlocks = extractTaggedBlocks(editor.state, from, to);
-    const taggedText =
-      taggedBlocks.length > 0
-        ? taggedBlocks.map((b) => b.line).join("\n")
-        : `[P] ${displayText}`;
-
-    // Collect ~3 blocks before and after the selection as surrounding context.
-    // This tells the AI what heading levels are in use, whether lists continue, etc.
-    const beforeBlocks = extractTaggedBlocks(
-      editor.state,
-      Math.max(0, from - 600),
-      from
-    ).slice(-3);
-    const afterBlocks = extractTaggedBlocks(
-      editor.state,
-      to,
-      Math.min(editor.state.doc.content.size, to + 600)
-    ).slice(0, 3);
-
-    const surroundingContext =
-      beforeBlocks.length > 0 || afterBlocks.length > 0
-        ? `\n## Surrounding Context (for formatting reference only — do NOT reproduce)\n` +
-          (beforeBlocks.length > 0
-            ? `Before selection:\n${beforeBlocks.map((b) => b.line).join("\n")}\n`
-            : "") +
-          (afterBlocks.length > 0
-            ? `After selection:\n${afterBlocks.map((b) => b.line).join("\n")}`
-            : "")
-        : "";
-
-    onAIEditRequest(displayText, taggedText, taggedBlocks, from, to, surroundingContext);
-  }, [editor, onAIEditRequest]);
-
   const handleAddComment = useCallback(() => {
     if (!editor || !onAddComment) return;
     const { from, to } = editor.state.selection;
@@ -1322,16 +1145,6 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                   >
                     I
                   </button>
-                  <div className="mx-1 h-4 w-px bg-gray-200" />
-                  {onAIEditRequest && (
-                    <button
-                      type="button"
-                      onClick={handleAIEdit}
-                      className="rounded bg-indigo-50 px-2 py-0.5 text-sm font-medium text-indigo-600 hover:bg-indigo-100"
-                    >
-                      Edit with AI
-                    </button>
-                  )}
                 </>
               )}
               {/* Comment button — available to everyone */}

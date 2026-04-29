@@ -34,7 +34,8 @@ import { logEvent } from "@/lib/saveTrace";
 export type PromptKind =
   | "plot_chunks"
   | "next_episode_plot"
-  | "next_reference_episode";
+  | "next_reference_episode"
+  | "format_tab";
 
 export type JobStatus =
   | "pending"

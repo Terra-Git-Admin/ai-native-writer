@@ -11,7 +11,7 @@
 // branching logic (bootstrap / standard / extend modes for plot_chunks)
 // stays in code rather than leaking into the system prompt.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { tabs, prompts as promptsTable } from "@/lib/db/schema";
 import {
@@ -23,6 +23,7 @@ import {
   PLOT_CHUNKS_SYSTEM_PROMPT,
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
+  FORMAT_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 import type { PromptKind } from "@/lib/ai/jobs";
 
@@ -256,6 +257,29 @@ ${charactersTagged || "(empty)"}
 Task: Expand the Episode Plot above into a full reference episode for Episode ${targetEpisodeNumber} in canonical Visual / Dialogue / V.O. format. Output exactly one [H3] block — no preamble.`;
 }
 
+// ─── format_tab ───
+//
+// Restructures a single tab's content into its canonical format. Reads the
+// tab fresh from the DB at job-run time — the client must flush its pending
+// editor save before starting this job, otherwise the LLM sees pre-debounce
+// content. Origin tab travels through ai_jobs.tabId, so the apply step
+// writes back to the same tab the writer started this job on, even if the
+// writer has switched tabs while the job ran.
+async function loadFormatTabContext(input: ActionInput): Promise<string> {
+  const { documentId, tabId } = input;
+  if (!tabId) {
+    throw new Error("format_tab requires a tabId — origin tab is mandatory.");
+  }
+  const tab = await db.query.tabs.findFirst({
+    where: and(eq(tabs.id, tabId), eq(tabs.documentId, documentId)),
+  });
+  if (!tab) {
+    throw new Error(`Tab ${tabId} not found in document ${documentId}.`);
+  }
+  const tagged = tiptapJsonToTagged(tab.content);
+  return `## Active Tab — ${tab.title} (${tab.type})\n${tagged || "(empty)"}\n\nRestructure this tab's content according to the style guide. Output the full tab body with structural tags. Do not invent new content; promote mis-tagged blocks, split running text into proper blocks, and fix heading levels.`;
+}
+
 // ─── Registry ───
 
 const ACTIONS: Record<PromptKind, Action> = {
@@ -276,6 +300,14 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "next_reference_episode",
     systemPromptFallback: NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
     loadContext: loadNextReferenceEpisodeContext,
+  },
+  format_tab: {
+    kind: "format_tab",
+    // Reuse the existing 'format' system prompt — same restructure-this-tab
+    // behaviour, now triggered through the durable jobs pipeline.
+    systemPromptId: "format",
+    systemPromptFallback: FORMAT_SYSTEM_PROMPT,
+    loadContext: loadFormatTabContext,
   },
 };
 

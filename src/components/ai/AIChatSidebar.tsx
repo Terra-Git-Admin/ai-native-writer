@@ -3,13 +3,20 @@
 import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
-import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { buildAIContext } from "@/lib/ai/context-engine";
 import WorkbookActions, {
   WORKBOOK_ACTION_LABELS,
 } from "@/components/ai/WorkbookActions";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
+import type { ApplyToTabResult } from "@/app/doc/[id]/page";
 
 type AIJobController = ReturnType<typeof useJob>;
+
+// Apply mode for a finished job's output. Format Document replaces the tab
+// body wholesale; the workbook actions append their output to the workbook.
+function applyModeForKind(kind: JobKind): "replace" | "append" {
+  return kind === "format_tab" ? "replace" : "append";
+}
 
 // ─── Types ───
 
@@ -88,13 +95,6 @@ interface AIChatSidebarProps {
   tabs: TabRow[];
   activeTab: TabRow;
   editorRef: RefObject<EditorHandle | null>;
-  selection: {
-    text: string;
-    taggedText: string;
-    from: number;
-    to: number;
-    surroundingContext?: string;
-  } | null;
   editorIsEmpty: boolean;
   modelId: string;
   thinking: boolean;
@@ -102,10 +102,16 @@ interface AIChatSidebarProps {
   // sidebar open/close. The sidebar reads state, dispatches start/cancel/
   // reset through the controller.
   aiJob: AIJobController;
-  onApplyEdit: (taggedAIResponse: string) => void;
-  onRejectEdit: () => void;
-  onApplyDraft: (content: string) => void;
+  // Routes tagged content to the origin tab. Same-tab uses the live editor;
+  // cross-tab uses the tab-content PUT endpoint. Falls back to workbook if
+  // the origin tab no longer exists.
+  onApplyToTab: (
+    originTabId: string,
+    content: string,
+    mode: "replace" | "append"
+  ) => Promise<ApplyToTabResult>;
   onApplyChange: (original: string, suggested: string) => void;
+  onFlushPendingSave: () => Promise<void>;
   onSetModel: (modelId: string) => void;
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
@@ -118,23 +124,21 @@ export default function AIChatSidebar({
   tabs,
   activeTab,
   editorRef,
-  selection,
   editorIsEmpty,
   modelId,
   thinking,
-  onApplyEdit,
-  onRejectEdit,
-  onApplyDraft,
+  onApplyToTab,
   onApplyChange,
+  onFlushPendingSave,
   onSetModel,
   onSetThinking,
   onSetTitle,
   onClose,
 }: AIChatSidebarProps) {
-  // Edit selection mode temporarily disabled — pending use case definition.
-  // To re-enable: flip editModeEnabled to true (or restore: selection ? "edit" : "chat")
-  const editModeEnabled = false as boolean;
-  const mode: Mode = editModeEnabled && selection ? "edit" : "chat";
+  // Selection-based "Edit with AI" was removed (Bug 4 fix, 29 Apr 2026).
+  // The sidebar now always operates in chat mode for free-form prompts;
+  // Format Document and the workbook actions handle their own job pipelines.
+  const mode: Mode = "chat";
 
   // messages = current AI conversation context (reset per mode change)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -145,9 +149,7 @@ export default function AIChatSidebar({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [draftApplied, setDraftApplied] = useState(false); // only for draft mode auto-apply
   const [changes, setChanges] = useState<ParsedChange[] | null>(null);
-  const [editApplied, setEditApplied] = useState(false);
   const [feedbackApplied, setFeedbackApplied] = useState(false);
   const [reviewMode, setReviewMode] = useState<"bulk" | "stepwise" | null>(null);
   const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
@@ -169,28 +171,56 @@ export default function AIChatSidebar({
   const handleStartJob = useCallback(
     async (kind: JobKind) => {
       if (isAIBusy || isStreaming) return;
+      // Format Document reads the tab fresh from DB at job-run time. Without
+      // a flush, recent typing that's still in the autosave debounce window
+      // is invisible to the LLM. Flush is a no-op for kinds that don't read
+      // the active tab (workbook actions read other tabs), so we always
+      // flush — costs a few ms, simplifies the code path.
+      try {
+        await onFlushPendingSave();
+      } catch {
+        /* logged via client-trace */
+      }
       const r = await aiJob.start(kind);
       if (!r.ok) {
         setError(r.error ?? "Could not start AI job.");
       }
     },
-    [aiJob, isAIBusy, isStreaming]
+    [aiJob, isAIBusy, isStreaming, onFlushPendingSave]
   );
 
-  const handleAppendJobToWorkbook = useCallback(() => {
+  // Apply the most recent completed job's output to its origin tab. Routing
+  // (same-tab vs cross-tab vs fallback) is handled by onApplyToTab on the
+  // doc page; this callback just dispatches with the right mode for the
+  // job kind. Result.fellBack === true means the origin tab was deleted
+  // mid-job and we landed on workbook instead — surface that to the writer.
+  const handleApplyJob = useCallback(async () => {
     if (aiJob.state.status !== "completed" || !aiJob.state.output) return;
-    if (activeTab.type !== "workbook") {
-      setError("Switch to the Workbook tab to append this output.");
+    if (!aiJob.state.kind || !aiJob.state.originTabId) return;
+
+    const mode = applyModeForKind(aiJob.state.kind);
+    const result = await onApplyToTab(
+      aiJob.state.originTabId,
+      aiJob.state.output,
+      mode
+    );
+    if (!result.ok) {
+      if (result.reason === "target_tab_missing") {
+        setError(
+          "Couldn't apply — the original tab no longer exists and there's no workbook to fall back to. The output is still in chat; copy it manually."
+        );
+      } else {
+        setError(`Apply failed (${result.reason ?? "unknown"}). Try again.`);
+      }
       return;
     }
-    const current =
-      tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? activeTab.content);
-    const merged = current.trim()
-      ? `${current.trim()}\n\n${aiJob.state.output.trim()}`
-      : aiJob.state.output.trim();
-    onApplyDraft(merged);
+    if (result.fellBack) {
+      setError(
+        "Original tab no longer exists; output landed in the Workbook instead."
+      );
+    }
     aiJob.reset();
-  }, [aiJob, activeTab, editorRef, onApplyDraft]);
+  }, [aiJob, onApplyToTab]);
 
   const persistedJobIdRef = useRef<string | null>(null);
   // Tracks the rows persisted for the most recent completed job — so Discard
@@ -335,42 +365,14 @@ export default function AIChatSidebar({
     }
   }, [historyLoaded]);
 
-  // On mode change: reset AI context, persist mode divider.
-  // Keyed on `selection` because that's what drives mode, but we only act
-  // when the *mode* actually flips — not on every cursor selection change.
+  // Initial mount: pick the default model. With selection-based edit mode
+  // removed, there are no mode flips to react to anymore — chat is the only
+  // mode the sidebar ever runs in.
   useEffect(() => {
-    const prevMode = prevModeRef.current;
-    prevModeRef.current = mode;
-
-    if (prevMode === null) {
-      // Initial mount — set model, don't reset (no prior state to clear).
-      onSetModel("gemini-3.1-pro-preview");
-      onSetThinking(false);
-      return;
-    }
-
-    if (prevMode === mode) return; // selection changed but mode didn't — do nothing
-
-    const entry: HistoryEntry = {
-      type: "mode-change",
-      mode,
-      timestamp: Date.now(),
-    };
-    setHistory((prev) => [...prev, entry]);
-    persistEntry(entry);
-
-    setMessages([]);
-    setInput("");
-    setError(null);
-    setDraftApplied(false);
-    setChanges(null);
-    setEditApplied(false);
-    setFeedbackApplied(false);
-    setTimeout(() => inputRef.current?.focus(), 50);
-
     onSetModel("gemini-3.1-pro-preview");
     onSetThinking(false);
-  }, [selection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-scroll
   useEffect(() => {
@@ -380,7 +382,11 @@ export default function AIChatSidebar({
   }, [messages, isStreaming]);
 
   const sendMessages = useCallback(
-    async (msgs: ChatMessage[]) => {
+    async (
+      msgs: ChatMessage[],
+      opts: { selectionAtSubmit: boolean; originTabId: string }
+    ) => {
+      const { selectionAtSubmit, originTabId } = opts;
       setIsStreaming(true);
       setStreamingText("");
       setError(null);
@@ -472,30 +478,55 @@ export default function AIChatSidebar({
           cleanAccumulated = accumulated.replace(/^[012]\n/, "");
         }
 
-        // Chat mode with signal 0: apply full document to editor
+        // Chat mode with signal 0: apply full document to the ORIGIN tab
+        // (the tab active when the user pressed Send), not whatever tab
+        // they may have switched to mid-stream. Cross-tab routing is
+        // delegated to onApplyToTab on the doc page.
+        //
+        // Selection guard: when the writer had text selected at submit
+        // time, the AI was reasoning about that selection and any "write
+        // the whole document" reply almost always means something the
+        // writer doesn't want auto-applied. Output stays in chat; writer
+        // copies anything they want manually. This is the explicit Bug 4
+        // fix — auto-apply on selection drifted unpredictably.
         if (mode === "chat" && chatSignal === "0") {
-          onApplyDraft(cleanAccumulated);
-          setDraftApplied(true);
+          if (selectionAtSubmit) {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                updated[lastIdx] = { role: "assistant", content: cleanAccumulated };
+              }
+              return updated;
+            });
+          } else {
+            await onApplyToTab(originTabId, cleanAccumulated, "replace");
 
-          setMessages((prev) => {
-            const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-              updated[lastIdx] = { role: "assistant", content: "Document has been written." };
-            }
-            return updated;
-          });
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                updated[lastIdx] = { role: "assistant", content: "Document has been written." };
+              }
+              return updated;
+            });
 
-          const h1Match = cleanAccumulated.match(/^\[H1\]\s+(.+)/m);
-          const title = h1Match ? h1Match[1] : "";
-          if (title) onSetTitle(title);
+            const h1Match = cleanAccumulated.match(/^\[H1\]\s+(.+)/m);
+            const title = h1Match ? h1Match[1] : "";
+            if (title) onSetTitle(title);
+          }
         }
 
-        // Chat mode with signal 2: parse targeted changes into change cards
+        // Chat mode with signal 2: parse targeted changes into change cards.
+        // Same selection guard as signal 0 — when the writer had a selection
+        // at submit time, suppress the [CHANGE] card UI and just show the
+        // raw response in chat.
         if (mode === "chat" && chatSignal === "2") {
-          const parsed = parseChanges(cleanAccumulated);
-          if (parsed && parsed.length > 0) {
-            setChanges(parsed);
+          if (!selectionAtSubmit) {
+            const parsed = parseChanges(cleanAccumulated);
+            if (parsed && parsed.length > 0) {
+              setChanges(parsed);
+            }
           }
           setMessages((prev) => {
             const updated = [...prev];
@@ -532,11 +563,20 @@ export default function AIChatSidebar({
         setStreamingText("");
       }
     },
-    [mode, modelId, thinking]
+    [mode, modelId, thinking, onApplyToTab, onSetTitle]
   );
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() || isStreaming) return;
+    // Snapshot the apply context at SEND time. The active tab can shift
+    // while the LLM streams; the apply target is the tab the writer was
+    // looking at when they hit Send. selectionAtSubmit is preserved as a
+    // dormant guard — selection-based edit mode was removed (Bug 4 fix),
+    // so this is always false today; left in place so a future re-enable
+    // of selection-aware AI inherits the auto-apply suppression.
+    const selectionAtSubmit = false;
+    const originTabId = activeTab.id;
+
     const userContent = buildUserMessage(input);
     const userMsg: ChatMessage = { role: "user", content: userContent };
     // Empty placeholder — rendered as "Thinking..." in the UI but NOT sent to AI
@@ -545,7 +585,6 @@ export default function AIChatSidebar({
     const newMessages = [...messages, userMsg, assistantMsg];
     setMessages(newMessages);
     setInput("");
-    setEditApplied(false);
     setFeedbackApplied(false);
 
     // Add user message to display history and persist
@@ -559,8 +598,11 @@ export default function AIChatSidebar({
     persistEntry(userEntry);
 
     // Send all messages — filter out the empty placeholder so it's not sent to AI
-    sendMessages(newMessages.filter((m) => m.content));
-  }, [input, isStreaming, messages, sendMessages, mode]);
+    sendMessages(newMessages.filter((m) => m.content), {
+      selectionAtSubmit,
+      originTabId,
+    });
+  }, [input, isStreaming, messages, sendMessages, mode, activeTab]);
 
   function buildUserMessage(userInput: string): string {
     const liveContent = editorRef.current?.getContentJSON() ?? null;
@@ -568,52 +610,13 @@ export default function AIChatSidebar({
       tabs,
       activeTab,
       activeTabLiveContent: liveContent,
-      mode: mode === "edit" ? "edit" : "chat",
-      selection: selection
-        ? {
-            taggedText: selection.taggedText,
-            surroundingContext: selection.surroundingContext,
-          }
-        : null,
+      mode: "chat",
+      selection: null,
     });
-
-    if (mode === "edit" && selection) {
-      if (messages.length === 0) {
-        return `${contextBlock}\n\n${selection.surroundingContext || ""}\n## Selected Text (rewrite THIS only, using structural tags)\n${selection.taggedText}\n\n## Instruction\n${userInput}`;
-      }
-      const selectionPreview = selection.text.slice(0, 120).replace(/\n/g, " ").trim();
-      return `[Follow-up — original selection still active: "${selectionPreview}${selection.text.length > 120 ? "..." : ""}"]\n\n## Instruction\n${userInput}`;
-    }
-    if (mode === "chat") {
-      return `${contextBlock}\n\n## Message\n${userInput}`;
-    }
-    return userInput;
+    return `${contextBlock}\n\n## Message\n${userInput}`;
   }
 
-  // ─── Last assistant message analysis ───
-  const lastAssistantMsg = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant" && m.content);
-  const lastContent = lastAssistantMsg?.content || "";
-  const isClarifying = lastContent.startsWith("[CLARIFY]");
-  const hasTaggedContent =
-    mode === "edit" &&
-    !isClarifying &&
-    lastContent.length > 0 &&
-    /^\[(?:H\d|OL|UL|P)]/m.test(lastContent);
   // ─── Apply handlers ───
-  const handleApplyEdit = () => {
-    if (!lastContent) return;
-    onApplyEdit(lastContent);
-    setEditApplied(true);
-  };
-
-  const handleRejectEdit = () => {
-    onRejectEdit();
-    setEditApplied(true);
-  };
-
-
   const handleApplyAllChanges = async () => {
     if (!changes) return;
     // Apply all changes in reverse order (so earlier positions aren't shifted)
@@ -629,64 +632,14 @@ export default function AIChatSidebar({
     setChanges(null);
   };
 
-  const handleFormatDocument = useCallback(async () => {
-    if (isStreaming) return;
-    setIsStreaming(true);
-    setStreamingText("");
-    setError(null);
-
-    const liveContent = editorRef.current?.getContentJSON() ?? null;
-    const activeTagged = tiptapJsonToTagged(liveContent) || tiptapJsonToTagged(activeTab.content);
-
-    const userMessage = `## Active Tab — ${activeTab.title} (${activeTab.type})\n${activeTagged || "(empty)"}`;
-
-    const userEntry: HistoryEntry = { type: "message", role: "user", content: "Format document", mode: "format" as Mode };
-    setHistory((prev) => [...prev, userEntry]);
-    persistEntry(userEntry);
-
-    try {
-      const res = await fetch("/api/ai/edit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: userMessage }],
-          mode: "format",
-          modelId,
-          thinking: false,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Format failed");
-      }
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          setStreamingText(accumulated);
-        }
-      }
-
-      if (accumulated) {
-        onApplyDraft(accumulated);
-        const assistantEntry: HistoryEntry = { type: "message", role: "assistant", content: "Document has been reformatted.", mode: "format" as Mode };
-        setHistory((prev) => [...prev, assistantEntry]);
-        persistEntry(assistantEntry);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Format failed");
-    } finally {
-      setIsStreaming(false);
-      setStreamingText("");
-    }
-  }, [isStreaming, modelId, editorRef, activeTab, onApplyDraft, persistEntry]);
+  // Format Document used to stream in-component via /api/ai/edit and write
+  // back through editorRef on completion — which silently targeted whatever
+  // tab the writer was viewing when the stream ended (Bug 1). Now it goes
+  // through the durable ai_jobs pipeline like the workbook actions: origin
+  // tab is captured server-side, the apply step routes via onApplyToTab.
+  const handleStartFormatTab = useCallback(() => {
+    void handleStartJob("format_tab");
+  }, [handleStartJob]);
 
   // Reset review state whenever a new set of changes arrives
   useEffect(() => {
@@ -718,12 +671,10 @@ export default function AIChatSidebar({
 
   // ─── Render helpers ───
 
-  const modeLabel = mode === "edit" ? "Edit Selection" : "Chat";
+  const modeLabel = "Chat";
 
   const placeholder =
-    mode === "edit"
-      ? "Describe how to edit the selected text..."
-      : "What would you like to do? (e.g. 'add an episode', 'tighten dialogue in ep 3')";
+    "What would you like to do? (e.g. 'add an episode', 'tighten dialogue in ep 3')";
 
   return (
     <div className="flex h-full flex-col">
@@ -738,7 +689,7 @@ export default function AIChatSidebar({
         <div className="flex items-center gap-1">
           {!editorIsEmpty && activeTab.type !== "workbook" && (
             <button
-              onClick={handleFormatDocument}
+              onClick={handleStartFormatTab}
               disabled={isStreaming || isAIBusy}
               title="Restructure this tab to its canonical format"
               className="rounded px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
@@ -797,16 +748,11 @@ export default function AIChatSidebar({
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
           <div className="py-6 text-sm text-gray-500">
-            {mode === "edit" && (
-              <p className="text-center">Describe how to edit the selected text.</p>
-            )}
-            {mode === "chat" && (
-              <p className="text-center text-gray-400">
-                {activeTab.type === "workbook"
-                  ? "Use a workbook action above, or type your own prompt below."
-                  : "Type your prompt below."}
-              </p>
-            )}
+            <p className="text-center text-gray-400">
+              {activeTab.type === "workbook"
+                ? "Use a workbook action above, or type your own prompt below."
+                : "Type your prompt below."}
+            </p>
           </div>
         )}
 
@@ -926,18 +872,26 @@ export default function AIChatSidebar({
                       >
                         Discard
                       </button>
-                      {activeTab.type === "workbook" ? (
-                        <button
-                          onClick={handleAppendJobToWorkbook}
-                          className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
-                        >
-                          Append to workbook
-                        </button>
-                      ) : (
-                        <span className="flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-center text-[11px] text-gray-500">
-                          Switch to Workbook to append
-                        </span>
-                      )}
+                      <button
+                        onClick={handleApplyJob}
+                        className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
+                      >
+                        {(() => {
+                          // Build a label that names the origin tab and the
+                          // mode: "Apply to Microdrama Plots" (replace) vs
+                          // "Append to Workbook" (workbook actions).
+                          const kind = aiJob.state.kind;
+                          const origin = aiJob.state.originTabId
+                            ? tabs.find((t) => t.id === aiJob.state.originTabId)
+                            : null;
+                          const tabLabel = origin?.title ?? "Workbook";
+                          const verb =
+                            kind && applyModeForKind(kind) === "replace"
+                              ? "Apply to"
+                              : "Append to";
+                          return `${verb} ${tabLabel}`;
+                        })()}
+                      </button>
                     </>
                   )}
                   {(aiJob.state.status === "failed" ||
@@ -987,30 +941,8 @@ export default function AIChatSidebar({
           </div>
         )}
 
-        {/* Flow A: Before/After diff */}
-        {mode === "edit" && hasTaggedContent && !isStreaming && !editApplied && (
-          <div className="space-y-3 pt-2">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-1">
-                Before
-              </p>
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {selection?.text}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600 mb-1">
-                After
-              </p>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-gray-800 whitespace-pre-wrap">
-                {stripTagsForDisplay(lastContent)}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Chat: Review mode selector */}
-        {mode === "chat" && changes && !isStreaming && !feedbackApplied && reviewMode === null && changes.length > 1 && (
+        {changes && !isStreaming && !feedbackApplied && reviewMode === null && changes.length > 1 && (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 mt-2">
             <p className="text-sm font-medium text-gray-700">
               {changes.length} changes ready. How would you like to review?
@@ -1033,7 +965,7 @@ export default function AIChatSidebar({
         )}
 
         {/* Chat: Stepwise — one change at a time */}
-        {mode === "chat" && changes && !isStreaming && !feedbackApplied && reviewMode === "stepwise" && (
+        {changes && !isStreaming && !feedbackApplied && reviewMode === "stepwise" && (
           <div className="space-y-3 pt-2">
             <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
               Change {currentChangeIndex + 1} of {changes.length}
@@ -1064,7 +996,7 @@ export default function AIChatSidebar({
         )}
 
         {/* Chat: Bulk — all changes at once */}
-        {mode === "chat" && changes && !isStreaming && !feedbackApplied && (reviewMode === "bulk" || changes.length === 1) && (
+        {changes && !isStreaming && !feedbackApplied && (reviewMode === "bulk" || changes.length === 1) && (
           <div className="space-y-3 pt-2">
             {changes.map((change) => (
               <div
@@ -1094,26 +1026,8 @@ export default function AIChatSidebar({
 
       </div>
 
-      {/* Sticky Apply / Reject buttons for edit mode */}
-      {mode === "edit" && hasTaggedContent && !isStreaming && !editApplied && (
-        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
-          <button
-            onClick={handleRejectEdit}
-            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
-          >
-            Reject
-          </button>
-          <button
-            onClick={handleApplyEdit}
-            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-          >
-            Apply to document
-          </button>
-        </div>
-      )}
-
       {/* Sticky buttons: stepwise mode */}
-      {mode === "chat" && changes && !feedbackApplied && !isStreaming && reviewMode === "stepwise" && (
+      {changes && !feedbackApplied && !isStreaming && reviewMode === "stepwise" && (
         <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
           <button
             onClick={handleSkipStepChange}
@@ -1131,7 +1045,7 @@ export default function AIChatSidebar({
       )}
 
       {/* Sticky buttons: bulk mode */}
-      {mode === "chat" && changes && !feedbackApplied && !isStreaming && (reviewMode === "bulk" || changes.length === 1) && (
+      {changes && !feedbackApplied && !isStreaming && (reviewMode === "bulk" || changes.length === 1) && (
         <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
           <button
             onClick={handleRejectAllChanges}
@@ -1235,12 +1149,9 @@ function AssistantMessage({
 
   if (content.startsWith("[CLARIFY]")) {
     displayContent = content.replace(/^\[CLARIFY\]\s*/, "");
-  } else if (mode === "edit" && isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
-    // Don't show raw tagged content in chat for current edit — it's in the diff view
-    displayContent = "";
   } else if (!isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
-    // History entry — show clean content (tags stripped). Covers edit-mode
-    // history entries AND persisted workbook-action results (chat mode).
+    // History entry — show clean content (tags stripped). Covers persisted
+    // workbook-action results (chat mode) and the format_tab job's output.
     displayContent = stripTagsForDisplay(content);
   } else if (content.includes("[CHANGE")) {
     if (isLast) {

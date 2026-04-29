@@ -59,8 +59,12 @@ export default function WorkbookActions({
   );
 }
 
+// Display label for any AI job kind. Some (workbook actions) appear in the
+// workbook button list above; others (format_tab) are header buttons. The map
+// is a job-kind dictionary, not a "things shown in the workbook menu" list.
 export const WORKBOOK_ACTION_LABELS: Record<JobKind, string> = {
   plot_chunks: "Create Plot Chunks",
   next_episode_plot: "Create Next Episode Plot",
   next_reference_episode: "Create Next Reference Episode",
+  format_tab: "Format Tab",
 };
