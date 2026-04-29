@@ -1,0 +1,37 @@
+{
+  "date": "2026-04-27",
+  "url": "https://ai-native-writer-936494534526.asia-south1.run.app/",
+  "revision": "ai-native-writer-00050-n2n",
+  "mode": "evidence-based",
+  "healthScore": 86,
+  "categoryScores": {
+    "console": 100,
+    "saveFlow": 100,
+    "functional": 95,
+    "ux": 100,
+    "durability": 60,
+    "performance": 90
+  },
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "Cloud Run command override bypasses durability bootstrap",
+      "severity": "high",
+      "category": "durability"
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "Tab deletion cascades to all version history (no warning)",
+      "severity": "medium",
+      "category": "functional"
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "No undo-revert UX after wrong revert click",
+      "severity": "low",
+      "category": "ux"
+    }
+  ],
+  "verifiedPRs": ["#32", "#33", "#34"],
+  "shipStatus": "GO"
+}

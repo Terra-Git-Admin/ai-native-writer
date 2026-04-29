@@ -9,6 +9,7 @@ const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "next_episode_plot",
   "next_reference_episode",
   "format_tab",
+  "series_skeleton",
 ]);
 
 interface CreateJobBody {

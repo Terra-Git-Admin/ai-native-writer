@@ -35,7 +35,8 @@ export type PromptKind =
   | "plot_chunks"
   | "next_episode_plot"
   | "next_reference_episode"
-  | "format_tab";
+  | "format_tab"
+  | "series_skeleton";
 
 export type JobStatus =
   | "pending"

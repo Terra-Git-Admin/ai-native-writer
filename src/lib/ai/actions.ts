@@ -24,6 +24,7 @@ import {
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
+  SERIES_SKELETON_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 import type { PromptKind } from "@/lib/ai/jobs";
 
@@ -280,6 +281,65 @@ async function loadFormatTabContext(input: ActionInput): Promise<string> {
   return `## Active Tab — ${tab.title} (${tab.type})\n${tagged || "(empty)"}\n\nRestructure this tab's content according to the style guide. Output the full tab body with structural tags. Do not invent new content; promote mis-tagged blocks, split running text into proper blocks, and fix heading levels.`;
 }
 
+// ─── series_skeleton ───
+//
+// Strategic foundation agent. Reads ALL of Original Research + Characters +
+// whatever is in Microdrama Plots so far + whatever is in Predefined
+// Episodes so far. Existing plots are authoritative spine input — the
+// agent reverse-engineers the skeleton from them and projects forward
+// using research. Always 9 phases × 5 episodes = 45 total. The output is
+// a 6-section workbook deliverable.
+
+async function loadSeriesSkeletonContext(input: ActionInput): Promise<string> {
+  const { documentId } = input;
+  const docTabs = await loadDocumentTabs(documentId);
+
+  const researchTagged = tiptapJsonToTagged(
+    docTabs.seriesOverview?.content ?? null
+  );
+  const charactersTagged = tiptapJsonToTagged(
+    docTabs.characters?.content ?? null
+  );
+  const plotsTagged = tiptapJsonToTagged(
+    docTabs.microdramaPlots?.content ?? null
+  );
+  const refEpsTagged = tiptapJsonToTagged(
+    docTabs.predefinedEpisodes?.content ?? null
+  );
+
+  // Input-quality guard: the agent needs at least source material OR
+  // existing plots to anchor the skeleton on. Refuse if both are empty —
+  // a skeleton from nothing is hallucination.
+  const researchLen = researchTagged.replace(/\s/g, "").length;
+  const plotsCount = (plotsTagged.match(/^\[H3\]/gm) ?? []).length;
+  if (researchLen < 800 && plotsCount === 0) {
+    throw new Error(
+      "Series Skeleton needs source material to work from. Add content to the Original Research tab (at least 800 characters) or draft a few episode plots in Microdrama Plots first."
+    );
+  }
+
+  const plotsBlock =
+    plotsCount > 0
+      ? `## Existing Microdrama Plots (AUTHORITATIVE — ${plotsCount} plots already drafted; treat as locked spine input for the phases they cover)\n${plotsTagged}`
+      : `## Existing Microdrama Plots\n(none yet — generate skeleton fresh from research)`;
+
+  const refEpsBlock = refEpsTagged.trim()
+    ? `## Existing Reference Episodes (read-only context — useful for character voice and confirmed beats)\n${refEpsTagged}`
+    : `## Existing Reference Episodes\n(none yet)`;
+
+  return `## Original Research (source material)
+${researchTagged || "(empty — rely on existing plots)"}
+
+## Characters (existing)
+${charactersTagged || "(empty)"}
+
+${plotsBlock}
+
+${refEpsBlock}
+
+Task: Produce the 6-section Series Skeleton (Series Summary, Cast, Plotline Architecture, 9-phase Phase Breakdown, Character Arc Evolution, Structural Audit) per the system-prompt format. Always 45 episodes across 9 phases of 5 episodes each. Honor existing plots as authoritative for the phases they cover; project the rest forward from research.`;
+}
+
 // ─── Registry ───
 
 const ACTIONS: Record<PromptKind, Action> = {
@@ -308,6 +368,12 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "format",
     systemPromptFallback: FORMAT_SYSTEM_PROMPT,
     loadContext: loadFormatTabContext,
+  },
+  series_skeleton: {
+    kind: "series_skeleton",
+    systemPromptId: "series_skeleton",
+    systemPromptFallback: SERIES_SKELETON_SYSTEM_PROMPT,
+    loadContext: loadSeriesSkeletonContext,
   },
 };
 
