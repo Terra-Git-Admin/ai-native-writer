@@ -15,6 +15,7 @@ export async function register(): Promise<void> {
   // would crash the edge runtime where better-sqlite3 is unavailable.
   const { recoverOrphanJobs } = await import("@/lib/ai/jobs");
   const { logEvent } = await import("@/lib/saveTrace");
+  const { seedPromptsFromCode } = await import("@/lib/ai/seed-prompts");
 
   try {
     const recovered = await recoverOrphanJobs();
@@ -23,6 +24,19 @@ export async function register(): Promise<void> {
     });
   } catch (err) {
     logEvent("instrumentation.boot.fail", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Reseed system prompts from code on every boot. Without this, edits to
+  // prompts.ts only propagate when an admin opens the Prompts panel (which
+  // triggers GET /api/prompts -> upsert). Boot-time reseed is the right
+  // contract for code-as-source-of-truth: edit code, restart, reseed.
+  try {
+    const upserted = await seedPromptsFromCode();
+    logEvent("instrumentation.boot.prompts_seeded", { count: upserted });
+  } catch (err) {
+    logEvent("instrumentation.boot.prompts_seed_fail", {
       err: err instanceof Error ? err.message : String(err),
     });
   }
