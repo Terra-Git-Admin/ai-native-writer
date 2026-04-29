@@ -655,9 +655,6 @@ export default function DocumentPage() {
                   /* logged via client-trace */
                 }
               }}
-              onApplyChange={(original, suggested) => {
-                editorRef.current?.findAndReplace(original, suggested);
-              }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}
               onSetTitle={(newTitle) => {

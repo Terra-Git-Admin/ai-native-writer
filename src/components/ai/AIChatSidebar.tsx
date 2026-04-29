@@ -45,13 +45,6 @@ const MODE_LABELS: Record<Mode, string> = {
 // Note: the previous "Generate Adaptation State" workbook quick-action has
 // been replaced by the WorkbookActions panel (durable, server-side jobs).
 
-interface ParsedChange {
-  id: number;
-  location: string;
-  original: string;
-  suggested: string;
-}
-
 function aiJobStatusLabel(s: string): string {
   if (s === "starting") return "Starting…";
   if (s === "running") return "Generating…";
@@ -61,31 +54,33 @@ function aiJobStatusLabel(s: string): string {
   return s;
 }
 
+// Clean up an AI message for chat display. Strips structural tags ([H1] [P]
+// [UL] [OL] [HR]) AND the [CHANGE N] / Location: / Original: / Suggested:
+// scaffolding the chat prompt sometimes emits — what the writer wants to
+// see is the new prose, not the diff machinery. Output is plain text the
+// writer can copy and paste straight into the document.
 function stripTagsForDisplay(text: string): string {
-  return text
+  // First pull out [CHANGE] blocks, replacing each with just its Suggested
+  // content. If no blocks present, leave the text alone.
+  const changeBlocks = text.split(/\[CHANGE \d+\]/i);
+  let working = text;
+  if (changeBlocks.length > 1) {
+    working = changeBlocks
+      .slice(1)
+      .map((block) => {
+        const suggested =
+          block.match(/Suggested:\s*([\s\S]*?)$/i)?.[1]?.trim() ?? "";
+        return suggested;
+      })
+      .filter((s) => s.length > 0)
+      .join("\n\n");
+  }
+  return working
     .replace(/\[\/(?:H\d|OL|UL|P|HR)\]/g, "")
     .split("\n")
     .map((l) => l.replace(/^\[(?:H\d|OL|UL|P|HR)\]\s*/, ""))
     .filter((l) => l.trim())
     .join("\n");
-}
-
-function parseChanges(text: string): ParsedChange[] | null {
-  const changeBlocks = text.split(/\[CHANGE \d+\]/i).slice(1);
-  if (changeBlocks.length === 0) return null;
-
-  return changeBlocks
-    .map((block, i) => {
-      const location =
-        block.match(/Location:\s*"?([^"\n]+)"?/i)?.[1]?.trim() || "";
-      const original =
-        block.match(/Original:\s*([\s\S]*?)(?=\nSuggested:|$)/i)?.[1]?.trim() ||
-        "";
-      const suggested =
-        block.match(/Suggested:\s*([\s\S]*?)$/i)?.[1]?.trim() || "";
-      return { id: i + 1, location, original, suggested };
-    })
-    .filter((c) => c.suggested);
 }
 
 // ─── Props ───
@@ -110,7 +105,6 @@ interface AIChatSidebarProps {
     content: string,
     mode: "replace" | "append"
   ) => Promise<ApplyToTabResult>;
-  onApplyChange: (original: string, suggested: string) => void;
   onFlushPendingSave: () => Promise<void>;
   onSetModel: (modelId: string) => void;
   onSetThinking: (enabled: boolean) => void;
@@ -128,7 +122,6 @@ export default function AIChatSidebar({
   modelId,
   thinking,
   onApplyToTab,
-  onApplyChange,
   onFlushPendingSave,
   onSetModel,
   onSetThinking,
@@ -149,17 +142,11 @@ export default function AIChatSidebar({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [changes, setChanges] = useState<ParsedChange[] | null>(null);
-  const [feedbackApplied, setFeedbackApplied] = useState(false);
-  const [reviewMode, setReviewMode] = useState<"bulk" | "stepwise" | null>(null);
-  const [currentChangeIndex, setCurrentChangeIndex] = useState(0);
-  const [skipWarning, setSkipWarning] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(() => {
     try { return localStorage.getItem("ai-send-on-enter") === "true"; } catch { return false; }
   });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevModeRef = useRef<Mode | null>(null);
 
   // ─── Durable AI job — owned by the doc page (passed in as a prop)
   // so it survives AI-sidebar open/close. The hook's EventSource keeps
@@ -412,10 +399,6 @@ export default function AIChatSidebar({
         const decoder = new TextDecoder();
         let accumulated = "";
 
-        // Chat mode: first-line signal. 0 = full doc, 1 = conversation, 2 = targeted changes.
-        let chatSignal: "0" | "1" | "2" | null = null;
-        let chatShowPlaceholder = false;
-
         if (reader) {
           while (true) {
             const { done, value } = await reader.read();
@@ -423,44 +406,14 @@ export default function AIChatSidebar({
             const chunk = decoder.decode(value, { stream: true });
             accumulated += chunk;
 
-            // In chat mode, detect the signal from the first line
-            if (mode === "chat" && chatSignal === null && accumulated.includes("\n")) {
-              const firstLine = accumulated.split("\n")[0].trim();
-              if (firstLine === "0") {
-                chatSignal = "0";
-                chatShowPlaceholder = true;
-                setMessages((prev) => {
-                  const lastUser = [...prev].reverse().find((m) => m.role === "user");
-                  return [
-                    ...(lastUser ? [lastUser] : []),
-                    { role: "assistant", content: "Writing to document..." },
-                  ];
-                });
-              } else if (firstLine === "1") {
-                chatSignal = "1";
-              } else if (firstLine === "2") {
-                chatSignal = "2";
-                chatShowPlaceholder = true;
-                setMessages((prev) => {
-                  const lastUser = [...prev].reverse().find((m) => m.role === "user");
-                  return [
-                    ...(lastUser ? [lastUser] : []),
-                    { role: "assistant", content: "Generating changes..." },
-                  ];
-                });
-              }
-            }
+            // Strip the signal-prefix line ("0\n" / "1\n" / "2\n") from the
+            // displayed stream. The chat prompt sometimes leads with a
+            // signal byte for legacy auto-apply paths; the writer doesn't
+            // need to see it. AssistantMessage cleans residual structural
+            // tags + [CHANGE] scaffolding at render time.
+            setStreamingText(accumulated.replace(/^[012]\n/, ""));
 
-            // Update streaming display text (skip when showing a placeholder)
-            if (!chatShowPlaceholder) {
-              const displayContent =
-                mode === "chat" && chatSignal === "1"
-                  ? accumulated.replace(/^1\n/, "")
-                  : accumulated;
-              setStreamingText(displayContent);
-            }
-
-            // Also update messages for AI context (not rendered directly)
+            // Also keep messages in sync for the assistant-side context.
             setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
@@ -472,90 +425,28 @@ export default function AIChatSidebar({
           }
         }
 
-        // Strip the signal line from accumulated content
-        let cleanAccumulated = accumulated;
-        if (mode === "chat" && chatSignal !== null) {
-          cleanAccumulated = accumulated.replace(/^[012]\n/, "");
-        }
+        // Final clean text — signal prefix dropped. No auto-apply, no card
+        // UI: chat output is conversation-only by user direction (29 Apr).
+        // The writer copies anything actionable into the document manually.
+        const cleanAccumulated = accumulated.replace(/^[012]\n/, "");
 
-        // Chat mode with signal 0: apply full document to the ORIGIN tab
-        // (the tab active when the user pressed Send), not whatever tab
-        // they may have switched to mid-stream. Cross-tab routing is
-        // delegated to onApplyToTab on the doc page.
-        //
-        // Selection guard: when the writer had text selected at submit
-        // time, the AI was reasoning about that selection and any "write
-        // the whole document" reply almost always means something the
-        // writer doesn't want auto-applied. Output stays in chat; writer
-        // copies anything they want manually. This is the explicit Bug 4
-        // fix — auto-apply on selection drifted unpredictably.
-        if (mode === "chat" && chatSignal === "0") {
-          if (selectionAtSubmit) {
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                updated[lastIdx] = { role: "assistant", content: cleanAccumulated };
-              }
-              return updated;
-            });
-          } else {
-            await onApplyToTab(originTabId, cleanAccumulated, "replace");
-
-            setMessages((prev) => {
-              const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                updated[lastIdx] = { role: "assistant", content: "Document has been written." };
-              }
-              return updated;
-            });
-
-            const h1Match = cleanAccumulated.match(/^\[H1\]\s+(.+)/m);
-            const title = h1Match ? h1Match[1] : "";
-            if (title) onSetTitle(title);
-          }
-        }
-
-        // Chat mode with signal 2: parse targeted changes into change cards.
-        // Same selection guard as signal 0 — when the writer had a selection
-        // at submit time, suppress the [CHANGE] card UI and just show the
-        // raw response in chat.
-        if (mode === "chat" && chatSignal === "2") {
-          if (!selectionAtSubmit) {
-            const parsed = parseChanges(cleanAccumulated);
-            if (parsed && parsed.length > 0) {
-              setChanges(parsed);
-            }
-          }
-          setMessages((prev) => {
-            const updated = [...prev];
-            const lastIdx = updated.length - 1;
-            if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-              updated[lastIdx] = { role: "assistant", content: cleanAccumulated };
-            }
-            return updated;
-          });
-        }
-
-        // Use clean content for everything below
-        accumulated = cleanAccumulated;
-
-        // Persist assistant response to history
-        if (accumulated) {
-          const historyContent =
-            mode === "chat" && chatSignal === "0"
-              ? "Document has been written."
-              : accumulated;
+        // Persist the cleaned response to chat history.
+        if (cleanAccumulated) {
           const assistantEntry: HistoryEntry = {
             type: "message",
             role: "assistant",
-            content: historyContent,
+            content: cleanAccumulated,
             mode,
           };
           setHistory((prev) => [...prev, assistantEntry]);
           persistEntry(assistantEntry);
         }
+        // Reference unused parameters so the closure-deps array stays
+        // stable across renders. selectionAtSubmit + originTabId are kept
+        // in the call signature for the future re-introduction of
+        // selection-aware AI without churning the contract.
+        void selectionAtSubmit;
+        void originTabId;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -563,7 +454,7 @@ export default function AIChatSidebar({
         setStreamingText("");
       }
     },
-    [mode, modelId, thinking, onApplyToTab, onSetTitle]
+    [mode, modelId, thinking]
   );
 
   const handleSubmit = useCallback(() => {
@@ -585,7 +476,6 @@ export default function AIChatSidebar({
     const newMessages = [...messages, userMsg, assistantMsg];
     setMessages(newMessages);
     setInput("");
-    setFeedbackApplied(false);
 
     // Add user message to display history and persist
     const userEntry: HistoryEntry = {
@@ -616,22 +506,6 @@ export default function AIChatSidebar({
     return `${contextBlock}\n\n## Message\n${userInput}`;
   }
 
-  // ─── Apply handlers ───
-  const handleApplyAllChanges = async () => {
-    if (!changes) return;
-    // Apply all changes in reverse order (so earlier positions aren't shifted)
-    const all = [...changes].reverse();
-    for (const c of all) {
-      onApplyChange(c.original, c.suggested);
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    setFeedbackApplied(true);
-  };
-
-  const handleRejectAllChanges = () => {
-    setChanges(null);
-  };
-
   // Format Document used to stream in-component via /api/ai/edit and write
   // back through editorRef on completion — which silently targeted whatever
   // tab the writer was viewing when the stream ended (Bug 1). Now it goes
@@ -640,34 +514,6 @@ export default function AIChatSidebar({
   const handleStartFormatTab = useCallback(() => {
     void handleStartJob("format_tab");
   }, [handleStartJob]);
-
-  // Reset review state whenever a new set of changes arrives
-  useEffect(() => {
-    setReviewMode(null);
-    setCurrentChangeIndex(0);
-    setSkipWarning(false);
-  }, [changes]);
-
-  const handleAcceptStepChange = () => {
-    if (!changes) return;
-    onApplyChange(changes[currentChangeIndex].original, changes[currentChangeIndex].suggested);
-    if (currentChangeIndex + 1 >= changes.length) {
-      setFeedbackApplied(true);
-    } else {
-      setCurrentChangeIndex((prev) => prev + 1);
-      setSkipWarning(false);
-    }
-  };
-
-  const handleSkipStepChange = () => {
-    if (!changes) return;
-    const remaining = changes.length - currentChangeIndex - 1;
-    if (remaining > 0 && !skipWarning) {
-      setSkipWarning(true);
-      return;
-    }
-    setFeedbackApplied(true);
-  };
 
   // ─── Render helpers ───
 
@@ -941,126 +787,7 @@ export default function AIChatSidebar({
           </div>
         )}
 
-        {/* Chat: Review mode selector */}
-        {changes && !isStreaming && !feedbackApplied && reviewMode === null && changes.length > 1 && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3 mt-2">
-            <p className="text-sm font-medium text-gray-700">
-              {changes.length} changes ready. How would you like to review?
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setReviewMode("stepwise")}
-                className="flex-1 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
-              >
-                Episode by episode
-              </button>
-              <button
-                onClick={() => setReviewMode("bulk")}
-                className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
-              >
-                All at once
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Chat: Stepwise — one change at a time */}
-        {changes && !isStreaming && !feedbackApplied && reviewMode === "stepwise" && (
-          <div className="space-y-3 pt-2">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
-              Change {currentChangeIndex + 1} of {changes.length}
-            </p>
-            <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase">
-                {changes[currentChangeIndex].location && (
-                  <span className="font-normal normal-case text-gray-400">
-                    &ldquo;{changes[currentChangeIndex].location.slice(0, 60)}&rdquo;
-                  </span>
-                )}
-              </p>
-              {changes[currentChangeIndex].original && (
-                <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
-                  {changes[currentChangeIndex].original}
-                </div>
-              )}
-              <div className="rounded border border-green-200 bg-green-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
-                {stripTagsForDisplay(changes[currentChangeIndex].suggested)}
-              </div>
-            </div>
-            {skipWarning && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                {changes.length - currentChangeIndex - 1} remaining change(s) will be dropped. Click &ldquo;Drop rest&rdquo; to confirm.
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Chat: Bulk — all changes at once */}
-        {changes && !isStreaming && !feedbackApplied && (reviewMode === "bulk" || changes.length === 1) && (
-          <div className="space-y-3 pt-2">
-            {changes.map((change) => (
-              <div
-                key={change.id}
-                className="rounded-lg border border-gray-200 bg-white p-3 space-y-2"
-              >
-                <p className="text-[10px] font-semibold text-gray-500 uppercase">
-                  Change {change.id}
-                  {change.location && (
-                    <span className="ml-1 font-normal normal-case text-gray-400">
-                      — &ldquo;{change.location.slice(0, 40)}...&rdquo;
-                    </span>
-                  )}
-                </p>
-                {change.original && (
-                  <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
-                    {change.original}
-                  </div>
-                )}
-                <div className="rounded border border-green-200 bg-green-50 p-2 text-xs text-gray-700 whitespace-pre-wrap">
-                  {stripTagsForDisplay(change.suggested)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
       </div>
-
-      {/* Sticky buttons: stepwise mode */}
-      {changes && !feedbackApplied && !isStreaming && reviewMode === "stepwise" && (
-        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
-          <button
-            onClick={handleSkipStepChange}
-            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
-          >
-            {skipWarning ? "Drop rest" : "Skip"}
-          </button>
-          <button
-            onClick={handleAcceptStepChange}
-            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-          >
-            Accept
-          </button>
-        </div>
-      )}
-
-      {/* Sticky buttons: bulk mode */}
-      {changes && !feedbackApplied && !isStreaming && (reviewMode === "bulk" || changes.length === 1) && (
-        <div className="border-t border-gray-200 px-3 py-2 flex gap-2">
-          <button
-            onClick={handleRejectAllChanges}
-            className="flex-1 rounded-lg bg-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 transition-colors"
-          >
-            Reject all
-          </button>
-          <button
-            onClick={handleApplyAllChanges}
-            className="flex-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
-          >
-            Apply all ({changes.length})
-          </button>
-        </div>
-      )}
 
       {/* Input — always visible, disabled during streaming or while a
           workbook job is running. Single-AI-lock: no chat sends while
@@ -1149,26 +876,17 @@ function AssistantMessage({
 
   if (content.startsWith("[CLARIFY]")) {
     displayContent = content.replace(/^\[CLARIFY\]\s*/, "");
-  } else if (!isLast && /^\[(?:H\d|OL|UL|P)]/m.test(content)) {
-    // History entry — show clean content (tags stripped). Covers persisted
-    // workbook-action results (chat mode) and the format_tab job's output.
+  } else if (
+    /^\[(?:H\d|OL|UL|P)]/m.test(content) ||
+    content.includes("[CHANGE")
+  ) {
+    // Strip structural tags + [CHANGE] / Location: / Original: / Suggested:
+    // scaffolding so the writer sees just the prose. Same render path for
+    // current and history messages — no special-case "wait for cards", no
+    // "Suggested N changes" placeholder, since chat output is conversation
+    // only (29 Apr — Bugs 2 + 4). The writer copies anything actionable
+    // into the document by hand.
     displayContent = stripTagsForDisplay(content);
-  } else if (content.includes("[CHANGE")) {
-    if (isLast) {
-      // Current message — cards are shown below, hide raw text
-      displayContent = "";
-    } else {
-      // History — show the actual suggested (applied) content
-      const parsed = parseChanges(content);
-      if (parsed && parsed.length > 0) {
-        displayContent = parsed
-          .map((c) => `Change ${c.id}:\n${stripTagsForDisplay(c.suggested)}`)
-          .join("\n\n");
-      } else {
-        const changeCount = (content.match(/\[CHANGE \d+\]/gi) || []).length;
-        displayContent = `Suggested ${changeCount} change${changeCount !== 1 ? "s" : ""} to the document.`;
-      }
-    }
   }
 
   if (!displayContent) return null;
