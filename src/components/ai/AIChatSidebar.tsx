@@ -147,6 +147,32 @@ export default function AIChatSidebar({
   });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Persisted via ref to avoid stale closure in the mousemove handler
+  const inputPanelHeightRef = useRef(200);
+  const [inputPanelHeight, setInputPanelHeight] = useState(200);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startH = inputPanelHeightRef.current;
+
+    const onMove = (ev: MouseEvent) => {
+      const delta = startY - ev.clientY; // drag up → taller input
+      const containerH = containerRef.current?.getBoundingClientRect().height ?? 600;
+      const next = Math.min(containerH * 0.5, Math.max(140, startH + delta));
+      inputPanelHeightRef.current = next;
+      setInputPanelHeight(next);
+    };
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   // ─── Durable AI job — owned by the doc page (passed in as a prop)
   // so it survives AI-sidebar open/close. The hook's EventSource keeps
@@ -523,7 +549,7 @@ export default function AIChatSidebar({
     "What would you like to do? (e.g. 'add an episode', 'tighten dialogue in ep 3')";
 
   return (
-    <div className="flex h-full flex-col">
+    <div ref={containerRef} className="flex h-full flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <div>
@@ -589,8 +615,8 @@ export default function AIChatSidebar({
         <WorkbookActions isAIBusy={isAIBusy} onStart={handleStartJob} />
       )}
 
-      {/* Messages area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+      {/* Messages area — min-h-0 prevents flex children from overflowing */}
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
           <div className="py-6 text-sm text-gray-500">
@@ -789,11 +815,20 @@ export default function AIChatSidebar({
 
       </div>
 
-      {/* Input — always visible, disabled during streaming or while a
-          workbook job is running. Single-AI-lock: no chat sends while
-          a Plot Chunks / Next Episode Plot / Next Reference Episode
-          generation is in flight. */}
-      <div className="border-t border-gray-200 p-3 space-y-2">
+      {/* Drag handle — drag up to expand input panel (max 50% of container) */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
+        title="Drag to resize"
+      >
+        <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
+      </div>
+
+      {/* Input panel — height controlled by drag handle */}
+      <div
+        style={{ height: inputPanelHeight }}
+        className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
+      >
           <textarea
             ref={inputRef}
             value={input}
@@ -803,9 +838,8 @@ export default function AIChatSidebar({
                 ? "AI is generating — wait for the current job to finish or cancel it."
                 : placeholder
             }
-            rows={3}
             disabled={isStreaming || isAIBusy}
-            className={`w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
+            className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
               isStreaming || isAIBusy
                 ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                 : "border-gray-300 bg-white"
@@ -825,11 +859,11 @@ export default function AIChatSidebar({
           <button
             onClick={handleSubmit}
             disabled={isStreaming || isAIBusy || !input.trim()}
-            className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+            className="w-full flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
             {isStreaming ? "Generating..." : isAIBusy ? "AI busy" : "Send"}
           </button>
-          <div className="flex justify-center">
+          <div className="flex flex-shrink-0 justify-center">
             <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
               <button
                 onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
