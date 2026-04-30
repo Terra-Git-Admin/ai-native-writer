@@ -44,18 +44,18 @@ export default function WorkbookActions({
   onStart,
 }: WorkbookActionsProps) {
   return (
-    <div className="border-b border-gray-200 bg-indigo-50/40 px-3 py-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-indigo-700">
-        Workbook actions
-      </p>
-      <div className="flex flex-col gap-1.5">
+    <div className="border-b border-gray-200 bg-indigo-50/40 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500 shrink-0">
+          Actions:
+        </span>
         {ACTIONS.map((a) => (
           <button
             key={a.kind}
             onClick={() => onStart(a.kind)}
             disabled={isAIBusy}
             title={a.description}
-            className="text-left rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-indigo-200 disabled:hover:bg-white transition-colors"
+            className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-indigo-200 disabled:hover:bg-white transition-colors"
           >
             {a.label}
           </button>
