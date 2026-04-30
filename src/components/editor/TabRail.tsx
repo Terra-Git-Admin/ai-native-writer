@@ -29,7 +29,7 @@ export interface TabRow {
 }
 
 const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
-  custom: { label: "Tab", className: "bg-gray-100 text-gray-600" },
+  custom: { label: "Page", className: "bg-teal-50 text-teal-600" },
   series_overview: {
     label: "Original Research",
     className: "bg-purple-100 text-purple-700",
@@ -170,6 +170,16 @@ export default function TabRail({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const createTitleRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
+
+  const isWorkbookContext = useMemo(() => {
+    const active = tabs.find((t) => t.id === activeTabId);
+    return active?.type === "workbook" || active?.type === "custom";
+  }, [tabs, activeTabId]);
+
+  const nextPageN = useMemo(
+    () => tabs.filter((t) => t.type === "custom").length + 1,
+    [tabs]
+  );
 
   useEffect(() => {
     if (showCreate) setTimeout(() => createTitleRef.current?.focus(), 50);
@@ -580,10 +590,13 @@ export default function TabRail({
           ) : (
             <button
               type="button"
-              onClick={() => setShowCreate(true)}
+              onClick={() => {
+                setShowCreate(true);
+                if (isWorkbookContext) setCreateTitle(`Page ${nextPageN}`);
+              }}
               className="w-full rounded border border-dashed border-gray-300 px-2 py-2 text-sm text-gray-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
             >
-              + New tab
+              {isWorkbookContext ? "+ New page" : "+ New tab"}
             </button>
           )}
         </div>

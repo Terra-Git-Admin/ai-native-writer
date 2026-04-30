@@ -103,7 +103,8 @@ interface AIChatSidebarProps {
   onApplyToTab: (
     originTabId: string,
     content: string,
-    mode: "replace" | "append"
+    mode: "replace" | "append",
+    opts?: { label?: string }
   ) => Promise<ApplyToTabResult>;
   onFlushPendingSave: () => Promise<void>;
   onSetModel: (modelId: string) => void;
@@ -215,7 +216,8 @@ export default function AIChatSidebar({
     const result = await onApplyToTab(
       aiJob.state.originTabId,
       aiJob.state.output,
-      mode
+      mode,
+      { label: WORKBOOK_ACTION_LABELS[aiJob.state.kind] }
     );
     if (!result.ok) {
       if (result.reason === "target_tab_missing") {
@@ -611,7 +613,7 @@ export default function AIChatSidebar({
           Job state lives in this parent component so the active-job UI
           (rendered inline in the chat thread below) stays alive across
           tab switches. */}
-      {activeTab.type === "workbook" && (
+      {(activeTab.type === "workbook" || activeTab.type === "custom") && (
         <WorkbookActions isAIBusy={isAIBusy} onStart={handleStartJob} />
       )}
 
@@ -621,7 +623,7 @@ export default function AIChatSidebar({
         {history.length === 0 && messages.length === 0 && !isStreaming && (
           <div className="py-6 text-sm text-gray-500">
             <p className="text-center text-gray-400">
-              {activeTab.type === "workbook"
+              {activeTab.type === "workbook" || activeTab.type === "custom"
                 ? "Use a workbook action above, or type your own prompt below."
                 : "Type your prompt below."}
             </p>
