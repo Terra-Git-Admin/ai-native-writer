@@ -202,7 +202,7 @@ function findSectionIndexByTitle(
 }
 
 // Extract the leading "Episode N" number from a section title, if present.
-function extractEpisodeNumber(title: string): number | null {
+export function extractEpisodeNumber(title: string): number | null {
   const m = title.match(/episode\s+(\d+)/i);
   return m ? parseInt(m[1], 10) : null;
 }
@@ -366,7 +366,7 @@ export function buildAIContext(args: BuildContextArgs): string {
 
       sections.push(`## Currently Editing — "${current.title}"\nThis is the plot the writer is working on.`);
     }
-  } else if (activeTab.type === "workbook") {
+  } else if (activeTab.type === "workbook" || activeTab.type === "custom") {
     // Workbook is the writer's scratch space. Give it full access to every
     // other canonical tab so the writer can draft reference episodes, plot
     // paragraphs, notes — anything — without leaving the tab.
