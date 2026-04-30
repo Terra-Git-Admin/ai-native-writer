@@ -307,7 +307,8 @@ export default function DocumentPage() {
     async (
       originTabId: string,
       taggedContent: string,
-      mode: "replace" | "append"
+      mode: "replace" | "append",
+      opts?: { label?: string }
     ): Promise<ApplyToTabResult> => {
       let target = tabs.find((t) => t.id === originTabId);
       let fellBack = false;
@@ -320,6 +321,70 @@ export default function DocumentPage() {
       }
       const targetTabId = target.id;
 
+      // Workbook append → create a new "Page N" tab so each AI output gets
+      // its own named page rather than accumulating inside the workbook body.
+      if (mode === "append" && target.type === "workbook") {
+        const nextN = tabs.filter((t) => t.type === "custom").length + 1;
+        const timestamp = new Date().toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const note = `[P] ${opts?.label ?? "AI Output"} · ${timestamp}`;
+        const fullContent = `${note}\n\n${taggedContent.trim()}`;
+
+        const createRes = await fetch(`/api/documents/${params.id}/tabs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: `Page ${nextN}` }),
+        });
+        if (!createRes.ok) {
+          return {
+            ok: false,
+            reason: `create_tab_failed_${createRes.status}`,
+            landedTabId: targetTabId,
+            fellBack,
+          };
+        }
+        const newTabRow = await createRes.json();
+        const newTabId: string = newTabRow.id;
+
+        const tiptapDoc = taggedTextToTiptapDoc(fullContent);
+        const jsonString = JSON.stringify(tiptapDoc);
+        const putRes = await fetch(
+          `/api/documents/${params.id}/tabs/${newTabId}/content`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: jsonString,
+              forceVersion: true,
+              versionReason: "ai_apply",
+            }),
+          }
+        );
+        if (!putRes.ok) {
+          return {
+            ok: false,
+            reason: `put_page_failed_${putRes.status}`,
+            landedTabId: newTabId,
+            fellBack,
+          };
+        }
+
+        setTabs((prev) => [
+          ...prev,
+          { ...newTabRow, content: jsonString, isProtected: false, updatedAt: new Date() },
+        ]);
+        setActiveTabId(newTabId);
+        const url = new URL(window.location.href);
+        url.searchParams.set("tab", newTabId);
+        window.history.pushState({}, "", url.toString());
+        return { ok: true, landedTabId: newTabId, fellBack };
+      }
+
       // Same tab as the active editor: write through editorRef so the
       // user sees the change immediately and any unsaved live edits in
       // the active editor are merged correctly for append mode.
@@ -329,14 +394,9 @@ export default function DocumentPage() {
           const liveJson =
             editorRef.current?.getContentJSON() ?? target.content ?? null;
           const liveTagged = tiptapJsonToTagged(liveJson);
-          let incoming = taggedContent.trim();
-          if (target.type === "workbook") {
-            const pageCount = (liveTagged.match(/^\[H2\]/gm) ?? []).length;
-            incoming = `[H2] Page ${pageCount + 1}\n\n${incoming}`;
-          }
           content = liveTagged.trim()
-            ? `${liveTagged.trim()}\n\n${incoming}`
-            : incoming;
+            ? `${liveTagged.trim()}\n\n${taggedContent.trim()}`
+            : taggedContent.trim();
         }
         editorRef.current?.setFullContent(content);
         return { ok: true, landedTabId: targetTabId, fellBack };
@@ -346,14 +406,9 @@ export default function DocumentPage() {
       let outgoing = taggedContent;
       if (mode === "append") {
         const existingTagged = tiptapJsonToTagged(target.content ?? null);
-        let incoming = taggedContent.trim();
-        if (target.type === "workbook") {
-          const pageCount = (existingTagged.match(/^\[H2\]/gm) ?? []).length;
-          incoming = `[H2] Page ${pageCount + 1}\n\n${incoming}`;
-        }
         outgoing = existingTagged.trim()
-          ? `${existingTagged.trim()}\n\n${incoming}`
-          : incoming;
+          ? `${existingTagged.trim()}\n\n${taggedContent.trim()}`
+          : taggedContent.trim();
       }
       const doc = taggedTextToTiptapDoc(outgoing);
       const jsonString = JSON.stringify(doc);
@@ -377,9 +432,6 @@ export default function DocumentPage() {
           fellBack,
         };
       }
-      // Sync local tabs cache so the rail and future tab-switches see the
-      // updated content without a refetch round-trip. handleTabSwitch still
-      // re-fetches on switch, so cache staleness here is best-effort only.
       setTabs((prev) =>
         prev.map((t) =>
           t.id === targetTabId
