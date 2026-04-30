@@ -219,6 +219,12 @@ export default function TabRail({
     [tabs]
   );
 
+  // Page tabs (custom type) render as indented children under the Workbook tab.
+  const pageTabs = useMemo(
+    () => sortedTabs.filter((t) => t.type === "custom"),
+    [sortedTabs]
+  );
+
   const handleCreate = async () => {
     if (creating) return;
     const title = createTitle.trim() || "Untitled";
@@ -240,6 +246,27 @@ export default function TabRail({
       setCreateTitle("");
       onTabsChange();
       setTimeout(() => onSwitch(newTab.id), 30);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // One-step page creation: instantly POSTs "Page N" and switches to it.
+  const handleCreatePage = async () => {
+    if (creating) return;
+    const title = `Page ${nextPageN}`;
+    setCreating(true);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/tabs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        const newTab = await res.json();
+        onTabsChange();
+        setTimeout(() => onSwitch(newTab.id), 30);
+      }
     } finally {
       setCreating(false);
     }
@@ -364,6 +391,82 @@ export default function TabRail({
     );
   };
 
+  // Render page tabs (custom type) as indented children of the Workbook tab.
+  const renderPageTabs = () => {
+    if (pageTabs.length === 0) return null;
+    return (
+      <ul className="ml-5 border-l border-gray-200">
+        {pageTabs.map((pageTab) => {
+          const pageActive = pageTab.id === activeTabId;
+          if (renamingId === pageTab.id) {
+            return (
+              <li key={pageTab.id} className="px-2 py-1">
+                <input
+                  ref={renameRef}
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={() => handleRename(pageTab.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleRename(pageTab.id);
+                    if (e.key === "Escape") {
+                      setRenamingId(null);
+                      setRenameValue("");
+                    }
+                  }}
+                  className="w-full rounded border border-indigo-400 px-2 py-0.5 text-xs focus:outline-none"
+                />
+              </li>
+            );
+          }
+          return (
+            <li
+              key={pageTab.id}
+              className={`group flex items-center gap-1 pl-2 pr-1 transition-colors ${
+                pageActive ? "bg-indigo-100" : "hover:bg-gray-100"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSwitch(pageTab.id)}
+                onDoubleClick={() => {
+                  if (!isOwner) return;
+                  setRenameValue(pageTab.title);
+                  setRenamingId(pageTab.id);
+                }}
+                className={`flex-1 min-w-0 truncate py-1.5 text-left text-[12px] ${
+                  pageActive ? "text-indigo-800 font-medium" : "text-gray-600"
+                }`}
+                title={`${pageTab.title} (double-click to rename)`}
+              >
+                {pageTab.title}
+              </button>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(pageTab.id, pageTab.title);
+                  }}
+                  className="hidden group-hover:block p-0.5 text-gray-400 hover:text-red-600 rounded"
+                  title="Delete page"
+                  aria-label="Delete page"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6M14 11v6" />
+                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
+
   return (
     <div className="w-60 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto flex flex-col">
       <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
@@ -374,15 +477,21 @@ export default function TabRail({
 
       <nav className="py-1 flex-1">
         {sortedTabs.map((tab) => {
+          // Custom/page tabs render as children under Workbook, not top-level.
+          if (tab.type === "custom") return null;
+
           const active = tab.id === activeTabId;
           const badge = TYPE_BADGES[tab.type];
           const archive = isArchive(tab.title);
           const protectedTab = tab.isProtected;
           // Any tab with headings inside gets a nested outline. Archive tabs
           // skip the outline (they're frozen safety copies — no need to
-          // surface their internal structure).
+          // surface their internal structure). Workbook also gets a collapse
+          // toggle when it has page children.
           const outlineHeadings = archive ? [] : headingsForTab(tab);
-          const hasNested = outlineHeadings.length > 0;
+          const hasNested =
+            outlineHeadings.length > 0 ||
+            (tab.type === "workbook" && pageTabs.length > 0);
           const subItemCount = outlineHeadings.length;
           const collapsed = collapsedParents.has(tab.id);
           const count = commentCounts[tab.id] || 0;
@@ -536,7 +645,12 @@ export default function TabRail({
                   </button>
                 )}
               </div>
-              {hasNested && !collapsed && renderSubItems(tab)}
+              {hasNested && !collapsed && (
+                <>
+                  {renderSubItems(tab)}
+                  {tab.type === "workbook" && renderPageTabs()}
+                </>
+              )}
             </div>
           );
         })}
@@ -590,13 +704,11 @@ export default function TabRail({
           ) : (
             <button
               type="button"
-              onClick={() => {
-                setShowCreate(true);
-                if (isWorkbookContext) setCreateTitle(`Page ${nextPageN}`);
-              }}
-              className="w-full rounded border border-dashed border-gray-300 px-2 py-2 text-sm text-gray-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+              onClick={isWorkbookContext ? handleCreatePage : () => setShowCreate(true)}
+              disabled={creating}
+              className="w-full rounded border border-dashed border-gray-300 px-2 py-2 text-sm text-gray-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 transition-colors disabled:opacity-50"
             >
-              {isWorkbookContext ? "+ New page" : "+ New tab"}
+              {creating && isWorkbookContext ? "Creating..." : isWorkbookContext ? "+ New page" : "+ New tab"}
             </button>
           )}
         </div>
