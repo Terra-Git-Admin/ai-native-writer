@@ -12,6 +12,7 @@ import CharacterCount from "@tiptap/extension-character-count";
 import FontFamily from "@tiptap/extension-font-family";
 import { TextStyle, FontSize, Color } from "@tiptap/extension-text-style";
 import { CommentMark } from "@/extensions/comment-mark";
+import { MicrodramaKeymap } from "@/extensions/microdrama-keymap";
 import {
   useCallback,
   useEffect,
@@ -66,6 +67,7 @@ function trace(event: string, data: Record<string, unknown> = {}): void {
 interface EditorProps {
   documentId: string;
   tabId: string;
+  tabType?: string;
   initialContent: string | null;
   isOwner: boolean;
   activeCommentId: string | null;
@@ -104,6 +106,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   {
     documentId,
     tabId,
+    tabType,
     initialContent,
     isOwner,
     activeCommentId,
@@ -187,6 +190,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       FontFamily,
       FontSize,
       Color,
+      ...(tabType === "microdrama_plots" ? [MicrodramaKeymap] : []),
     ],
     content: initialContent ? JSON.parse(initialContent) : undefined,
     editable: isOwner,

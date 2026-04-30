@@ -329,9 +329,14 @@ export default function DocumentPage() {
           const liveJson =
             editorRef.current?.getContentJSON() ?? target.content ?? null;
           const liveTagged = tiptapJsonToTagged(liveJson);
+          let incoming = taggedContent.trim();
+          if (target.type === "workbook") {
+            const pageCount = (liveTagged.match(/^\[H2\]/gm) ?? []).length;
+            incoming = `[H2] Page ${pageCount + 1}\n\n${incoming}`;
+          }
           content = liveTagged.trim()
-            ? `${liveTagged.trim()}\n\n${taggedContent.trim()}`
-            : taggedContent.trim();
+            ? `${liveTagged.trim()}\n\n${incoming}`
+            : incoming;
         }
         editorRef.current?.setFullContent(content);
         return { ok: true, landedTabId: targetTabId, fellBack };
@@ -341,9 +346,14 @@ export default function DocumentPage() {
       let outgoing = taggedContent;
       if (mode === "append") {
         const existingTagged = tiptapJsonToTagged(target.content ?? null);
+        let incoming = taggedContent.trim();
+        if (target.type === "workbook") {
+          const pageCount = (existingTagged.match(/^\[H2\]/gm) ?? []).length;
+          incoming = `[H2] Page ${pageCount + 1}\n\n${incoming}`;
+        }
         outgoing = existingTagged.trim()
-          ? `${existingTagged.trim()}\n\n${taggedContent.trim()}`
-          : taggedContent.trim();
+          ? `${existingTagged.trim()}\n\n${incoming}`
+          : incoming;
       }
       const doc = taggedTextToTiptapDoc(outgoing);
       const jsonString = JSON.stringify(doc);
@@ -595,6 +605,7 @@ export default function DocumentPage() {
           ref={editorRef}
           documentId={doc.id}
           tabId={activeTabId}
+          tabType={activeTab?.type}
           initialContent={activeTabContent}
           isOwner={doc.isOwner}
           activeCommentId={activeCommentId}

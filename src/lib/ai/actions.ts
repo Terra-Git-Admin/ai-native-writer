@@ -17,6 +17,7 @@ import { tabs, prompts as promptsTable } from "@/lib/db/schema";
 import {
   tiptapJsonToTagged,
   splitTabByH3,
+  extractEpisodeNumber,
   type H3Section,
 } from "@/lib/ai/context-engine";
 import {
@@ -255,9 +256,10 @@ Task: Propose ONE microdrama plot for Episode ${nextEpisodeNumber}. This episode
 
 // ─── next_reference_episode ───
 //
-// Always expands the LAST microdrama plot in the tab into a full reference
-// episode. Other episodes (re-generation, mid-series patching) are handled
-// via chat per the writer's direction — this agent is single-purpose.
+// Expands the microdrama plot for episode N+1, where N is the last reference
+// episode that already exists in the Predefined Episodes tab. If the matching
+// plot isn't in the Microdrama Plots tab yet, throws a clear error asking the
+// writer to add it first.
 
 async function loadNextReferenceEpisodeContext(
   input: ActionInput
@@ -270,37 +272,52 @@ async function loadNextReferenceEpisodeContext(
   );
   const plotSections = splitTabByH3(plotsTagged);
 
-  if (plotSections.length === 0) {
-    throw new Error(
-      "No microdrama plots exist yet. Create the next episode plot first — this agent expands the LATEST microdrama plot into a full reference episode."
-    );
-  }
-
-  const lastPlot = plotSections[plotSections.length - 1];
-  const targetEpisodeNumber =
-    lastPlot.title.match(/episode\s+(\d+)/i)?.[1] ?? `${plotSections.length}`;
-
-  // Input-quality guard: refuse if the latest plot body is too thin to
-  // expand reliably. Catches the "single letter plot triggers full-scene
-  // hallucination" failure mode noted in the cross-tab assistant backlog.
-  const plotBody = lastPlot.content.replace(/\s/g, "");
-  if (plotBody.length < 60) {
-    throw new Error(
-      `Latest microdrama plot (Episode ${targetEpisodeNumber}) is too thin (${plotBody.length} chars after whitespace strip). Fill in the plot body before generating a reference episode — otherwise the agent will hallucinate scenes that aren't in your plan.`
-    );
-  }
-
   const refTagged = tiptapJsonToTagged(
     docTabs.predefinedEpisodes?.content ?? null
   );
   const refSections = splitTabByH3(refTagged);
 
+  // Determine N = last reference episode number already generated.
+  // Primary: highest episode number found in H3 titles.
+  // Fallback: count of sections (for legacy tabs with no /Episode N/ titles).
+  const lastRefN = refSections.reduce((max, s) => {
+    const n = extractEpisodeNumber(s.title);
+    return n != null && n > max ? n : max;
+  }, 0) || refSections.length;
+
+  const targetN = lastRefN + 1;
+
+  // Find the microdrama plot for episode targetN.
+  // Primary: match by episode number in H3 title.
+  // Fallback: position-based (plotSections[targetN - 1]) for unnumbered tabs.
+  let targetPlot: H3Section | undefined =
+    plotSections.find((s) => extractEpisodeNumber(s.title) === targetN);
+  if (!targetPlot && plotSections.length >= targetN) {
+    targetPlot = plotSections[targetN - 1];
+  }
+
+  if (!targetPlot) {
+    throw new Error(
+      plotSections.length === 0
+        ? "No microdrama plots exist yet. Create episode plots first — this agent expands the plot for the next unwritten reference episode."
+        : `No microdrama plot for Episode ${targetN} found in the Microdrama Plots tab. Add [H3] Episode ${targetN} there first, then run this agent again.`
+    );
+  }
+
+  // Input-quality guard: refuse if the plot body is too thin to expand.
+  const plotBody = targetPlot.content.replace(/\s/g, "");
+  if (plotBody.length < 60) {
+    throw new Error(
+      `Microdrama plot for Episode ${targetN} is too thin (${plotBody.length} chars). Fill in the plot body first — otherwise the agent will hallucinate scenes that aren't in your plan.`
+    );
+  }
+
   const charactersTagged = tiptapJsonToTagged(
     docTabs.characters?.content ?? null
   );
 
-  return `## Latest Microdrama Plot (the one and only plot to expand — last [H3] in Microdrama Plots tab)
-${lastPlot.content}
+  return `## Microdrama Plot for Episode ${targetN} (expanding into the next reference episode)
+${targetPlot.content}
 
 ## Previous Reference Episodes (full chain — your voice + continuity reference, your first beat picks up from the LAST beat of the most recent reference episode below)
 ${
@@ -312,7 +329,7 @@ ${
 ## Characters (canonical voice profiles — use these to write distinct dialogue)
 ${charactersTagged || "(empty)"}
 
-Task: Expand the Latest Microdrama Plot above into ONE full reference episode for Episode ${targetEpisodeNumber} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetEpisodeNumber} block. No preamble, no commentary, no alternatives. The reference episode realises the plot — every beat in the plot must surface in the episode.`;
+Task: Expand the Microdrama Plot above into ONE full reference episode for Episode ${targetN} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetN} block. No preamble, no commentary, no alternatives. The reference episode realises the plot — every beat in the plot must surface in the episode.`;
 }
 
 // ─── format_tab ───
