@@ -530,6 +530,7 @@ export default function AIChatSidebar({
       activeTabLiveContent: liveContent,
       mode: "chat",
       selection: null,
+      userMessage: userInput,
     });
     return `${contextBlock}\n\n## Message\n${userInput}`;
   }

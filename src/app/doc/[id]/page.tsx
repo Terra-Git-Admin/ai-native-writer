@@ -605,25 +605,25 @@ export default function DocumentPage() {
               >
                 AI Assistant
               </button>
-              <button
-                onClick={() => {
-                  setPromptsOpen(!promptsOpen);
-                  if (!promptsOpen) {
-                    setAiSidebarOpen(false);
-                    setCommentSidebarOpen(false);
-                    setVersionHistoryOpen(false);
-                  }
-                }}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  promptsOpen
-                    ? "bg-gray-200 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Prompts
-              </button>
             </>
           )}
+          <button
+            onClick={() => {
+              setPromptsOpen(!promptsOpen);
+              if (!promptsOpen) {
+                setAiSidebarOpen(false);
+                setCommentSidebarOpen(false);
+                setVersionHistoryOpen(false);
+              }
+            }}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+              promptsOpen
+                ? "bg-gray-200 text-gray-900"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            Prompts
+          </button>
           {session?.user?.name && (
             <div className="ml-2 flex items-center gap-2">
               {session.user.image && (
