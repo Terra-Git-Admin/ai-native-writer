@@ -393,6 +393,17 @@ Rules for a valid deviation scene:
   4. Does NOT alter any decision a main character makes in the established plot
 Declare it before writing: DEVIATION SCENE: [FORMAT] | [what happens — 1 sentence] | [payoff ep: N]
 
+OUTPUT FORMAT FOR DEVIATION BEATS (mandatory):
+Deviation beats must be preceded by a [P] label so the script writer can identify and optionally remove them.
+Use exactly this format:
+
+  [P] — Deviation (optional): not in source material — added for cliffhanger strength. Safe to remove without affecting the main plot.
+  [UL] (Visual: ...)
+  [UL] CharacterName: "..."
+  [UL] (Visual: ...)   ← last deviation beat = the freeze
+
+The [P] label appears once, immediately before the first deviation beat. The deviation beats follow as normal [UL] lines. No closing label needed — the episode ends on the last deviation beat.
+
 STEP 3 — CLIFFHANGER GOAL DECLARATION (before writing any beats):
 State: CLIFFHANGER GOAL: [FORMAT LETTER + NAME] | [THE QUESTION LEFT OPEN] | [TARGET EMOTION]
 Example: CLIFFHANGER GOAL: Format F — Secret Alliance | Does Priya know about Marcus? | Dread + disbelief
