@@ -5,11 +5,6 @@ import { prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { seedPromptsFromCode } from "@/lib/ai/seed-prompts";
 
-// Boot-time reseed runs in instrumentation.ts. The lazy first-GET reseed
-// here is now a safety net for environments where instrumentation didn't
-// fire (e.g. some serverless cold-start paths).
-let seeded = false;
-
 // GET /api/prompts — list all prompts (readable by everyone)
 export async function GET() {
   const session = await auth();
@@ -17,12 +12,16 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!seeded) {
+  // Always seed if the table is empty — guards against stale GCS backups
+  // that predate the prompts table, and against the in-memory `seeded` flag
+  // surviving a DB wipe mid-run.
+  const all = await db.select().from(prompts);
+  if (all.length === 0) {
     await seedPromptsFromCode();
-    seeded = true;
+    const reseeded = await db.select().from(prompts);
+    return NextResponse.json(reseeded);
   }
 
-  const all = await db.select().from(prompts);
   return NextResponse.json(all);
 }
 

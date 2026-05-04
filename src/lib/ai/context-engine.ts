@@ -40,6 +40,7 @@ export interface BuildContextArgs {
     taggedText: string;
     surroundingContext?: string;
   } | null;
+  userMessage?: string;
 }
 
 // ─── Tiptap JSON → tagged lines ───
@@ -224,7 +225,7 @@ function sectionsByEpisodeNumbers(
 // ─── Main builder ───
 
 export function buildAIContext(args: BuildContextArgs): string {
-  const { tabs, activeTab, activeTabLiveContent, selection } = args;
+  const { tabs, activeTab, activeTabLiveContent, selection, userMessage } = args;
 
   const renderTab = (tab: TabRow | undefined): string => {
     if (!tab) return "";
@@ -388,10 +389,18 @@ export function buildAIContext(args: BuildContextArgs): string {
             .map((s) => s.content)
             .join("\n\n")}`
         );
-        const lastPlot = plotSections[plotSections.length - 1];
-        sections.push(
-          `## Current Episode Plot (last [H3] in the Microdrama Plots tab — the most recently finalised plot. When the writer asks to draft the next reference episode in this workbook, this is the plot it expands from)\n${lastPlot.content}`
-        );
+        // If the user's message explicitly names an episode number, use that
+        // plot as the current one. Otherwise fall back to the last plot.
+        const requestedN = userMessage != null
+          ? extractEpisodeNumber(userMessage)
+          : null;
+        const currentPlot = requestedN != null
+          ? (plotSections.find((s) => extractEpisodeNumber(s.title) === requestedN) ?? plotSections[plotSections.length - 1])
+          : plotSections[plotSections.length - 1];
+        const label = requestedN != null
+          ? `## Current Episode Plot (Episode ${requestedN} — matched from your message)`
+          : `## Current Episode Plot (last [H3] in the Microdrama Plots tab — the most recently finalised plot. When the writer asks to draft the next reference episode in this workbook, this is the plot it expands from)`;
+        sections.push(`${label}\n${currentPlot.content}`);
       }
     }
   }
