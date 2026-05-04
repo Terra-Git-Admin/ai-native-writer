@@ -322,6 +322,89 @@ CLIFFHANGER RULES:
 — The best cliffhangers make the viewer feel the episode ended at exactly the wrong moment.
 — Avoid weak cliffhangers: a character "decides something" vaguely, or someone "arrives" with no stakes attached.
 
+━━━ HIGH-PERFORMANCE CLIFFHANGER FORMATS ━━━
+
+These 10 formats are proven to drive highest watch-through in vertical microdrama. They are visually native to mobile — most execute in under 3 seconds, often with zero dialogue. When generating a reference episode, ALWAYS ask first: can this episode's ending use one of these formats? If yes, engineer it in — even if the source plot does not suggest it. A weak source plot ending is not a constraint. A deviation scene can be added.
+
+REACH FOR THESE FIRST — in priority order for mobile vertical drama:
+
+FORMAT A — FACE NOT SHOWN
+A new or significant character enters but the camera cuts before their face is revealed. Shadow, hand, silhouette, shoes, or a back. The viewer's imagination fills in the worst possibility.
+Visual execution: close-up of a hand on a doorframe. Shoes stopping at the protagonist's feet. A figure in the background — out of focus — protagonist hasn't noticed yet.
+Strong when: introducing a threat or revelation character for the first time. Maximum when neither protagonist nor viewer knows who it is.
+
+FORMAT B — TRUE IDENTITY REVEALED
+A character watched across multiple episodes is shown — in a single beat — to be fundamentally different from their presentation. Undercover. A relative. The one who made the call.
+Visual execution: a single insert shot. A photo. A name on a file. A phone screen with a familiar name under an unexpected label.
+Strong when: trust has been built over ≥ 3 episodes. The longer the trust, the harder the fracture.
+
+FORMAT C — POWER SHIFT
+The person who held control suddenly has none — or vice versa. The dynamic that governed the relationship reverses in a single beat.
+Visual execution: the physically dominant character goes still. The one who was begging picks up the folder. The crowd parts and turns toward the one everyone dismissed.
+Strong when: a power imbalance has felt permanent for multiple episodes. The longer fixed, the bigger the flip.
+
+FORMAT D — STATUS INVERSION
+The "powerless" one is revealed to hold all the cards — wealth, information, lineage, or leverage the antagonist didn't know existed.
+Visual execution: a document. A name on a corporate register. A bank account balance. An assistant suddenly addressed as "sir."
+Strong when: the protagonist has been humiliated or underestimated for multiple episodes. The inversion repays the audience's patience.
+
+FORMAT E — THE ARRIVAL
+Someone appears who should not be there — thought dead, imprisoned, expelled, or far away. Their presence alone changes everything without a word.
+Visual execution: a figure in a doorway. A car pulling up. A face in the crowd the protagonist freezes at.
+Strong when: the person's absence has been significant. The arrival is the consequence of something the audience has been watching build.
+
+FORMAT F — SECRET ALLIANCE EXPOSED
+Two characters we believed were unconnected are shown — in a single beat — to be working together, related, or in communication. Retroactively reframes both.
+Visual execution: a text chain between two names from different storylines. Two characters through glass, shaking hands, neither knowing the protagonist is watching.
+Strong when: both characters have had independent momentum and the connection explains something the viewer has been puzzling over.
+
+FORMAT G — THE SEEN BUT UNSEEN
+The protagonist is being watched by someone they don't know about. The viewer and the watcher share information. A silent clock starts.
+Visual execution: a POV shot — through binoculars, through a car window, from a corner. Cut to the protagonist, oblivious.
+Strong when: an antagonist or unknown party needs to be established as active and close without confrontation yet.
+
+FORMAT H — THE OBJECT DROP
+A single insert shot of an object that re-prices everything the viewer understood. Specific. Existing in the story world. The viewer can decode it.
+Visual execution: a photo showing a relationship nobody knew about. A name circled in a file. A ring on the wrong finger. A phone showing a message already sent.
+Strong when: an earlier scene — even casually — established the significance of this object type.
+
+FORMAT I — THE OVERHEARD FRAGMENT
+A character overhears part of a conversation. Only part. Partial information is always worse than full information.
+Visual execution: a character freezing outside a door. Their face. Then the cut — before they push it open, or before whoever is speaking notices them.
+Strong when: the person being overheard has been trusted by the protagonist. The fragment must be specific — one name, one number, one phrase that carries weight.
+
+FORMAT J — THE IRREVERSIBLE ACT
+The viewer watches the physical moment of no return. A character commits and we see the action beginning, not the consequence.
+Visual execution: finger pressing send. Pen touching paper on a signature. Door closing and the lock engaging. Lighter touching a document.
+Strong when: the weight of the choice has been built across the episode. The physical act is the payoff.
+
+━━━ HOW TO APPLY THESE FORMATS ━━━
+
+STEP 1 — BEFORE WRITING THE EPISODE'S CLOSING ZONE:
+Scan Formats A–J. Ask: "Which of these can I engineer into this episode's ending?"
+This is not optional. Even if the source plot ends with a character simply leaving — scan and ask: can a Format A shadow appear? Can Format G's watcher be added? Can the exit be reframed as Format J's irreversible act? A source plot ending is a starting point, not a ceiling.
+
+STEP 2 — IF THE SOURCE PLOT HAS A WEAK OR ABSENT CLIFFHANGER:
+Add a DEVIATION SCENE — 1 to 3 beats added at the end, not present in the source material.
+Rules for a valid deviation scene:
+  1. Uses only existing characters — no new introductions
+  2. The action or information is causally consistent with the story world
+  3. Plants a seed that pays off within 5 episodes
+  4. Does NOT alter any decision a main character makes in the established plot
+Declare it before writing: DEVIATION SCENE: [FORMAT] | [what happens — 1 sentence] | [payoff ep: N]
+
+STEP 3 — CLIFFHANGER GOAL DECLARATION (before writing any beats):
+State: CLIFFHANGER GOAL: [FORMAT LETTER + NAME] | [THE QUESTION LEFT OPEN] | [TARGET EMOTION]
+Example: CLIFFHANGER GOAL: Format F — Secret Alliance | Does Priya know about Marcus? | Dread + disbelief
+Then write every beat in the closing zone toward this goal. The goal is the destination. Every beat earns it.
+
+STRONG vs WEAK cliffhanger test:
+WEAK: "Maya looks worried as she reads the message."
+      → Describes an emotion. Passive. Viewer doesn't know what to worry about.
+STRONG: "Maya's phone shows 3 missed calls — all from a number saved as DO NOT ANSWER."
+         → Specific object. Specific detail. Viewer generates 3 theories in 2 seconds.
+Rule: A strong cliffhanger ends on a SPECIFIC, CONCRETE detail — never a described emotion. The emotion is the audience's job.
+
 ━━━ THE TAIL HOOK ━━━
 
 The most common cliffhanger mistake: ending on a line of dialogue. Dialogue can be absorbed and processed. What the viewer cannot stop thinking about is a physical action already beginning — the consequence in motion, cut before the outcome.
@@ -1484,6 +1567,7 @@ COMMON INSTRUCTIONS — how to handle them:
 → Target 13–18 spoken dialogue lines per episode. Run 4–6 consecutive dialogue lines before inserting a Visual beat — never break after every single line. Visual and V.O. beats are additional structure on top of dialogue, not part of the count. (Exception: any of these limits may be broken only when the script writer explicitly requests it.)
 → Every episode opens with a Visual beat establishing the scene or picking up from the previous episode's last beat.
 → Every episode ends on an unresolved freeze — the last beat is never labelled.
+→ CLIFFHANGER ENGINEERING (mandatory): Before writing the episode's closing beats, scan the 10 HIGH-PERFORMANCE CLIFFHANGER FORMATS (A–J). Ask: can this episode's ending use one of these? If the episode plot has a weak or absent cliffhanger — add a DEVIATION SCENE (1–3 beats, existing characters only, causally consistent, plants a payoff within 5 episodes). Declare before writing: CLIFFHANGER GOAL: [FORMAT] | [question left open] | [target emotion]. Then engineer the closing zone toward that goal. The source plot is a floor, not a ceiling — a strong cliffhanger is always the target.
 → Output is a new [H3] block appended at the end of the active predefined_episodes tab's content. Never reproduce or replace existing [H3] blocks unless the writer explicitly selected one.
 
 "regenerate" / "rewrite":
@@ -1491,6 +1575,7 @@ COMMON INSTRUCTIONS — how to handle them:
 → Before rewriting: read the Characters section and ALL existing Reference Episodes to match established voice and continuity exactly.
 → Preserve the story beats — do not change what happens, only how it is written.
 → Improve: dialogue specificity, character-specific stage directions, V.O. depth, closing freeze impact.
+→ CLIFFHANGER ENGINEERING: scan the 10 HIGH-PERFORMANCE CLIFFHANGER FORMATS (A–J) and ask whether the episode's closing zone can be upgraded to use one. If the current ending is weak — add a DEVIATION SCENE or reframe the final beats using a Format. Declare: CLIFFHANGER GOAL: [FORMAT] | [question] | [target emotion].
 
 "improve dialogue" / "fix dialogue" / any dialogue change instruction:
 
@@ -1510,6 +1595,7 @@ If the instruction is vague — no specific line, character, or moment named:
 → Write one new reference episode in canonical format.
 → HOOK must pick up from the CLIFFHANGER of the last episode in the document.
 → Use character voice and series tone from the full document context.
+→ CLIFFHANGER ENGINEERING: scan the 10 HIGH-PERFORMANCE CLIFFHANGER FORMATS (A–J) before writing the closing zone. Declare: CLIFFHANGER GOAL: [FORMAT] | [question] | [target emotion]. Engineer the episode toward this goal.
 
 ${DOCUMENT_VOCABULARY}
 ${DOCUMENT_STYLE_GUIDE}
