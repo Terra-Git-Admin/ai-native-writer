@@ -639,19 +639,17 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       document.head.appendChild(styleEl);
     }
 
-    const baseStyle = `.comment-highlight { background-color: rgba(255,212,0,0.25) !important; border-bottom: 1px solid rgba(200,150,0,0.5) !important; }`;
-
+    // Base highlight style lives in globals.css — always visible, no JS needed.
+    // This tag only handles the active-comment override (bright orange).
+    // Non-active comments are NOT dimmed — they stay at the globals.css yellow.
     if (activeCommentId) {
-      styleEl.textContent = `
-        ${baseStyle}
-        .comment-highlight[data-comment-id="${activeCommentId}"] { background-color: rgba(251,146,60,0.45) !important; border-bottom: 2px solid rgba(234,88,12,0.8) !important; }
-      `;
+      styleEl.textContent = `.comment-highlight[data-comment-id="${activeCommentId}"] { background-color: rgba(251,146,60,0.45) !important; border-bottom: 2px solid rgba(234,88,12,0.8) !important; }`;
     } else {
-      styleEl.textContent = baseStyle;
+      styleEl.textContent = "";
     }
 
     return () => {
-      if (styleEl) styleEl.textContent = baseStyle;
+      if (styleEl) styleEl.textContent = "";
     };
   }, [activeCommentId]);
 

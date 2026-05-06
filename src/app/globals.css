@@ -39,10 +39,8 @@ body {
   transition: background-color 0.2s ease, border-bottom-color 0.2s ease;
 }
 
-/* Active comment highlighting is handled via a dynamic <style> tag injected by Editor.tsx.
-   When a comment is clicked in the sidebar:
-   - All .comment-highlight spans get dimmed
-   - The matching [data-comment-id="xxx"] span gets bright orange */
+/* Active comment override: Editor.tsx injects a dynamic <style> tag that brightens
+   the matching [data-comment-id="xxx"] span to orange. Non-active highlights stay yellow. */
 
 /* AI highlight */
 .ai-highlight-pending {
