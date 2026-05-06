@@ -639,18 +639,19 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       document.head.appendChild(styleEl);
     }
 
+    const baseStyle = `.comment-highlight { background-color: rgba(255,212,0,0.25) !important; border-bottom: 1px solid rgba(200,150,0,0.5) !important; }`;
+
     if (activeCommentId) {
-      // Dim all comment highlights, then brighten the active one
       styleEl.textContent = `
-        .comment-highlight { background-color: rgba(255,212,0,0.1) !important; border-bottom-color: rgba(255,180,0,0.15) !important; }
+        ${baseStyle}
         .comment-highlight[data-comment-id="${activeCommentId}"] { background-color: rgba(251,146,60,0.45) !important; border-bottom: 2px solid rgba(234,88,12,0.8) !important; }
       `;
     } else {
-      styleEl.textContent = "";
+      styleEl.textContent = baseStyle;
     }
 
     return () => {
-      if (styleEl) styleEl.textContent = "";
+      if (styleEl) styleEl.textContent = baseStyle;
     };
   }, [activeCommentId]);
 

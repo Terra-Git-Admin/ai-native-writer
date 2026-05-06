@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
+import QualityAgentModal from "@/components/ai/QualityAgentModal";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
@@ -57,6 +58,11 @@ export default function DocumentPage() {
 
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [qualityModalOpen, setQualityModalOpen] = useState(false);
+  const [qualityEvalRequest, setQualityEvalRequest] = useState<{
+    episodeTabId: string;
+    episodeLabel: string;
+  } | null>(null);
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -607,6 +613,15 @@ export default function DocumentPage() {
               </button>
             </>
           )}
+          {(doc.isOwner || (session?.user as { role?: string })?.role === "admin") &&
+            activeTab?.type === "predefined_episodes" && (
+              <button
+                onClick={() => setQualityModalOpen(true)}
+                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+              >
+                Quality Agent
+              </button>
+            )}
           <button
             onClick={() => {
               setPromptsOpen(!promptsOpen);
@@ -731,6 +746,8 @@ export default function DocumentPage() {
               onClose={() => {
                 setAiSidebarOpen(false);
               }}
+              qualityEvalRequest={qualityEvalRequest}
+              onQualityEvalConsumed={() => setQualityEvalRequest(null)}
             />
           </div>
         )}
@@ -754,6 +771,22 @@ export default function DocumentPage() {
           </div>
         )}
       </div>
+
+      {qualityModalOpen && activeTabId && (
+        <QualityAgentModal
+          tabs={tabs}
+          currentTabId={activeTabId}
+          onConfirm={(episodeTabId, episodeLabel) => {
+            setQualityModalOpen(false);
+            setAiSidebarOpen(true);
+            setCommentSidebarOpen(false);
+            setVersionHistoryOpen(false);
+            setPromptsOpen(false);
+            setQualityEvalRequest({ episodeTabId, episodeLabel });
+          }}
+          onCancel={() => setQualityModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
