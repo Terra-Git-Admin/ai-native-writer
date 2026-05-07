@@ -439,7 +439,6 @@ async function loadSeriesSkeletonPredefinedContext(
 
   const plotsCount = (plotsTagged.match(/^\[H3\]/gm) ?? []).length;
   const refEpsCount = (refEpsTagged.match(/^\[H3\]/gm) ?? []).length;
-
   if (plotsCount === 0 && refEpsCount === 0) {
     throw new Error(
       "No predefined episodes found. Add episode plots to Microdrama Plots or reference episodes to Predefined Episodes first, then run this action."
