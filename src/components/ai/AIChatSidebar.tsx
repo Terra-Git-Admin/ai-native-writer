@@ -111,6 +111,8 @@ interface AIChatSidebarProps {
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
   onClose: () => void;
+  qualityEvalRequest?: { episodeTabId: string; episodeLabel: string } | null;
+  onQualityEvalConsumed?: () => void;
 }
 
 export default function AIChatSidebar({
@@ -128,6 +130,8 @@ export default function AIChatSidebar({
   onSetThinking,
   onSetTitle,
   onClose,
+  qualityEvalRequest,
+  onQualityEvalConsumed,
 }: AIChatSidebarProps) {
   // Selection-based "Edit with AI" was removed (Bug 4 fix, 29 Apr 2026).
   // The sidebar now always operates in chat mode for free-form prompts;
@@ -395,6 +399,73 @@ export default function AIChatSidebar({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isStreaming]);
+
+  // Quality Agent — fires when the doc page sets qualityEvalRequest
+  useEffect(() => {
+    if (!qualityEvalRequest) return;
+
+    const { episodeTabId, episodeLabel } = qualityEvalRequest;
+
+    const userEntry: HistoryEntry = {
+      type: "message",
+      role: "user",
+      content: `Quality Agent — evaluating: ${episodeLabel}`,
+      mode,
+    };
+    setHistory((prev) => [...prev, userEntry]);
+    persistEntry(userEntry);
+
+    setIsStreaming(true);
+    setStreamingText("");
+    setError(null);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/documents/${documentId}/quality-eval`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ episodeTabId }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error || "Quality eval failed");
+        }
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            accumulated += decoder.decode(value, { stream: true });
+            setStreamingText(accumulated.replace(/^[012]\n/, ""));
+          }
+        }
+
+        const clean = accumulated.replace(/^[012]\n/, "");
+        if (clean) {
+          const assistantEntry: HistoryEntry = {
+            type: "message",
+            role: "assistant",
+            content: clean,
+            mode,
+          };
+          setHistory((prev) => [...prev, assistantEntry]);
+          persistEntry(assistantEntry);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Quality eval failed");
+      } finally {
+        setIsStreaming(false);
+        setStreamingText("");
+        onQualityEvalConsumed?.();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qualityEvalRequest]);
 
   const sendMessages = useCallback(
     async (
