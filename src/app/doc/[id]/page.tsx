@@ -62,6 +62,7 @@ export default function DocumentPage() {
   const [qualityEvalRequest, setQualityEvalRequest] = useState<{
     episodeTabId: string;
     episodeLabel: string;
+    episodeIndex: number;
   } | null>(null);
 
   // Live headings of the active tab — fed by the editor on every transaction
@@ -776,13 +777,13 @@ export default function DocumentPage() {
         <QualityAgentModal
           tabs={tabs}
           currentTabId={activeTabId}
-          onConfirm={(episodeTabId, episodeLabel) => {
+          onConfirm={(episodeTabId, episodeLabel, episodeIndex) => {
             setQualityModalOpen(false);
             setAiSidebarOpen(true);
             setCommentSidebarOpen(false);
             setVersionHistoryOpen(false);
             setPromptsOpen(false);
-            setQualityEvalRequest({ episodeTabId, episodeLabel });
+            setQualityEvalRequest({ episodeTabId, episodeLabel, episodeIndex });
           }}
           onCancel={() => setQualityModalOpen(false)}
         />

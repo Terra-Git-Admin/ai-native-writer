@@ -3,9 +3,60 @@ import { streamText } from "ai";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents, tabs, prompts } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { QUALITY_AGENT_SYSTEM_PROMPT } from "@/lib/ai/prompts";
+
+interface TiptapNode {
+  type: string;
+  attrs?: { level?: number };
+  content?: TiptapNode[];
+  text?: string;
+}
+
+function nodeText(node: TiptapNode): string {
+  if (node.text) return node.text;
+  return (node.content ?? []).map(nodeText).join("");
+}
+
+// Split a TipTap doc into episode sections keyed by episode index.
+// An episode starts at any heading whose text matches /^episode\s*\d/i
+// and runs until the next such heading (or end of doc).
+function extractEpisodeSections(content: string | null): string[] {
+  if (!content) return [];
+  try {
+    const doc = JSON.parse(content) as { content?: TiptapNode[] };
+    const nodes = doc.content ?? [];
+
+    const sections: string[] = [];
+    let current: string[] = [];
+    let inEpisode = false;
+
+    for (const node of nodes) {
+      const text = nodeText(node).trim();
+      const isEpisodeHeading =
+        node.type === "heading" && /^episode\s*\d/i.test(text);
+
+      if (isEpisodeHeading) {
+        if (inEpisode && current.length > 0) {
+          sections.push(current.join("\n").trim());
+        }
+        current = [text];
+        inEpisode = true;
+      } else if (inEpisode) {
+        if (text) current.push(text);
+      }
+    }
+
+    if (inEpisode && current.length > 0) {
+      sections.push(current.join("\n").trim());
+    }
+
+    return sections;
+  } catch {
+    return [];
+  }
+}
 
 export async function POST(
   req: Request,
@@ -33,32 +84,39 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({}));
-  const { episodeTabId } = body as { episodeTabId?: string };
+  const { episodeTabId, episodeIndex } = body as {
+    episodeTabId?: string;
+    episodeIndex?: number;
+  };
   if (!episodeTabId) {
-    return NextResponse.json({ error: "episodeTabId is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "episodeTabId is required" },
+      { status: 400 }
+    );
   }
 
-  // Load all predefined_episodes tabs sorted by sequenceNumber then position
-  const allTabs = await db.query.tabs.findMany({
-    where: eq(tabs.documentId, id),
-    orderBy: [asc(tabs.position)],
+  const tab = await db.query.tabs.findFirst({
+    where: eq(tabs.id, episodeTabId),
   });
-
-  const episodeTabs = allTabs
-    .filter((t) => t.type === "predefined_episodes")
-    .sort((a, b) => {
-      const aSeq = a.sequenceNumber ?? a.position;
-      const bSeq = b.sequenceNumber ?? b.position;
-      return aSeq - bSeq;
-    });
-
-  const currentIdx = episodeTabs.findIndex((t) => t.id === episodeTabId);
-  if (currentIdx === -1) {
-    return NextResponse.json({ error: "Episode tab not found" }, { status: 404 });
+  if (!tab) {
+    return NextResponse.json({ error: "Tab not found" }, { status: 404 });
   }
 
-  const currentTab = episodeTabs[currentIdx];
-  const prevTab = currentIdx > 0 ? episodeTabs[currentIdx - 1] : null;
+  // Extract individual episode sections from the tab content
+  const sections = extractEpisodeSections(tab.content);
+
+  let currentEpisode: string;
+  let prevEpisode: string | null;
+
+  if (sections.length > 0 && episodeIndex !== undefined) {
+    const idx = Math.max(0, Math.min(episodeIndex, sections.length - 1));
+    currentEpisode = sections[idx] ?? tab.content ?? "(empty)";
+    prevEpisode = idx > 0 ? sections[idx - 1] : null;
+  } else {
+    // Fallback: evaluate the whole tab
+    currentEpisode = tab.content ?? "(empty)";
+    prevEpisode = null;
+  }
 
   // Load quality_agent prompt from DB, fall back to constant
   const promptRow = await db.query.prompts.findFirst({
@@ -67,10 +125,10 @@ export async function POST(
   const systemPrompt = promptRow?.content || QUALITY_AGENT_SYSTEM_PROMPT;
 
   const userMessage = [
-    prevTab
-      ? `PREVIOUS EPISODE (for hook context):\n${prevTab.content || "(empty)"}`
+    prevEpisode
+      ? `PREVIOUS EPISODE (for hook context):\n${prevEpisode}`
       : "PREVIOUS EPISODE (for hook context):\nNo previous episode.",
-    `\nEPISODE TO EVALUATE:\n${currentTab.content || "(empty)"}`,
+    `\nEPISODE TO EVALUATE:\n${currentEpisode}`,
   ].join("\n\n");
 
   try {

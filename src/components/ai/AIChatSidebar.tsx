@@ -111,7 +111,7 @@ interface AIChatSidebarProps {
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
   onClose: () => void;
-  qualityEvalRequest?: { episodeTabId: string; episodeLabel: string } | null;
+  qualityEvalRequest?: { episodeTabId: string; episodeLabel: string; episodeIndex: number } | null;
   onQualityEvalConsumed?: () => void;
 }
 
@@ -404,7 +404,7 @@ export default function AIChatSidebar({
   useEffect(() => {
     if (!qualityEvalRequest) return;
 
-    const { episodeTabId, episodeLabel } = qualityEvalRequest;
+    const { episodeTabId, episodeLabel, episodeIndex } = qualityEvalRequest;
 
     const userEntry: HistoryEntry = {
       type: "message",
@@ -424,7 +424,7 @@ export default function AIChatSidebar({
         const res = await fetch(`/api/documents/${documentId}/quality-eval`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ episodeTabId }),
+          body: JSON.stringify({ episodeTabId, episodeIndex }),
         });
 
         if (!res.ok) {
