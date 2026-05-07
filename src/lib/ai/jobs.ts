@@ -36,7 +36,8 @@ export type PromptKind =
   | "next_episode_plot"
   | "next_reference_episode"
   | "format_tab"
-  | "series_skeleton";
+  | "series_skeleton"
+  | "series_skeleton_predefined";
 
 export type JobStatus =
   | "pending"

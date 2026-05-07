@@ -21,9 +21,15 @@ interface WorkbookActionsProps {
 const ACTIONS: { kind: JobKind; label: string; description: string }[] = [
   {
     kind: "series_skeleton",
-    label: "Create Series Skeleton",
+    label: "Skeleton — From Research",
     description:
-      "Distill source material + existing plots into a 45-episode skeleton: Series Summary, Cast (2-4 primaries), Plotline Architecture (1 spine + branches that converge), 9-phase Phase Breakdown with setup-payoff tracking, Character Arc Evolution, Structural Audit.",
+      "Distill source material + existing plots into a skeleton (35–45 episodes): Series Summary, Cast (2-4 primaries), Plotline Architecture, 9-phase Phase Breakdown, More Details. Use when no predefined episodes exist yet, or you want the AI to reason from the original research.",
+  },
+  {
+    kind: "series_skeleton_predefined",
+    label: "Skeleton — From Predefined",
+    description:
+      "Build or update the skeleton based on existing predefined episodes and plots (authoritative). If a skeleton already exists, outputs the new version with ⚡ change callouts per section so you can review what changed before committing.",
   },
   {
     kind: "next_episode_plot",
@@ -73,5 +79,6 @@ export const WORKBOOK_ACTION_LABELS: Record<JobKind, string> = {
   next_episode_plot: "Create Next Episode Plot",
   next_reference_episode: "Create Next Reference Episode",
   format_tab: "Format Tab",
-  series_skeleton: "Create Series Skeleton",
+  series_skeleton: "Skeleton — From Research",
+  series_skeleton_predefined: "Skeleton — From Predefined",
 };

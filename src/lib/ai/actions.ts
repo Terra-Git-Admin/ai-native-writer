@@ -26,6 +26,7 @@ import {
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
   SERIES_SKELETON_SYSTEM_PROMPT,
+  SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 import type { PromptKind } from "@/lib/ai/jobs";
 
@@ -411,7 +412,59 @@ ${plotsBlock}
 
 ${refEpsBlock}
 
-Task: Produce the 6-section Series Skeleton (Series Summary, Cast, Plotline Architecture, 9-phase Phase Breakdown, Character Arc Evolution, Structural Audit) per the system-prompt format. Always 45 episodes across 9 phases of 5 episodes each. Honor existing plots as authoritative for the phases they cover; project the rest forward from research.`;
+Task: Produce the 4-section Series Skeleton (Series Summary, Plotline Architecture, Phase Breakdown, More Details) per the system-prompt format. Choose the most natural episode count between 35 and 45 based on source density — do not pad to reach 45. Honor existing plots as authoritative for the phases they cover; project the rest forward from research.`;
+}
+
+async function loadSeriesSkeletonPredefinedContext(
+  input: ActionInput
+): Promise<string> {
+  const { documentId } = input;
+  const docTabs = await loadDocumentTabs(documentId);
+
+  const researchTagged = tiptapJsonToTagged(
+    docTabs.seriesOverview?.content ?? null
+  );
+  const charactersTagged = tiptapJsonToTagged(
+    docTabs.characters?.content ?? null
+  );
+  const plotsTagged = tiptapJsonToTagged(
+    docTabs.microdramaPlots?.content ?? null
+  );
+  const refEpsTagged = tiptapJsonToTagged(
+    docTabs.predefinedEpisodes?.content ?? null
+  );
+  const existingSkeletonTagged = tiptapJsonToTagged(
+    docTabs.seriesSkeleton?.content ?? null
+  );
+
+  const plotsCount = (plotsTagged.match(/^\[H3\]/gm) ?? []).length;
+  const refEpsCount = (refEpsTagged.match(/^\[H3\]/gm) ?? []).length;
+
+  if (plotsCount === 0 && refEpsCount === 0) {
+    throw new Error(
+      "No predefined episodes found. Add episode plots to Microdrama Plots or reference episodes to Predefined Episodes first, then run this action."
+    );
+  }
+
+  const existingSkeletonBlock = existingSkeletonTagged.trim()
+    ? `## Previous Series Skeleton (EXISTING VERSION — produce the updated skeleton and add ⚡ Changed from previous callouts in every section that differs)\n${existingSkeletonTagged}`
+    : `## Previous Series Skeleton\n(none — this is the first skeleton; no diff callouts needed)`;
+
+  return `## Original Research (background context only — predefined episodes take precedence over this)
+${researchTagged || "(empty)"}
+
+## Characters (existing)
+${charactersTagged || "(empty)"}
+
+## Existing Microdrama Plots (AUTHORITATIVE — ${plotsCount} plots; treat as locked spine input)
+${plotsTagged || "(none yet)"}
+
+## Existing Reference Episodes (AUTHORITATIVE — ${refEpsCount} episodes; use for confirmed character beats and story direction)
+${refEpsTagged || "(none yet)"}
+
+${existingSkeletonBlock}
+
+Task: Produce the 4-section Series Skeleton (Series Summary, Plotline Architecture, Phase Breakdown, More Details) per the system-prompt format. Base it primarily on the existing predefined episodes — they are authoritative. Use original research only to fill phases not yet covered by episodes. Choose the most natural episode count between 35 and 45. ${existingSkeletonTagged.trim() ? "A Previous Series Skeleton exists — add ⚡ Changed from previous callouts in every section that differs so the writer can review the diff before committing." : "No previous skeleton — generate fresh."}`;
 }
 
 // ─── Registry ───
@@ -448,6 +501,12 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "series_skeleton",
     systemPromptFallback: SERIES_SKELETON_SYSTEM_PROMPT,
     loadContext: loadSeriesSkeletonContext,
+  },
+  series_skeleton_predefined: {
+    kind: "series_skeleton_predefined",
+    systemPromptId: "series_skeleton_predefined",
+    systemPromptFallback: SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT,
+    loadContext: loadSeriesSkeletonPredefinedContext,
   },
 };
 

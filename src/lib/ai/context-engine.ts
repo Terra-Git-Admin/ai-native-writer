@@ -240,12 +240,14 @@ export function buildAIContext(args: BuildContextArgs): string {
   const charactersTab = findTabByType(tabs, "characters");
   const episodePlotTab = findTabByType(tabs, "microdrama_plots");
   const refEpisodeTab = findTabByType(tabs, "predefined_episodes");
+  const skeletonTab = findTabByType(tabs, "series_skeleton");
 
   const researchTagged = renderTab(researchTab);
   const seriesOverviewTagged = renderTab(seriesOverviewTab);
   const charactersTagged = renderTab(charactersTab);
   const episodePlotTagged = renderTab(episodePlotTab);
   const refEpisodeTagged = renderTab(refEpisodeTab);
+  const skeletonTagged = renderTab(skeletonTab);
   const logline = extractLogline(seriesOverviewTagged);
 
   const activeTagged = renderTab(activeTab);
@@ -371,6 +373,11 @@ export function buildAIContext(args: BuildContextArgs): string {
     // Workbook is the writer's scratch space. Give it full access to every
     // other canonical tab so the writer can draft reference episodes, plot
     // paragraphs, notes — anything — without leaving the tab.
+    if (skeletonTagged.trim()) {
+      sections.push(
+        `## Series Skeleton (from the Series Skeleton tab — use this as the authoritative spine, phase breakdown, and character arcs)\n${skeletonTagged}`
+      );
+    }
     if (refEpisodeTagged) {
       const refSections = splitTabByH3(refEpisodeTagged);
       if (refSections.length > 0) {
