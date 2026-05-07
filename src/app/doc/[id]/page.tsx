@@ -7,6 +7,7 @@ import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import QualityAgentModal from "@/components/ai/QualityAgentModal";
+import QualityAgentPanel from "@/components/ai/QualityAgentPanel";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
@@ -59,7 +60,7 @@ export default function DocumentPage() {
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
-  const [qualityEvalRequest, setQualityEvalRequest] = useState<{
+  const [qualityPanelRequest, setQualityPanelRequest] = useState<{
     episodeTabId: string;
     episodeLabel: string;
     episodeIndex: number;
@@ -747,8 +748,6 @@ export default function DocumentPage() {
               onClose={() => {
                 setAiSidebarOpen(false);
               }}
-              qualityEvalRequest={qualityEvalRequest}
-              onQualityEvalConsumed={() => setQualityEvalRequest(null)}
             />
           </div>
         )}
@@ -771,6 +770,17 @@ export default function DocumentPage() {
             <PromptEditor onClose={() => setPromptsOpen(false)} />
           </div>
         )}
+        {qualityPanelRequest && (
+          <div className="w-96 border-l border-gray-200 bg-gray-50">
+            <QualityAgentPanel
+              documentId={doc.id}
+              episodeTabId={qualityPanelRequest.episodeTabId}
+              episodeLabel={qualityPanelRequest.episodeLabel}
+              episodeIndex={qualityPanelRequest.episodeIndex}
+              onClose={() => setQualityPanelRequest(null)}
+            />
+          </div>
+        )}
       </div>
 
       {qualityModalOpen && activeTabId && (
@@ -779,11 +789,7 @@ export default function DocumentPage() {
           currentTabId={activeTabId}
           onConfirm={(episodeTabId, episodeLabel, episodeIndex) => {
             setQualityModalOpen(false);
-            setAiSidebarOpen(true);
-            setCommentSidebarOpen(false);
-            setVersionHistoryOpen(false);
-            setPromptsOpen(false);
-            setQualityEvalRequest({ episodeTabId, episodeLabel, episodeIndex });
+            setQualityPanelRequest({ episodeTabId, episodeLabel, episodeIndex });
           }}
           onCancel={() => setQualityModalOpen(false)}
         />
