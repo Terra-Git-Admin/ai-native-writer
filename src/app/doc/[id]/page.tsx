@@ -71,6 +71,7 @@ export default function DocumentPage() {
   // typed [H3] appears in the rail immediately rather than waiting for a
   // tabs-refetch.
   const [activeTabHeadings, setActiveTabHeadings] = useState<HeadingItem[]>([]);
+  const [commentMarkPositions, setCommentMarkPositions] = useState<Record<string, number>>({});
 
   const [aiModels, setAiModels] = useState<
     { id: string; label: string; provider: string; thinking?: boolean }[]
@@ -615,7 +616,7 @@ export default function DocumentPage() {
               </button>
             </>
           )}
-          {(doc.isOwner || (session?.user as { role?: string })?.role === "admin") &&
+          {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
               <button
                 onClick={() => setQualityModalOpen(true)}
@@ -681,6 +682,7 @@ export default function DocumentPage() {
           onAddComment={handleAddComment}
           onCommentMarkClick={handleCommentMarkClick}
           onHeadingsChange={setActiveTabHeadings}
+          onCommentMarkPositions={setCommentMarkPositions}
         />
 
         {commentSidebarOpen && (
@@ -705,6 +707,12 @@ export default function DocumentPage() {
                 editorRef.current?.removeCommentMark(commentMarkId);
               }}
               onCountChange={setOpenCommentCount}
+              h3Headings={activeTabHeadings.filter((h) => h.level === 3)}
+              commentMarkPositions={commentMarkPositions}
+              showSectionFilter={
+                activeTab?.type === "predefined_episodes" &&
+                (doc.isOwner || (session?.user as { role?: string })?.role === "admin")
+              }
             />
           </div>
         )}
