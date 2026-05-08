@@ -90,8 +90,8 @@ export default function QualityAgentModal({
           Quality Agent
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          Select the episode to evaluate. The previous episode will be used for
-          hook context.
+          Select the episode to evaluate. Previous episodes and series summary
+          will be used for context.
         </p>
 
         {episodeTabs.length === 0 ? (

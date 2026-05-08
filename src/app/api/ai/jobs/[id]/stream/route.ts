@@ -149,8 +149,35 @@ export async function GET(
         return;
       }
 
-      // Live subscriber. Replay any tokens the runner has already emitted,
-      // then attach listeners for the rest.
+      // Live subscriber. If the runner already reached a terminal state
+      // before this client connected, replay the final event immediately
+      // (the emitter events already fired and won't fire again).
+      if (runner.status === "completed") {
+        if (runner.buffer.length > 0) sendEvent("token", runner.buffer);
+        sendEvent("done", {
+          content: runner.buffer,
+          completedAt: job.completedAt?.toISOString() ?? new Date().toISOString(),
+        });
+        closeOnce();
+        return;
+      }
+      if (runner.status === "failed") {
+        sendEvent("error", {
+          reason: job.failureReason ?? "unknown",
+          completedAt: job.completedAt?.toISOString() ?? new Date().toISOString(),
+        });
+        closeOnce();
+        return;
+      }
+      if (runner.status === "cancelled") {
+        sendEvent("cancelled", {
+          completedAt: job.completedAt?.toISOString() ?? new Date().toISOString(),
+        });
+        closeOnce();
+        return;
+      }
+
+      // Runner still active — replay buffered tokens then attach listeners.
       if (runner.buffer.length > 0) {
         sendEvent("token", runner.buffer);
       }
