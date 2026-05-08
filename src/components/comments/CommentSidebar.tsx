@@ -3,6 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 
+interface HeadingItem {
+  level: 1 | 2 | 3;
+  text: string;
+  pos: number;
+}
+
 interface Comment {
   id: string;
   commentMarkId: string;
@@ -26,6 +32,9 @@ interface CommentSidebarProps {
   onApplyCommentMark: (commentMarkId: string) => void;
   onRemoveCommentMark: (commentMarkId: string) => void;
   onCountChange?: (count: number) => void;
+  h3Headings?: HeadingItem[];
+  commentMarkPositions?: Record<string, number>;
+  showSectionFilter?: boolean;
 }
 
 function formatTimestamp(dateStr: string): string {
@@ -50,6 +59,9 @@ export default function CommentSidebar({
   onApplyCommentMark,
   onRemoveCommentMark,
   onCountChange,
+  h3Headings = [],
+  commentMarkPositions = {},
+  showSectionFilter = false,
 }: CommentSidebarProps) {
   const { data: session } = useSession();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -57,6 +69,7 @@ export default function CommentSidebar({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [hideResolved, setHideResolved] = useState(false);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const pendingRef = useRef<HTMLInputElement>(null);
   const pendingContainerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -232,22 +245,54 @@ export default function CommentSidebar({
       return a.resolved ? 1 : -1; // unresolved first
     });
 
-  const visibleThreads = hideResolved ? threads.filter((t) => !t.resolved) : threads;
+  // Find which H3 section a comment mark belongs to by its document position
+  const getThreadSection = (markId: string): string | null => {
+    const pos = commentMarkPositions[markId];
+    if (pos === undefined) return null;
+    let section: string | null = null;
+    for (const h of h3Headings) {
+      if (h.pos <= pos) section = h.text;
+      else break;
+    }
+    return section;
+  };
+
+  const afterResolvedFilter = hideResolved ? threads.filter((t) => !t.resolved) : threads;
+  const visibleThreads =
+    showSectionFilter && selectedSection
+      ? afterResolvedFilter.filter((t) => getThreadSection(t.markId) === selectedSection)
+      : afterResolvedFilter;
   const resolvedCount = threads.filter((t) => t.resolved).length;
   const isActive = (markId: string) => activeCommentId === markId;
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <h3 className="font-semibold">Comments</h3>
-        {resolvedCount > 0 && (
-          <button
-            onClick={() => setHideResolved((v) => !v)}
-            className="text-xs text-gray-500 hover:text-gray-700"
+      <div className="border-b border-gray-200 px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">Comments</h3>
+          {resolvedCount > 0 && (
+            <button
+              onClick={() => setHideResolved((v) => !v)}
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              {hideResolved ? `Show resolved (${resolvedCount})` : "Hide resolved"}
+            </button>
+          )}
+        </div>
+        {showSectionFilter && h3Headings.length > 0 && (
+          <select
+            value={selectedSection ?? ""}
+            onChange={(e) => setSelectedSection(e.target.value || null)}
+            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
-            {hideResolved ? `Show resolved (${resolvedCount})` : "Hide resolved"}
-          </button>
+            <option value="">All episodes</option>
+            {h3Headings.map((h) => (
+              <option key={h.pos} value={h.text}>
+                {h.text}
+              </option>
+            ))}
+          </select>
         )}
       </div>
 

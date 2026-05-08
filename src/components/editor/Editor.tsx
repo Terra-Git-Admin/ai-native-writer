@@ -74,6 +74,7 @@ interface EditorProps {
   onAddComment?: (commentMarkId: string, quotedText: string, from: number, to: number) => void;
   onCommentMarkClick?: (commentMarkId: string) => void;
   onHeadingsChange?: (headings: HeadingItem[]) => void;
+  onCommentMarkPositions?: (positions: Record<string, number>) => void;
 }
 
 export interface EditorHandle {
@@ -113,6 +114,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     onAddComment,
     onCommentMarkClick,
     onHeadingsChange,
+    onCommentMarkPositions,
   },
   ref
 ) {
@@ -676,6 +678,34 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       editor.off("transaction", schedule);
     };
   }, [editor, onHeadingsChange]);
+
+  // Extract comment mark positions and notify parent (rAF-batched, same pattern as heading tracking)
+  useEffect(() => {
+    if (!editor || !onCommentMarkPositions) return;
+    let rafId: ReturnType<typeof requestAnimationFrame>;
+    const schedule = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const positions: Record<string, number> = {};
+        editor.state.doc.descendants((node, pos) => {
+          node.marks.forEach((mark) => {
+            if (mark.type.name === "commentMark" && mark.attrs.commentId) {
+              if (!(mark.attrs.commentId in positions)) {
+                positions[mark.attrs.commentId] = pos;
+              }
+            }
+          });
+        });
+        onCommentMarkPositions(positions);
+      });
+    };
+    editor.on("transaction", schedule);
+    schedule();
+    return () => {
+      cancelAnimationFrame(rafId);
+      editor.off("transaction", schedule);
+    };
+  }, [editor, onCommentMarkPositions]);
 
   const saveDocument = useCallback(
     async (
