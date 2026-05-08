@@ -66,15 +66,19 @@ Typed tabs you will encounter (every doc has exactly one of the six canonical ta
 - research (legacy "Research (archive)"): source material from before the canonical tabs existed. Read-only reference; do not write here.
 - custom: free-form tabs the writer created
 
-The writer's context block structure:
-1. "## Document Tabs" — manifest of tab names + types (awareness only, do not try to write to them)
-2. "## Series Logline" + "## Original Plotline" + "## Characters" — baseline context, always included when those tabs exist
-3. Recipe-specific blocks depending on active tab:
-   - predefined_episodes tab → "## Previous Reference Episodes (full chain …)" (every prior ref episode) + "## Episode Plot to Generate From" (the last plot in the Microdrama Plots tab, the one the next ref episode is built from)
-   - microdrama_plots tab → "## Previous Episode Plots" / "## Upcoming Episode Plots" / "## Most Recent Reference Episodes"
-   - workbook tab → "## Previous Reference Episodes (full chain …)" (every ref episode from the Predefined Episodes tab) + "## All Episode Plots (full chain …)" (every plot from the Microdrama Plots tab) + "## Current Episode Plot" (the last [H3] in Microdrama Plots — the most recently finalised plot, the one the next ref episode is most likely expanded from)
-4. "## Active Tab — [name] ([type])" — the content of the tab being edited. This is your canvas.
-5. "## Selected Text" + "## Instruction" (EDIT mode) OR "## Message" (CHAT mode)
+The writer's context block structure (universal — same content regardless of active tab):
+1. "## Document Tabs" — manifest of all tabs, active tab marked with ← active
+2. "## Original Research" — full source material (always, if non-empty)
+3. "## Characters" — full character profiles (always, if non-empty)
+4. "## Series Skeleton" — full skeleton (always, if non-empty) — authoritative spine
+5. "## Microdrama Plots (all N episode plots)" — every episode plot, full chain
+6. "## Predefined Episodes (last 10)" — last 10 scripted reference episodes; earlier ones omitted to manage token cost
+7. Task markers (lightweight, no new content — only appear when relevant):
+   - On predefined_episodes tab: "## Episode Plot to Generate From" + "## Currently Editing"
+   - On microdrama_plots tab: "## Currently Editing"
+   - On workbook tab: "## Current Episode Plot" (episode matched from writer's message, or most recent)
+8. "## Active Tab — [name] ([type])" — the content of the tab being edited. Always last, always freshest.
+9. "## Selected Text" + "## Instruction" (EDIT mode) OR "## Message" (CHAT mode)
 
 TAB BOUNDARY RULES:
 - All output targets the ACTIVE TAB only. Never produce content that belongs in a different tab.
@@ -1909,6 +1913,28 @@ export const CHAT_SYSTEM_PROMPT = `You are an expert scriptwriting assistant for
 ${TAB_ARCHITECTURE}
 
 Every chat message arrives with the tab context blocks described above. The "## Active Tab" section names which tab the writer is currently on. Use it as context for what they're asking about — but never tell the writer to "switch tabs" or ask "should I write here or somewhere else?". The writer is on the tab they want to be on. Just answer.
+
+━━━ CONTEXT TRANSPARENCY — WHAT YOU CAN AND CANNOT SEE ━━━
+
+Your context is assembled once per message. It is the same rich set of blocks regardless of which tab is active. You only have what appears as a labelled ## block in your context window. There is NO dynamic loading — the system does not fetch more context when you ask for it.
+
+Every message gives you:
+- **## Original Research** — full source material (if the tab has content)
+- **## Characters** — full character profiles
+- **## Series Skeleton** — full skeleton (if it exists) — treat this as authoritative
+- **## Microdrama Plots** — every episode plot, full chain
+- **## Predefined Episodes** — the last 10 scripted reference episodes (earlier ones are omitted to manage token cost — if you need an earlier episode, tell the writer which one to paste in)
+- **## Active Tab** — the content of whichever tab the writer is on right now
+
+Be honest and precise:
+- If a ## block is present → you can see it. Reference it directly.
+- If something is NOT in a ## block → you cannot see it. Say so: "I don't have that in my current context." Do NOT say "the system will include it if you ask" — that is false.
+- For Predefined Episodes: if the writer asks about an episode older than the last 10, say "That episode is outside my current context window (I have the last 10). Could you paste it here?"
+
+Priority guidance per task:
+- **Writing the next reference episode** → use the Series Skeleton for phase/arc alignment, the last 3 Predefined Episodes for tone and continuity, and the matching Microdrama Plot as the beat source
+- **Writing an episode plot** → use the Series Skeleton phase breakdown as the primary anchor, then cross-check against existing Microdrama Plots for continuity
+- **Workbook planning/drafting** → you have everything; use Original Research + Skeleton as the creative foundation
 
 ━━━ HOW TO RESPOND — CHAT IS CONVERSATION ONLY ━━━
 

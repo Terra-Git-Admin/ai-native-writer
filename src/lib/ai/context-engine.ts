@@ -253,29 +253,66 @@ export function buildAIContext(args: BuildContextArgs): string {
   const activeTagged = renderTab(activeTab);
   const sections: string[] = [];
 
+  // ── Universal context (same regardless of active tab) ──────────────────
+  // Phase 1 architecture: every chat message gets the same rich context so
+  // tab-switching mid-conversation doesn't silently drop content the AI was
+  // referencing. Tab-specific task guidance lives in the system prompt, not
+  // in the context assembly.
+
   // Document manifest.
   const manifestLines = tabs
     .filter((t) => !/\(archive\)/i.test(t.title))
     .slice()
     .sort((a, b) => a.position - b.position)
     .map((t) => {
-      const marker = t.id === activeTab.id ? " (active)" : "";
-      return `- ${t.title} — type: ${t.type}${marker}`;
+      const marker = t.id === activeTab.id ? " ← active" : "";
+      return `- ${t.title} (${t.type})${marker}`;
     })
     .join("\n");
   sections.push(`## Document Tabs\n${manifestLines}`);
 
-  // Baseline.
-  if (logline) sections.push(`## Series Logline\n${logline}`);
-  if (researchTagged) sections.push(`## Original Plotline (Research / source material)\n${researchTagged}`);
+  // Original Research — full content always.
+  if (seriesOverviewTagged.trim()) {
+    sections.push(`## Original Research\n${seriesOverviewTagged}`);
+  }
+
+  // Characters — full always.
   if (charactersTagged) sections.push(`## Characters\n${charactersTagged}`);
 
-  // Recipe-specific.
+  // Series Skeleton — full always (authoritative spine).
+  if (skeletonTagged.trim()) {
+    sections.push(`## Series Skeleton\n${skeletonTagged}`);
+  }
+
+  // All Microdrama Plots — full chain always.
+  if (episodePlotTagged) {
+    const allPlots = splitTabByH3(episodePlotTagged);
+    if (allPlots.length > 0) {
+      sections.push(
+        `## Microdrama Plots (all ${allPlots.length} episode plots)\n${allPlots.map((s) => s.content).join("\n\n")}`
+      );
+    }
+  }
+
+  // Last 10 Predefined Episodes — capped to keep token cost manageable.
+  if (refEpisodeTagged) {
+    const allRef = splitTabByH3(refEpisodeTagged);
+    if (allRef.length > 0) {
+      const cap = 10;
+      const slice = allRef.slice(-cap);
+      const omitted = allRef.length - slice.length;
+      const header = omitted > 0
+        ? `## Predefined Episodes (last ${slice.length} of ${allRef.length} — ${omitted} earlier episodes not shown)`
+        : `## Predefined Episodes (all ${slice.length})`;
+      sections.push(`${header}\n${slice.map((s) => s.content).join("\n\n")}`);
+    }
+  }
+
+  // ── Task markers (lightweight, no extra content) ────────────────────────
+  // These help the AI know exactly where the writer is working and what the
+  // next generation target is. They add no large content blocks.
+
   if (activeTab.type === "predefined_episodes") {
-    // Generating predefined episodes: writer wants the FULL previous chain
-    // (no trim) + the single latest Episode Plot (which is how the workflow
-    // is wired — the next episode's plot is finalised as the last [H3] in
-    // the Episode Plots tab, and the ref episode is generated from it).
     const selfSections = splitTabByH3(activeTagged);
     const activeTitle = selection
       ? detectActiveH3Title(selection.taggedText, selection.surroundingContext || "")
@@ -285,42 +322,21 @@ export function buildAIContext(args: BuildContextArgs): string {
       if (i >= 0) return i;
       return selfSections.length > 0 ? selfSections.length - 1 : -1;
     })();
-
-    // All reference episodes authored BEFORE the current editing point.
-    // When the writer is appending a new ref episode at the end, curIdx is
-    // the last existing section; we pass everything strictly before it —
-    // which for a fresh append means every prior episode.
-    const previous =
-      curIdx >= 0 ? selfSections.slice(0, curIdx) : selfSections;
-    if (previous.length > 0) {
-      sections.push(
-        `## Previous Reference Episodes (full chain — all ${previous.length}, in order, from this tab)\n${previous
-          .map((s) => s.content)
-          .join("\n\n")}`
-      );
-    }
-
-    // The LAST Episode Plot in the Episode Plots tab. The writer finalises
-    // the next episode's plot there as the trailing [H3]; that's the plot
-    // this ref episode is built from, not a number-paired match.
     if (episodePlotTagged) {
       const plotSections = splitTabByH3(episodePlotTagged);
       if (plotSections.length > 0) {
         const lastPlot = plotSections[plotSections.length - 1];
         sections.push(
-          `## Episode Plot to Generate From (last [H3] in the Episode Plots tab — finalised plot for the next reference episode)\n${lastPlot.content}`
+          `## Episode Plot to Generate From (last finalised plot — the one the next reference episode expands from)\n${lastPlot.content}`
         );
       }
     }
-
     if (curIdx >= 0 && selfSections.length > 0) {
-      const current = selfSections[curIdx];
       sections.push(
-        `## Currently Editing — "${current.title}"\nThis is the section the writer is working on.`
+        `## Currently Editing — "${selfSections[curIdx].title}"\nThis is the reference episode the writer is working on.`
       );
     }
   } else if (activeTab.type === "microdrama_plots") {
-    // Plots as [H3] sections in this tab.
     const selfSections = splitTabByH3(activeTagged);
     const activeTitle = selection
       ? detectActiveH3Title(selection.taggedText, selection.surroundingContext || "")
@@ -330,89 +346,30 @@ export function buildAIContext(args: BuildContextArgs): string {
       if (i >= 0) return i;
       return selfSections.length > 0 ? selfSections.length - 1 : -1;
     })();
-
     if (curIdx >= 0 && selfSections.length > 0) {
-      const current = selfSections[curIdx];
-      const prevStart = Math.max(0, curIdx - 3);
-      const previous = selfSections.slice(prevStart, curIdx);
-      if (previous.length > 0) {
-        sections.push(
-          `## Previous Episode Plots (last ${previous.length}, from this tab)\n${previous.map((s) => s.content).join("\n\n")}`
-        );
-      }
-      const nextEnd = Math.min(selfSections.length, curIdx + 4);
-      const upcoming = selfSections.slice(curIdx + 1, nextEnd);
-      if (upcoming.length > 0) {
-        sections.push(
-          `## Upcoming Episode Plots (next ${upcoming.length}, from this tab)\n${upcoming.map((s) => s.content).join("\n\n")}`
-        );
-      }
-
-      // Last 3 reference episodes for realised-tone context.
-      if (refEpisodeTagged) {
-        const refSections = splitTabByH3(refEpisodeTagged);
-        const curEpNum = extractEpisodeNumber(current.title);
-        let refSlice: H3Section[] = [];
-        if (curEpNum != null) {
-          const nums = [curEpNum - 3, curEpNum - 2, curEpNum - 1].filter((n) => n > 0);
-          refSlice = sectionsByEpisodeNumbers(refSections, nums);
-        }
-        if (refSlice.length === 0 && refSections.length > 0) {
-          refSlice = refSections.slice(-3);
-        }
-        if (refSlice.length > 0) {
-          sections.push(
-            `## Most Recent Reference Episodes (last ${refSlice.length})\n${refSlice.map((s) => s.content).join("\n\n")}`
-          );
-        }
-      }
-
-      sections.push(`## Currently Editing — "${current.title}"\nThis is the plot the writer is working on.`);
-    }
-  } else if (activeTab.type === "workbook" || activeTab.type === "custom") {
-    // Workbook is the writer's scratch space. Give it full access to every
-    // other canonical tab so the writer can draft reference episodes, plot
-    // paragraphs, notes — anything — without leaving the tab.
-    if (skeletonTagged.trim()) {
       sections.push(
-        `## Series Skeleton (from the Series Skeleton tab — use this as the authoritative spine, phase breakdown, and character arcs)\n${skeletonTagged}`
+        `## Currently Editing — "${selfSections[curIdx].title}"\nThis is the episode plot the writer is working on.`
       );
     }
-    if (refEpisodeTagged) {
-      const refSections = splitTabByH3(refEpisodeTagged);
-      if (refSections.length > 0) {
-        sections.push(
-          `## Previous Reference Episodes (full chain — all ${refSections.length}, from the Predefined Episodes tab)\n${refSections
-            .map((s) => s.content)
-            .join("\n\n")}`
-        );
-      }
-    }
+  } else if (activeTab.type === "workbook" || activeTab.type === "custom") {
+    // For workbook: if the writer's message names an episode number, surface
+    // the matching plot so the AI knows exactly which episode to expand from.
     if (episodePlotTagged) {
       const plotSections = splitTabByH3(episodePlotTagged);
       if (plotSections.length > 0) {
-        sections.push(
-          `## All Episode Plots (full chain — all ${plotSections.length}, from the Microdrama Plots tab)\n${plotSections
-            .map((s) => s.content)
-            .join("\n\n")}`
-        );
-        // If the user's message explicitly names an episode number, use that
-        // plot as the current one. Otherwise fall back to the last plot.
-        const requestedN = userMessage != null
-          ? extractEpisodeNumber(userMessage)
-          : null;
+        const requestedN = userMessage != null ? extractEpisodeNumber(userMessage) : null;
         const currentPlot = requestedN != null
           ? (plotSections.find((s) => extractEpisodeNumber(s.title) === requestedN) ?? plotSections[plotSections.length - 1])
           : plotSections[plotSections.length - 1];
         const label = requestedN != null
           ? `## Current Episode Plot (Episode ${requestedN} — matched from your message)`
-          : `## Current Episode Plot (last [H3] in the Microdrama Plots tab — the most recently finalised plot. When the writer asks to draft the next reference episode in this workbook, this is the plot it expands from)`;
+          : `## Current Episode Plot (most recently finalised — the plot the next reference episode expands from)`;
         sections.push(`${label}\n${currentPlot.content}`);
       }
     }
   }
 
-  // Active tab — last so it's the freshest block.
+  // Active tab — always last so it's the freshest, most prominent block.
   sections.push(`## Active Tab — ${activeTab.title} (${activeTab.type})\n${activeTagged}`);
 
   return sections.filter(Boolean).join("\n\n");
