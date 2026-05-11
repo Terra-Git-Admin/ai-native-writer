@@ -8,7 +8,8 @@ export type JobKind =
   | "next_reference_episode"
   | "format_tab"
   | "series_skeleton"
-  | "series_skeleton_predefined";
+  | "series_skeleton_predefined"
+  | "series_skeleton_auto";
 
 export type JobStatus =
   | "idle"
@@ -153,7 +154,10 @@ export function useJob(args: UseJobArgs) {
   }, []);
 
   const start = useCallback(
-    async (kind: JobKind): Promise<{ ok: boolean; error?: string }> => {
+    async (
+      kind: JobKind,
+      opts?: { userGuidance?: string }
+    ): Promise<{ ok: boolean; error?: string }> => {
       // Reject if an active job already exists in this scope (block & toast).
       if (state.status === "starting" || state.status === "running") {
         return {
@@ -176,6 +180,7 @@ export function useJob(args: UseJobArgs) {
             promptKind: kind,
             modelId: args.modelId,
             thinking: args.thinking,
+            ...(opts?.userGuidance ? { userGuidance: opts.userGuidance } : {}),
           }),
         });
         if (!res.ok) {
