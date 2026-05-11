@@ -37,7 +37,8 @@ export type PromptKind =
   | "next_reference_episode"
   | "format_tab"
   | "series_skeleton"
-  | "series_skeleton_predefined";
+  | "series_skeleton_predefined"
+  | "series_skeleton_auto";
 
 export type JobStatus =
   | "pending"
@@ -98,6 +99,7 @@ export interface CreateJobOpts {
   modelId: string;
   thinking: boolean;
   userId: string;
+  userGuidance?: string;
 }
 
 // Insert the row, register the runner in the in-memory map SYNCHRONOUSLY,
@@ -137,6 +139,7 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
     status: "pending",
     modelId: opts.modelId,
     thinking: opts.thinking,
+    userGuidance: opts.userGuidance ?? null,
     createdBy: opts.userId,
     createdAt: now,
   });
@@ -254,6 +257,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
     const userMessage = await action.loadContext({
       documentId: job.documentId,
       tabId: job.tabId,
+      userGuidance: job.userGuidance ?? undefined,
     });
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });

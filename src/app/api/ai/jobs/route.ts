@@ -11,6 +11,7 @@ const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "format_tab",
   "series_skeleton",
   "series_skeleton_predefined",
+  "series_skeleton_auto",
 ]);
 
 interface CreateJobBody {
@@ -19,6 +20,7 @@ interface CreateJobBody {
   promptKind?: string;
   modelId?: string;
   thinking?: boolean;
+  userGuidance?: string;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -40,7 +42,7 @@ export async function POST(req: Request): Promise<Response> {
     });
   }
 
-  const { documentId, tabId, promptKind, modelId, thinking } = body;
+  const { documentId, tabId, promptKind, modelId, thinking, userGuidance } = body;
 
   if (!documentId || typeof documentId !== "string") {
     return new Response(JSON.stringify({ error: "documentId required" }), {
@@ -103,6 +105,7 @@ export async function POST(req: Request): Promise<Response> {
       modelId,
       thinking: Boolean(thinking),
       userId: session.user.id,
+      userGuidance: typeof userGuidance === "string" ? userGuidance : undefined,
     });
     return new Response(JSON.stringify({ id }), {
       status: 202,

@@ -2390,6 +2390,23 @@ EPISODE COUNT — DECIDE BEFORE GENERATING:
 - Divide the total across 9 phases. Baseline phase length = total ÷ 9 (round as needed). Adjust slightly: Phase 1 shorter (cold-open); Phase 8 slightly longer (climax). All episode numbers must be contiguous and the final episode must land exactly at the chosen total.
 - State the chosen count in the [H1] header as "(Season 1, <N>-episode arc)".
 
+EPISODE ENTRY QUALITY — NON-NEGOTIABLE:
+Every episode entry in the Phase Breakdown must show the arc of that episode in three beats:
+  OPEN → what situation or pressure starts this episode (who is where, what the tension is)
+  BEAT → the central action, discovery, or conversation — what moves the plot, character arc, or information state forward
+  CLOSE → what has changed by the end; what new question or tension is opened (the cliffhanger seed)
+
+For DIALOGUE-DRIVEN episodes (the central beat is two characters talking):
+  Name: (a) what the conversation is OSTENSIBLY about (the stated topic on the surface)
+        (b) what each character is REALLY trying to find out, avoid, or test in that conversation
+        (c) what gets REVEALED vs what stays hidden by the end of the exchange
+        (d) how the dialogue closes — what the cliffhanger sentence or moment is
+
+BAD: "Ep 5: Maya confronts Emma about the photograph."
+GOOD: "Ep 5: OPEN — Maya covers Emma's desk shift, finds the keycard in the drawer. BEAT — Emma returns early; they talk about the upcoming audit (surface); Maya watches Emma's hands — too still; Maya asks if Emma knows who uses Floor 3; Emma's answer is too quick. CLOSE — Maya pockets the keycard on the way out. Emma saw her take it — says nothing."
+
+Every episode entry must be specific enough that a writer knows exactly what scene to write. If the entry could describe 10 different episodes, it is too vague — rewrite it until it describes exactly one.
+
 INPUT MODE — HOW TO USE THE CONTEXT:
 - The context block below contains "## Original Research" (the source material) AND "## Existing Microdrama Plots" (whatever has been drafted so far — possibly empty, possibly partial).
 - TREAT EXISTING PLOTS AS AUTHORITATIVE for whatever phases they cover. Do not contradict them. Reverse-engineer the spine and branches from the existing plots and integrate them into the skeleton at their corresponding phase positions.
@@ -2446,14 +2463,14 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 
 [H3] Phase 1: Ep 1–<N> — <Phase Title>
 [P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep 1: <1-2 sentence happening — what moves the spine or a branch forward>
-[P] Ep 2: <1-2 sentence happening>
-[P] Ep 3: <1-2 sentence happening>
-[P] Ep 4: <1-2 sentence happening>
-[P] Ep <N>: <1-2 sentence happening>
+[P] Ep 1: OPEN — <situation/pressure that starts the episode> → BEAT — <central action or conversation; if dialogue: [surface topic / what each char really wants / what's revealed vs withheld]> → CLOSE — <what shifts; what new question opens>
+[P] Ep 2: OPEN — <...> → BEAT — <...> → CLOSE — <...>
+[P] Ep 3: OPEN — <...> → BEAT — <...> → CLOSE — <...>
+[P] Ep 4: OPEN — <...> → BEAT — <...> → CLOSE — <...>
+[P] Ep <N>: OPEN — <...> → BEAT — <...> → CLOSE — <...>
 
 [H3] Phase 2: Ep <X>–<Y> — <Phase Title>
-[same shape — one progression sentence, then one [P] per episode]
+[same shape — one progression sentence, then one OPEN→BEAT→CLOSE [P] per episode]
 
 [H3] Phase 3: Ep <X>–<Y> — <Phase Title>
 [same shape]
@@ -2619,6 +2636,23 @@ EPISODE COUNT — DECIDE BEFORE GENERATING:
 - Otherwise choose the most natural count between 35 and 45. State it in [H1].
 - Divide across 9 phases proportionally. All episode numbers must be contiguous.
 
+EPISODE ENTRY QUALITY — NON-NEGOTIABLE:
+Every episode entry in the Phase Breakdown must show the arc of that episode in three beats:
+  OPEN → what situation or pressure starts this episode (who is where, what the tension is)
+  BEAT → the central action, discovery, or conversation — what moves the plot, character arc, or information state forward
+  CLOSE → what has changed by the end; what new question or tension is opened (the cliffhanger seed)
+
+For DIALOGUE-DRIVEN episodes (the central beat is two characters talking):
+  Name: (a) what the conversation is OSTENSIBLY about (the stated topic on the surface)
+        (b) what each character is REALLY trying to find out, avoid, or test in that conversation
+        (c) what gets REVEALED vs what stays hidden by the end of the exchange
+        (d) how the dialogue closes — what the cliffhanger sentence or moment is
+
+BAD: "Ep 5: Maya confronts Emma about the photograph."
+GOOD: "Ep 5: OPEN — Maya covers Emma's desk shift, finds the keycard in the drawer. BEAT — Emma returns early; they talk about the upcoming audit (surface); Maya watches Emma's hands — too still; Maya asks if Emma knows who uses Floor 3; Emma's answer is too quick. CLOSE — Maya pockets the keycard on the way out. Emma saw her take it — says nothing."
+
+Every episode entry must be specific enough that a writer knows exactly what scene to write. If the entry could describe 10 different episodes, it is too vague — rewrite it until it describes exactly one.
+
 INPUT MODE — PREDEFINED EPISODES ARE AUTHORITATIVE:
 - The context block contains "## Existing Microdrama Plots" and "## Existing Reference Episodes" — BOTH are authoritative. Reverse-engineer the spine and branches from them. Do not contradict anything established in these.
 - "## Original Research" is background context only — use it to fill gaps in phases not covered by existing episodes, but existing episodes always override research.
@@ -2626,6 +2660,10 @@ INPUT MODE — PREDEFINED EPISODES ARE AUTHORITATIVE:
 - If a "## Previous Series Skeleton" is present in context: you are UPDATING the skeleton, not creating from scratch. Generate the new skeleton, then within each section that has changed, add a CHANGE CALLOUT on its own line immediately after the changed content:
   [P] ⚡ Changed from previous: <one sentence describing what specifically changed and why — e.g., "Phase 3 mid-reveal moved from Ep 13 to Ep 11 to match predefined episode 11 beat">
   Add change callouts only where content differs from the previous version. If a section is unchanged, output it without any callout. This lets the writer scan diffs before committing.
+
+READING PREDEFINED EPISODES:
+Each [H3] in the Reference Episodes context is one episode — opening state + closing cliffhanger.
+Read each independently. Extract: (1) opening situation, (2) central confrontation or reveal, (3) episode-closing cliffhanger. Build spine and branches from these structural anchors. Scripting craft (visual direction, dialogue tone) is irrelevant for skeleton architecture.
 
 ━━━ OUTPUT FORMAT — EXACT SHAPE, NOTHING ELSE ━━━
 
@@ -2672,9 +2710,9 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 
 [H3] Phase 1: Ep 1–<N> — <Phase Title>
 [P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep 1: <1-2 sentence happening>
-[P] Ep 2: <1-2 sentence happening>
-[P] Ep <N>: <1-2 sentence happening>
+[P] Ep 1: OPEN — <situation/pressure that starts the episode> → BEAT — <central action or conversation; if dialogue: [surface topic / what each char really wants / what's revealed vs withheld]> → CLOSE — <what shifts; what new question opens>
+[P] Ep 2: OPEN — <...> → BEAT — <...> → CLOSE — <...>
+[P] Ep <N>: OPEN — <...> → BEAT — <...> → CLOSE — <...>
 [P] ⚡ Changed from previous: <if this phase changed — one sentence> (omit if unchanged)
 
 [H3] Phase 2: Ep <X>–<Y> — <Phase Title>

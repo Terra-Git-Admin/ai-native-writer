@@ -196,6 +196,8 @@ export const aiJobs = sqliteTable("ai_jobs", {
   // JSON-encoded result. { content: string } for v1.
   resultJson: text("result_json"),
   failureReason: text("failure_reason"),
+  // Optional free-text guidance from the writer (passed via chat on skeleton tab).
+  userGuidance: text("user_guidance"),
   // User who initiated the job. References users.id; cascade-delete with user.
   createdBy: text("created_by")
     .notNull()

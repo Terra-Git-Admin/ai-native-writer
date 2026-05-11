@@ -33,6 +33,7 @@ import type { PromptKind } from "@/lib/ai/jobs";
 export interface ActionInput {
   documentId: string;
   tabId: string | null;
+  userGuidance?: string;
 }
 
 export interface Action {
@@ -78,10 +79,12 @@ async function loadDocumentTabs(documentId: string): Promise<DocumentTabs> {
 function hasUsableSkeleton(taggedContent: string): boolean {
   const stripped = taggedContent.replace(/\s/g, "");
   if (stripped.length < 200) return false;
-  // Real skeletons have at least one phase-breakdown [H3] and a Cast section
-  const hasPhase = /\[H3\]\s*Phase\s+\d/i.test(taggedContent);
-  const hasCast = /\[H2\]\s*Cast/i.test(taggedContent);
-  return hasPhase || hasCast;
+  const hasPhase          = /\[H3\]\s*Phase\s+\d/i.test(taggedContent);
+  const hasCast           = /\[H3\]\s*Cast/i.test(taggedContent);           // [H3] not [H2]
+  const hasSeriesSummary  = /\[H2\]\s*Series\s+Summary/i.test(taggedContent);
+  const hasPlotlineArch   = /\[H2\]\s*Plotline\s+Architecture/i.test(taggedContent);
+  const hasPhaseBreakdown = /\[H2\]\s*Phase\s+Breakdown/i.test(taggedContent);
+  return hasPhase || hasCast || hasSeriesSummary || hasPlotlineArch || hasPhaseBreakdown;
 }
 
 // Plot Chunks input: last 10 microdrama plots + episode 1 for premise anchor
@@ -211,8 +214,11 @@ async function loadNextEpisodePlotContext(input: ActionInput): Promise<string> {
     docTabs.seriesSkeleton?.content ?? null
   );
   if (!hasUsableSkeleton(skeletonTagged)) {
+    const isEmpty = skeletonTagged.replace(/\s/g, "").length < 200;
     throw new Error(
-      "Series Skeleton tab is empty or incomplete. Run the Create Series Skeleton agent first, finalise the output in the Workbook, then paste the polished version into the Series Skeleton tab — the Microdrama Plot agent reads from that tab as the authoritative spine."
+      isEmpty
+        ? "Series Skeleton is empty. Go to the Series Skeleton tab and ask the AI to create it, or use the skeleton action buttons in the workbook sidebar."
+        : "Series Skeleton exists but is missing recognisable structure (Phase Breakdown or Series Summary). If you edited it manually, ensure the [H2]/[H3] heading hierarchy is intact."
     );
   }
 
@@ -438,12 +444,25 @@ async function loadSeriesSkeletonPredefinedContext(
   );
 
   const plotsCount = (plotsTagged.match(/^\[H3\]/gm) ?? []).length;
-  const refEpsCount = (refEpsTagged.match(/^\[H3\]/gm) ?? []).length;
+  const refEpsSections = splitTabByH3(refEpsTagged);
+  const refEpsCount = refEpsSections.length;
   if (plotsCount === 0 && refEpsCount === 0) {
     throw new Error(
       "No predefined episodes found. Add episode plots to Microdrama Plots or reference episodes to Predefined Episodes first, then run this action."
     );
   }
+
+  // Pre-process predefined episodes into compact story maps (opening beat + closing beat).
+  // Passing full scripted episodes (Visual/Dialogue/VO detail) buries the structural signal
+  // the skeleton agent needs — story maps give it clean per-episode structural anchors.
+  const refStoryMap = refEpsSections.length > 0
+    ? refEpsSections.map((s) => {
+        const pLines = s.content.split("\n").filter(l => l.startsWith("[P]"));
+        const first = pLines[0] ?? "";
+        const last  = pLines.length > 1 ? pLines[pLines.length - 1] : "";
+        return `${s.title}\n${first}${last && last !== first ? `\n${last}` : ""}`;
+      }).join("\n\n")
+    : "(none yet)";
 
   const existingSkeletonBlock = existingSkeletonTagged.trim()
     ? `## Previous Series Skeleton (EXISTING VERSION — produce the updated skeleton and add ⚡ Changed from previous callouts in every section that differs)\n${existingSkeletonTagged}`
@@ -458,12 +477,61 @@ ${charactersTagged || "(empty)"}
 ## Existing Microdrama Plots (AUTHORITATIVE — ${plotsCount} plots; treat as locked spine input)
 ${plotsTagged || "(none yet)"}
 
-## Existing Reference Episodes (AUTHORITATIVE — ${refEpsCount} episodes; use for confirmed character beats and story direction)
-${refEpsTagged || "(none yet)"}
+## Existing Reference Episodes (AUTHORITATIVE — ${refEpsCount} episodes; story map per episode: opening beat + closing cliffhanger)
+${refStoryMap}
 
 ${existingSkeletonBlock}
 
 Task: Produce the 4-section Series Skeleton (Series Summary, Plotline Architecture, Phase Breakdown, More Details) per the system-prompt format. Base it primarily on the existing predefined episodes — they are authoritative. Use original research only to fill phases not yet covered by episodes. Choose the most natural episode count between 35 and 45. ${existingSkeletonTagged.trim() ? "A Previous Series Skeleton exists — add ⚡ Changed from previous callouts in every section that differs so the writer can review the diff before committing." : "No previous skeleton — generate fresh."}`;
+}
+
+// ─── series_skeleton_auto ───
+//
+// Auto-selecting skeleton generation. Determines path at runtime:
+//   - no skeleton AND predefined count < 5 → research path
+//   - otherwise → predefined path
+// Chat message passed as userGuidance (via ActionInput) is appended as
+// authoritative writer guidance, overriding defaults.
+
+function selectSkeletonPath(
+  skeletonTagged: string,
+  predefinedCount: number
+): "research" | "predefined" {
+  const skeletonExists = skeletonTagged.replace(/\s/g, "").length >= 200;
+  return !skeletonExists && predefinedCount < 5 ? "research" : "predefined";
+}
+
+async function loadSeriesSkeletonAutoContext(
+  input: ActionInput
+): Promise<string> {
+  const { documentId, userGuidance } = input;
+  const docTabs = await loadDocumentTabs(documentId);
+
+  const refEpsTagged = tiptapJsonToTagged(
+    docTabs.predefinedEpisodes?.content ?? null
+  );
+  const predefinedCount = splitTabByH3(refEpsTagged).length;
+  const skeletonTagged = tiptapJsonToTagged(
+    docTabs.seriesSkeleton?.content ?? null
+  );
+
+  const path = selectSkeletonPath(skeletonTagged, predefinedCount);
+
+  const baseContext =
+    path === "research"
+      ? await loadSeriesSkeletonContext(input)
+      : await loadSeriesSkeletonPredefinedContext(input);
+
+  const modeBlock =
+    path === "predefined"
+      ? `GENERATION MODE: PREDEFINED-FIRST. Predefined Episodes are AUTHORITATIVE. Research fills gaps only.${skeletonTagged.replace(/\s/g, "").length >= 200 ? " Existing skeleton present — add ⚡ Changed from previous callouts in every section that differs." : ""}\n\n`
+      : "";
+
+  const guidanceBlock = userGuidance?.trim()
+    ? `\n\n## Writer Guidance (AUTHORITATIVE — honour these instructions over all defaults)\n${userGuidance.trim()}`
+    : "";
+
+  return modeBlock + baseContext + guidanceBlock;
 }
 
 // ─── Registry ───
@@ -506,6 +574,14 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "series_skeleton_predefined",
     systemPromptFallback: SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT,
     loadContext: loadSeriesSkeletonPredefinedContext,
+  },
+  series_skeleton_auto: {
+    kind: "series_skeleton_auto",
+    // Uses the research system prompt as base (has full output format spec).
+    // The predefined mode preamble is injected into context when needed.
+    systemPromptId: "series_skeleton",
+    systemPromptFallback: SERIES_SKELETON_SYSTEM_PROMPT,
+    loadContext: loadSeriesSkeletonAutoContext,
   },
 };
 

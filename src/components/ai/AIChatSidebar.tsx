@@ -183,7 +183,7 @@ export default function AIChatSidebar({
     aiJob.state.status === "starting" || aiJob.state.status === "running";
 
   const handleStartJob = useCallback(
-    async (kind: JobKind) => {
+    async (kind: JobKind, opts?: { userGuidance?: string }) => {
       if (isAIBusy || isStreaming) return;
       // Format Document reads the tab fresh from DB at job-run time. Without
       // a flush, recent typing that's still in the autosave debounce window
@@ -195,7 +195,7 @@ export default function AIChatSidebar({
       } catch {
         /* logged via client-trace */
       }
-      const r = await aiJob.start(kind);
+      const r = await aiJob.start(kind, opts);
       if (!r.ok) {
         setError(r.error ?? "Could not start AI job.");
       }
@@ -488,6 +488,26 @@ export default function AIChatSidebar({
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() || isStreaming) return;
+
+    // On the series_skeleton tab, detect skeleton generation intent and route
+    // to the series_skeleton_auto job so the dedicated skeleton system prompt
+    // (with full quality rules + proper output format) is used instead of the
+    // general chat prompt. The writer's message becomes the userGuidance.
+    const isSkeletonTab = activeTab.type === "series_skeleton";
+    // Require both an action verb AND "skeleton" in the message to avoid
+    // triggering skeleton job on questions that merely mention the word.
+    const SKELETON_ACTION = /\b(create|generate|update|rewrite|rebuild|redo|make|build|write|draft)\b/i;
+    const SKELETON_NOUN = /\bskeleton\b/i;
+    const isSkeletonIntent =
+      isSkeletonTab &&
+      SKELETON_ACTION.test(input) &&
+      SKELETON_NOUN.test(input);
+    if (isSkeletonIntent && !isAIBusy) {
+      void handleStartJob("series_skeleton_auto", { userGuidance: input });
+      setInput("");
+      return;
+    }
+
     // Snapshot the apply context at SEND time. The active tab can shift
     // while the LLM streams; the apply target is the tab the writer was
     // looking at when they hit Send. selectionAtSubmit is preserved as a
