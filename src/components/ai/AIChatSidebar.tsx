@@ -494,11 +494,14 @@ export default function AIChatSidebar({
     // (with full quality rules + proper output format) is used instead of the
     // general chat prompt. The writer's message becomes the userGuidance.
     const isSkeletonTab = activeTab.type === "series_skeleton";
+    // Require both an action verb AND "skeleton" in the message to avoid
+    // triggering skeleton job on questions that merely mention the word.
+    const SKELETON_ACTION = /\b(create|generate|update|rewrite|rebuild|redo|make|build|write|draft)\b/i;
+    const SKELETON_NOUN = /\bskeleton\b/i;
     const isSkeletonIntent =
       isSkeletonTab &&
-      /\b(skeleton|create|generate|update|rewrite|rebuild|redo|make)\b/i.test(
-        input
-      );
+      SKELETON_ACTION.test(input) &&
+      SKELETON_NOUN.test(input);
     if (isSkeletonIntent && !isAIBusy) {
       void handleStartJob("series_skeleton_auto", { userGuidance: input });
       setInput("");
