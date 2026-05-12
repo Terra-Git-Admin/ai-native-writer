@@ -73,7 +73,7 @@ export default function CommentSidebar({
   const pendingRef = useRef<HTMLInputElement>(null);
   const pendingContainerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const threadRefs = useRef<Record<string, HTMLDivElement>>({});
+  const threadRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isAdmin = session?.user?.role === "admin";
 
@@ -100,17 +100,30 @@ export default function CommentSidebar({
     onCountChange(openCount);
   }, [comments, onCountChange]);
 
+  // Reset section filter when tab changes — prevents stale filter from prior tab.
+  useEffect(() => {
+    setSelectedSection(null);
+  }, [tabId]);
+
   // Auto-scroll sidebar to the active thread when it changes.
-  // If the thread is hidden (resolved + hideResolved), unhide first so it becomes visible.
+  // If the thread is hidden (by hideResolved or section filter), update filters to make it visible.
   useEffect(() => {
     if (!activeCommentId) return;
     const el = threadRefs.current[activeCommentId];
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } else {
-      // Thread not in DOM — likely hidden by hideResolved. Show all threads.
+      // Thread not in DOM — unhide resolved threads and update section filter to match this comment's section.
       setHideResolved(false);
+      const section = getThreadSection(activeCommentId);
+      setSelectedSection(section === "__unknown__" ? null : section);
+      // Scroll after React re-renders with the updated filter
+      setTimeout(() => {
+        const updated = threadRefs.current[activeCommentId];
+        if (updated) updated.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 50);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCommentId]);
 
   // Scroll to pending comment and focus input when it appears
@@ -188,6 +201,7 @@ export default function CommentSidebar({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ resolved }),
     });
+    if (resolved) setHideResolved(true);
     fetchComments();
   };
 
@@ -245,11 +259,12 @@ export default function CommentSidebar({
       return a.resolved ? 1 : -1; // unresolved first
     });
 
-  // Find which H3 section a comment mark belongs to by its document position
-  const getThreadSection = (markId: string): string | null => {
+  // Find which H3 section a comment mark belongs to by its document position.
+  // Returns "__unknown__" when the mark is not in the document (e.g. wiped by AI regen).
+  const getThreadSection = (markId: string): string => {
     const pos = commentMarkPositions[markId];
-    if (pos === undefined) return null;
-    let section: string | null = null;
+    if (pos === undefined) return "__unknown__";
+    let section: string = "__unknown__";
     for (const h of h3Headings) {
       if (h.pos <= pos) section = h.text;
       else break;
@@ -260,7 +275,10 @@ export default function CommentSidebar({
   const afterResolvedFilter = hideResolved ? threads.filter((t) => !t.resolved) : threads;
   const visibleThreads =
     showSectionFilter && selectedSection
-      ? afterResolvedFilter.filter((t) => getThreadSection(t.markId) === selectedSection)
+      ? afterResolvedFilter.filter((t) => {
+          const s = getThreadSection(t.markId);
+          return s === selectedSection || s === "__unknown__";
+        })
       : afterResolvedFilter;
   const resolvedCount = threads.filter((t) => t.resolved).length;
   const isActive = (markId: string) => activeCommentId === markId;
@@ -308,7 +326,7 @@ export default function CommentSidebar({
         {visibleThreads.map(({ markId, root, replies, resolved, quotedText }) => (
           <div
             key={markId}
-            ref={(el) => { if (el) threadRefs.current[markId] = el; }}
+            ref={(el) => { threadRefs.current[markId] = el; }}
             onClick={() => onActiveCommentChange(isActive(markId) ? null : markId)}
             className={`cursor-pointer rounded-lg border p-3 space-y-2 transition-colors ${
               resolved
@@ -322,6 +340,18 @@ export default function CommentSidebar({
             {quotedText && (
               <p className="text-xs italic text-gray-500 border-l-2 border-yellow-400 pl-2 line-clamp-2">
                 &ldquo;{quotedText}&rdquo;
+              </p>
+            )}
+
+            {/* Location lost indicator */}
+            {commentMarkPositions[markId] === undefined && !resolved && (
+              <span className="text-[10px] text-amber-500">&#9888; location lost in document</span>
+            )}
+
+            {/* Can't locate feedback when clicked but mark is gone */}
+            {isActive(markId) && commentMarkPositions[markId] === undefined && (
+              <p className="text-[10px] text-amber-500">
+                Can&apos;t locate in document — marker may have been replaced by AI content.
               </p>
             )}
 
@@ -352,7 +382,10 @@ export default function CommentSidebar({
                       )
                     ) : (
                       <button
-                        onClick={() => resolveComment(comment.id, true)}
+                        onClick={() => {
+                          resolveComment(comment.id, true);
+                          onRemoveCommentMark(markId);
+                        }}
                         className="text-xs text-green-600 hover:text-green-800"
                         title="Resolve"
                       >
