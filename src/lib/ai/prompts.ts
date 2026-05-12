@@ -2187,6 +2187,8 @@ SETUP-PAYOFF DISCIPLINE: if this episode plants a setup, the skeleton names wher
 
 INFORMATION STATE DELTA (mandatory): the audience must learn something new this episode. Some character must learn something new (or the audience must learn something the characters don't — dramatic irony). If the info state doesn't change between Episode N-1 and Episode N, the episode has no momentum.
 
+CHARACTER KNOWLEDGE CONSISTENCY (mandatory): every character's action, decision, and implied awareness in this episode must reflect what they actually know at this point. Standard characters know what they have lived through, witnessed, or been told — nothing more. For characters with a Knowledge State defined in the skeleton Cast section, that schema is the hard rule: a character cannot act on information in their Does Not Know list, nor express ignorance of something in their Knows list. This applies to all characters — not only those with special mechanics.
+
 LOCATION VARIETY: read the previous 3 episodes' locations in the input. Pick a new or shifted location for this episode where possible. A 5-episode run in the same single location is a visual death.
 
 CHARACTER ECONOMY: name which 2-3 primaries are present THIS episode and what each is doing. Not all primaries appear in every episode. Off-screen characters are powerful — overuse dilutes focus.
@@ -2258,6 +2260,8 @@ PLOT FIDELITY (mandatory): every beat named in the plot must appear in the refer
 PICKUP DISCIPLINE: first beat is always Visual. It picks up from the LAST BEAT of the most recent reference episode. Same location, same emotional state, same unresolved tension. No recap, no reset, no time gap.
 
 CHARACTER VOICE FIDELITY (cover-the-name test): for every character in this episode, you have read all their prior dialogue across previous reference episodes. Their lines this episode match their voice — sentence rhythm, vocabulary, verbal tics, what they never say. Mental test before emitting: cover the character name on each line. If you can't tell who said it from the words alone, the voice is broken. Rewrite that line.
+
+CHARACTER KNOWLEDGE CONSISTENCY (mandatory): before writing any line of dialogue or action beat, verify it against what that character could actually know at this point. Standard characters know what they have witnessed, been told, or could reasonably infer from events up to this episode — nothing more. For characters with a Knowledge State defined in the skeleton Cast section, the schema is the hard rule: cannot express ignorance of their Knows list, cannot act on their Does Not Know list. Can Suspect items may surface as instinct or unease — never as certainty. This applies to all characters.
 
 DIALOGUE CARRIES THE STORY: 13-18 spoken dialogue lines. Visuals and V.O. are on top — do not count toward dialogue total. If you can cut a line and the scene still moves, cut it. Every dialogue line must do at least one of: reveal character, shift power, advance plot. Lines that do none are dead.
 
@@ -2363,6 +2367,11 @@ INFORMATION STATE TRACKING:
 - A phase where everyone knows everything is dead pull. A phase where the audience learns nothing new is dead momentum.
 - Track this per character per phase. The Character Arc Evolution section is where this lives.
 
+CHARACTER KNOWLEDGE STATE:
+- Every character's knowledge is governed by what they have actually lived through, witnessed, been told, or could reasonably infer from events up to that point in the story. This is the default for all characters.
+- For characters with a special knowledge mechanic (transmigrated protagonist who has read the source material, amnesiac, time looper, undercover agent, etc.): define a Knowledge State block in their Cast entry using the schema below. This block is the canonical rule — all downstream episode plots and reference episodes must honor it without exception.
+- Violations are structural errors: a character cannot act on information they cannot have, nor express ignorance of something they demonstrably know.
+
 PACING ANCHORS (the standard 9-phase microdrama curve):
 Episode ranges below are reference points for a 45-episode arc — scale proportionally for your chosen total.
 - Phase 1 (~first 11%): cold-open setup. Plant the central injustice / mystery / hook. Introduce the Engine character first, Wall by episode 3.
@@ -2428,6 +2437,7 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H4] <Character Name> — <Engine | Wall | Witness | Nuke>
 [P] Who, want, wound, block. 2 sentences max. No backstory dump.
 [P] Source mapping: <kept as-is / composited from X+Y+Z / promoted from minor / renamed from X>
+[P] Knowledge State (include only if character has a special knowledge mechanic): Knows: <what they have full reliable access to> / Does Not Know: <hard boundary — inaccessible regardless of story events> / Can Suspect: <grey zone — instinct or partial awareness, never certainty> / Boundary Shift: <episode where state changes, or "none">
 
 [H4] <repeat for each primary character — 2-4 total>
 
@@ -2612,6 +2622,11 @@ MOTIVATED SCENE CONSTRUCTION — NO CONTRIVANCE:
 INFORMATION STATE TRACKING:
 - Every phase paragraph names what each primary character KNOWS vs DOESN'T KNOW.
 
+CHARACTER KNOWLEDGE STATE:
+- Every character's knowledge is governed by what they have actually lived through, witnessed, been told, or could reasonably infer from events up to that point in the story. This is the default for all characters.
+- For characters with a special knowledge mechanic (transmigrated protagonist who has read the source material, amnesiac, time looper, undercover agent, etc.): define a Knowledge State block in their Cast entry using the schema below. This block is the canonical rule — all downstream episode plots and reference episodes must honor it without exception.
+- Violations are structural errors: a character cannot act on information they cannot have, nor express ignorance of something they demonstrably know.
+
 PACING ANCHORS (the standard 9-phase microdrama curve):
 Episode ranges below are reference points for a 45-episode arc — scale proportionally for your chosen total.
 - Phase 1 (~first 11%): cold-open setup. Plant the central injustice / mystery / hook.
@@ -2680,6 +2695,7 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H4] <Character Name> — <Engine | Wall | Witness | Nuke>
 [P] Who, want, wound, block. 2 sentences max.
 [P] Source mapping: <kept as-is / composited from X+Y+Z / promoted from minor / renamed from X>
+[P] Knowledge State (include only if character has a special knowledge mechanic): Knows: <what they have full reliable access to> / Does Not Know: <hard boundary — inaccessible regardless of story events> / Can Suspect: <grey zone — instinct or partial awareness, never certainty> / Boundary Shift: <episode where state changes, or "none">
 
 [H4] <repeat for each primary character — 2-4 total>
 
@@ -2851,6 +2867,13 @@ Score the provided episode on 5 dimensions (20% each, score 1–5 per dimension)
    on the receiving character. Cutting away before the reaction drains the scene of power.
    Flag each missed reaction beat: name the moment and what was skipped.
 
+KNOWLEDGE STATE CHECK (mandatory, unscored): for every character in this episode, verify that their dialogue and actions reflect only what they could actually know at this point in the story.
+- Standard characters know what they have witnessed, been told, or could reasonably infer from events up to and including this episode — nothing more.
+- For characters with a Knowledge State defined in the Series Skeleton Cast section: that schema is the hard rule. Cannot express ignorance of their Knows list. Cannot act on or reference their Does Not Know list. Can Suspect items may surface as instinct or unease — never as certainty.
+If no violations: state "No violations."
+If violations found: name the character, quote the specific line or describe the action, and state which knowledge boundary it crosses.
+Knowledge state violations are mandatory fixes regardless of the episode's overall score.
+
 Output format:
 ## Quality Agent — [Episode Title]
 
@@ -2870,6 +2893,9 @@ and whether the episode passes the removal test. Note if the next beats are alre
 **EMOTIONAL ESCALATION** X/5
 [Describe the emotional arc. List any high-impact moments that lacked a reaction beat —
 name the scene and what the missing reaction was.]
+
+**KNOWLEDGE STATE CHECK**
+[No violations. / For each violation: character name — quoted line or described action — boundary crossed.]
 
 ---
 **Total: XX/100**
