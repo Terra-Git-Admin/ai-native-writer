@@ -143,6 +143,17 @@ export function getDb(): DB {
     migrate(_instance, {
       migrationsFolder: path.join(process.cwd(), "drizzle"),
     });
+
+    // Defensive guard: if migration 0006 was recorded as applied in
+    // __drizzle_migrations but the ALTER TABLE never ran (e.g. DB restored
+    // from a backup taken after the journal entry was written but before the
+    // column was physically added), add the column now. Idempotent.
+    const cols = sqlite.pragma("table_info(ai_jobs)") as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "user_guidance")) {
+      sqlite.exec("ALTER TABLE `ai_jobs` ADD `user_guidance` text");
+      logEvent("db.migration.defensive.user_guidance_added", {});
+    }
+
     const db = fileStats(dbPath);
     const wal = fileStats(`${dbPath}-wal`);
     logEvent("db.open", {

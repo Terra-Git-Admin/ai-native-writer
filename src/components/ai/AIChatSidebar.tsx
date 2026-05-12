@@ -508,6 +508,22 @@ export default function AIChatSidebar({
       return;
     }
 
+    // On the predefined_episodes tab, detect reference episode generation intent
+    // and route to the next_reference_episode job so the correct episode number
+    // is computed from existing ref episodes (not inferred from full context).
+    const isRefEpTab = activeTab.type === "predefined_episodes";
+    const REF_EP_ACTION_RE = /\b(create|generate|write|draft|make|build|add)\b/i;
+    const REF_EP_NOUN_RE = /\breference\s+episode\b/i;
+    const isRefEpIntent =
+      isRefEpTab &&
+      REF_EP_ACTION_RE.test(input) &&
+      REF_EP_NOUN_RE.test(input);
+    if (isRefEpIntent && !isAIBusy) {
+      void handleStartJob("next_reference_episode");
+      setInput("");
+      return;
+    }
+
     // Snapshot the apply context at SEND time. The active tab can shift
     // while the LLM streams; the apply target is the tab the writer was
     // looking at when they hit Send. selectionAtSubmit is preserved as a

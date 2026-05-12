@@ -286,11 +286,13 @@ async function loadNextReferenceEpisodeContext(
 
   // Determine N = last reference episode number already generated.
   // Primary: highest episode number found in H3 titles.
-  // Fallback: count of sections (for legacy tabs with no /Episode N/ titles).
+  // Fallback: count of sections that have substantive content (>100 non-ws
+  // chars) — excludes heading-only stubs and non-episode H3 sections that
+  // would otherwise inflate the count via refSections.length.
   const lastRefN = refSections.reduce((max, s) => {
     const n = extractEpisodeNumber(s.title);
     return n != null && n > max ? n : max;
-  }, 0) || refSections.length;
+  }, 0) || refSections.filter(s => s.content.replace(/\s/g, "").length > 100).length;
 
   const targetN = lastRefN + 1;
 
