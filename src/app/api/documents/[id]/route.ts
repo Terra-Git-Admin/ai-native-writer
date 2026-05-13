@@ -113,17 +113,19 @@ export async function PUT(
   // Orphan check: commentMarks in incoming content vs comment rows in DB.
   let orphanMarks: string[] = [];
   let orphanComments: string[] = [];
+  let orphanCommentDetails: { markId: string; tabId: string | null }[] = [];
   if (body.content) {
     try {
       const incoming = JSON.parse(body.content);
       const marksInContent = extractCommentMarkIds(incoming);
       const commentRows = await db
-        .select({ markId: comments.commentMarkId })
+        .select({ markId: comments.commentMarkId, tabId: comments.tabId })
         .from(comments)
         .where(eq(comments.documentId, id));
       const marksInDb = new Set(commentRows.map((r) => r.markId));
       orphanMarks = [...marksInContent].filter((m) => !marksInDb.has(m));
       orphanComments = [...marksInDb].filter((m) => !marksInContent.has(m));
+      orphanCommentDetails = commentRows.filter((r) => !marksInContent.has(r.markId));
     } catch {
       /* ignore */
     }
@@ -146,6 +148,7 @@ export async function PUT(
     nonMarkContentDiffers: diff?.nonMarkContentDiffers ?? null,
     orphanMarks: orphanMarks.length > 0 ? orphanMarks : null,
     orphanComments: orphanComments.length > 0 ? orphanComments : null,
+    orphanCommentDetails: orphanCommentDetails.length > 0 ? orphanCommentDetails : null,
     parseError,
     ...trace,
   };
