@@ -130,6 +130,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // recognise our own saves and avoid false conflict banners.
   const lastSavedServerUpdatedAtRef = useRef<string | null>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Tracks the set of commentMark IDs present after the last rAF tick.
+  // Used to detect when marks disappear from the editor document.
+  const prevMarkIdsRef = useRef<Set<string>>(new Set());
   // Stable per-tab id — threaded into save/poll logs on both client and server
   // so we can correlate events across the two in Cloud Run.
   const tabIdRef = useRef<string>(newId());
@@ -214,6 +217,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     applyCommentMark(commentMarkId: string, from: number, to: number) {
       if (!editor) return;
+      console.log('[cmk-debug] applyCommentMark', { commentMarkId, from, to, docId: documentId, tabId });
       const wasEditable = editor.isEditable;
       if (!wasEditable) editor.setEditable(true);
       editor
@@ -326,6 +330,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     setFullContent(content: string) {
       if (!editor) return;
+      console.warn('[cmk-debug] FORMAT setFullContent: marks before replace', [...prevMarkIdsRef.current], { docId: documentId, tabId });
       const doc = taggedTextToTiptapDoc(content);
       editor.commands.setContent(doc as { type: "doc"; content: [] });
       triggerSave();
@@ -696,6 +701,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             }
           });
         });
+        // Detect marks that disappeared since last tick
+        const lostIds = [...prevMarkIdsRef.current].filter(id => !(id in positions));
+        if (lostIds.length > 0) {
+          console.warn('[cmk-debug] MARKS LOST from editor doc', { lostIds, docId: documentId, tabId });
+        }
+        prevMarkIdsRef.current = new Set(Object.keys(positions));
         onCommentMarkPositions(positions);
       });
     };
@@ -883,6 +894,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
         if (!isOwner) {
           // Reviewers are read-only — always sync to server
+          console.warn('[cmk-debug] REVIEWER POLL: overwriting editor', {
+            saveStatus: saveStatusRef.current,
+            currentMarkIds: [...prevMarkIdsRef.current],
+            docId: documentId,
+            tabId,
+          });
           trace("client.poll.reviewer.applyServer", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
           restoreCursor();
@@ -906,6 +923,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
         if (commentMarkOnly) {
           // Only comment marks differ — reviewer added a highlight. Apply silently.
+          console.warn('[cmk-debug] MARK-ONLY POLL: overwriting editor with server marks', {
+            currentMarkIds: [...prevMarkIdsRef.current],
+            docId: documentId,
+            tabId,
+          });
           trace("client.poll.applyCommentMarks", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
           restoreCursor();
