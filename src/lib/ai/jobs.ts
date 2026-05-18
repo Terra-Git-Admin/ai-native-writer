@@ -262,20 +262,18 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });
 
-    const model = await getAIModel(job.modelId, job.thinking);
+    const model = await getAIModel(job.modelId, true);
 
     const streamOptions: Parameters<typeof streamText>[0] = {
       model,
       system: systemPrompt,
       messages: [{ role: "user", content: userMessage }],
       abortSignal: runner.controller.signal,
-    };
-    if (job.thinking) {
-      streamOptions.providerOptions = {
+      providerOptions: {
         anthropic: { thinking: { type: "enabled", budgetTokens: 10000 } },
         google: { thinkingConfig: { thinkingBudget: 10000 } },
-      };
-    }
+      },
+    };
 
     const result = streamText(streamOptions);
 

@@ -63,7 +63,7 @@ export async function POST(req: Request) {
   try {
     const model = await getAIModel(
       modelId || "claude-sonnet-4-20250514",
-      thinking
+      true
     );
 
     const streamOptions: Parameters<typeof streamText>[0] = {
@@ -73,14 +73,11 @@ export async function POST(req: Request) {
         role: m.role as "user" | "assistant",
         content: m.content,
       })),
-    };
-
-    if (thinking) {
-      streamOptions.providerOptions = {
+      providerOptions: {
         anthropic: { thinking: { type: "enabled", budgetTokens: 10000 } },
         google: { thinkingConfig: { thinkingBudget: 10000 } },
-      };
-    }
+      },
+    };
 
     const result = streamText(streamOptions);
     return result.toTextStreamResponse();
