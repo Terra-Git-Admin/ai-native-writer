@@ -382,10 +382,7 @@ export default function CommentSidebar({
                       )
                     ) : (
                       <button
-                        onClick={() => {
-                          resolveComment(comment.id, true);
-                          onRemoveCommentMark(markId);
-                        }}
+                        onClick={() => resolveComment(comment.id, true)}
                         className="text-xs text-green-600 hover:text-green-800"
                         title="Resolve"
                       >
