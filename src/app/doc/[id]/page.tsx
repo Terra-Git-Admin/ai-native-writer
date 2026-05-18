@@ -77,7 +77,7 @@ export default function DocumentPage() {
     { id: string; label: string; provider: string; thinking?: boolean }[]
   >([]);
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [thinkingEnabled, setThinkingEnabled] = useState(true);
 
   // Durable AI job (workbook actions: Plot Chunks / Next Episode Plot /
   // Next Reference Episode). Hoisted to the doc-page level so the
