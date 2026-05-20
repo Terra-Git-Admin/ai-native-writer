@@ -8,6 +8,9 @@ import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import QualityAgentModal from "@/components/ai/QualityAgentModal";
 import QualityAgentPanel from "@/components/ai/QualityAgentPanel";
+import ResearchAgentPanel from "@/components/ai/ResearchAgentPanel";
+import OutsidersPerspectivePanel from "@/components/ai/OutsidersPerspectivePanel";
+import OutsidersPerspectiveModal from "@/components/ai/OutsidersPerspectiveModal";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
@@ -61,6 +64,13 @@ export default function DocumentPage() {
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityPanelRequest, setQualityPanelRequest] = useState<{
+    episodeTabId: string;
+    episodeLabel: string;
+    episodeIndex: number;
+  } | null>(null);
+  const [researchAgentOpen, setResearchAgentOpen] = useState(false);
+  const [outsidersModalOpen, setOutsidersModalOpen] = useState(false);
+  const [outsidersPanelRequest, setOutsidersPanelRequest] = useState<{
     episodeTabId: string;
     episodeLabel: string;
     episodeIndex: number;
@@ -616,14 +626,34 @@ export default function DocumentPage() {
               </button>
             </>
           )}
+          {doc?.isOwner && activeTab?.type === "workbook" && (
+            <button
+              onClick={() => setResearchAgentOpen((o) => !o)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                researchAgentOpen
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              }`}
+            >
+              Research Agent
+            </button>
+          )}
           {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
-              <button
-                onClick={() => setQualityModalOpen(true)}
-                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-              >
-                Quality Agent
-              </button>
+              <>
+                <button
+                  onClick={() => setOutsidersModalOpen(true)}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+                >
+                  Outsiders View
+                </button>
+                <button
+                  onClick={() => setQualityModalOpen(true)}
+                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+                >
+                  Quality Agent
+                </button>
+              </>
             )}
           <button
             onClick={() => {
@@ -778,6 +808,25 @@ export default function DocumentPage() {
             <PromptEditor onClose={() => setPromptsOpen(false)} />
           </div>
         )}
+        {researchAgentOpen && (
+          <div className="w-96 border-l border-gray-200 bg-gray-50">
+            <ResearchAgentPanel
+              documentId={doc.id}
+              onClose={() => setResearchAgentOpen(false)}
+            />
+          </div>
+        )}
+        {outsidersPanelRequest && (
+          <div className="w-96 border-l border-gray-200 bg-gray-50">
+            <OutsidersPerspectivePanel
+              documentId={doc.id}
+              episodeTabId={outsidersPanelRequest.episodeTabId}
+              episodeIndex={outsidersPanelRequest.episodeIndex}
+              episodeLabel={outsidersPanelRequest.episodeLabel}
+              onClose={() => setOutsidersPanelRequest(null)}
+            />
+          </div>
+        )}
         {qualityPanelRequest && (
           <div className="w-96 border-l border-gray-200 bg-gray-50">
             <QualityAgentPanel
@@ -791,6 +840,17 @@ export default function DocumentPage() {
         )}
       </div>
 
+      {outsidersModalOpen && activeTabId && (
+        <OutsidersPerspectiveModal
+          tabs={tabs}
+          currentTabId={activeTabId}
+          onConfirm={(episodeTabId, episodeLabel, episodeIndex) => {
+            setOutsidersModalOpen(false);
+            setOutsidersPanelRequest({ episodeTabId, episodeLabel, episodeIndex });
+          }}
+          onCancel={() => setOutsidersModalOpen(false)}
+        />
+      )}
       {qualityModalOpen && activeTabId && (
         <QualityAgentModal
           tabs={tabs}
