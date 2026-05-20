@@ -40,6 +40,8 @@ import {
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
   SERIES_SKELETON_SYSTEM_PROMPT,
   QUALITY_AGENT_SYSTEM_PROMPT,
+  RESEARCH_AGENT_SYSTEM_PROMPT,
+  OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -66,6 +68,8 @@ const DEFAULTS = [
   { id: "next_reference_episode", label: "Workbook: Create Next Reference Episode", content: NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT },
   { id: "series_skeleton", label: "Workbook: Create Series Skeleton (45-ep arc)", content: SERIES_SKELETON_SYSTEM_PROMPT },
   { id: "quality_agent", label: "Quality Agent", content: QUALITY_AGENT_SYSTEM_PROMPT },
+  { id: "research_agent", label: "Research Agent", content: RESEARCH_AGENT_SYSTEM_PROMPT },
+  { id: "outsiders_perspective", label: "Outsiders Perspective Agent", content: OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {
