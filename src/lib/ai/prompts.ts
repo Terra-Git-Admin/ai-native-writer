@@ -2223,6 +2223,14 @@ LOCATION VARIETY: read the previous 3 episodes' locations in the input. Pick a n
 
 CHARACTER ECONOMY: name which 2-3 primaries are present THIS episode and what each is doing. Not all primaries appear in every episode. Off-screen characters are powerful — overuse dilutes focus.
 
+CHARACTER ABSENCE WARNING (mandatory pre-generation check): Before generating, scan all existing episode plots in the input. For each primary character, count consecutive episodes where they do not appear. If any primary character has been absent from 3+ consecutive episodes, flag before proceeding: "WARNING: [Character] has not appeared in [N] consecutive episodes (last seen: Ep X in state: Y). Confirm: (a) Is this absence structurally justified? (b) Is their arc in a critical phase per the skeleton? If yes, this episode may need a scene for them. (c) What are they doing offscreen, consistent with their last known state?" Primary characters do not disappear during their emotionally critical phases.
+
+EMOTIONAL STATE CARRYOVER (mandatory): Before writing any primary character's scene, verify their emotional entry state against their most recent appearance. The output must include for each primary character appearing here: "[Character] enters as: [emotional state from Episode X]" and "[Character] exits as: [emotional state at end of this episode]". A character cannot enter in an emotional state contradicting where they left off without a bridging on-screen event. If entry and exit states are dramatically different with no bridge: "CONTINUITY GAP: [Character] moves from [state A] (Ep X) to [state B] with no visible bridge." Most critical for sacrifice and climax episodes — a character making a major sacrifice cannot arrive at that moment without showing the accumulated weight that built to it.
+
+POST-REVERSAL SYMPATHY CHECK (applies from Phase 5 onward if protagonist has been revealed as morally compromised): Before generating, answer: "What specifically in this episode gives the audience permission to keep caring about this protagonist?" Must be concrete — not "audience curiosity" (curiosity ≠ sympathy), not "she's still the protagonist" (position ≠ permission). Valid: a genuine cost she pays, a moment of non-strategic vulnerability, an act done for someone else with no personal benefit. If no clear answer: "SYMPATHY GAP: This episode advances plot without providing the audience a reason to remain emotionally invested. Consider: what does [character] feel, lose, or give in this episode?"
+
+PHASE 8-9 COMPRESSION CHECK (applies only when this episode falls in Phase 8-9): Count distinct major resolutions this episode delivers: (1) a character's fate is settled, (2) a central plot thread closes, (3) a primary relationship reaches its final state, (4) a major emotional payoff lands. If more than one: "COMPRESSION WARNING: This Phase [8/9] episode delivers [N] major resolutions: [list]. In the final act, each major payoff earns its own episode. Consider distributing across adjacent episodes." The final act is where the audience collects on everything the series built — the writer knows where it's going and wants to get there; the audience needs to be brought there, not delivered.
+
 CHARACTER VOICE PRESERVATION: read the Characters tab. Their dialogue choices in this episode must match their voice profile. The Engine character drives action; the Wall blocks; the Witness sees; the Nuke detonates.
 
 PHASE FIDELITY: this episode falls in Phase N (1–9) per skeleton. Phase 1–2 are setup phases (plant, don't pay off). Phase 3–4 begin escalation. Phase 5 is mid-series turn. Phase 6–7 climb to climax. Phase 8 climax. Phase 9 resolution. The episode's pacing must match its phase intent.
@@ -2243,7 +2251,7 @@ PHASE FIDELITY: this episode falls in Phase N (1–9) per skeleton. Phase 1–2 
 
 [P] Spine motion: <one sentence — how PLOT-A advanced this episode, OR which branch converged, OR which payoff landed>
 
-[P] Characters present: <which primaries appear; for each, what they want THIS episode (different from their series want)>
+[P] Characters present: <which primaries appear; for each: what they want THIS episode (different from their series want) + enters as: [emotional state from last appearance, cite episode] + exits as: [emotional state at end of this episode]>
 
 [P] Information state delta: <what audience learns. What character X now knows. Dramatic-irony gap if any.>
 
@@ -2309,6 +2317,23 @@ STAGE DIRECTIONS — physical and character-specific:
 - Stage direction tells the actor exactly what the body does. Generic emotion labels do not.
 
 V.O. SPARINGLY: V.O. is the character's interior. Use it 0-3 times per episode max. Overusing V.O. tells instead of shows.
+
+SUBTEXT RULE — PEAK SCENES (mandatory): For any scene involving confession, sacrifice, betrayal, major emotional reversal, or a declaration of love/guilt/hatred — the most important statement must NOT be the first thing said. The character must approach it obliquely first: a physical action before words, an indirect opening line that circles the truth, a deflection that fails, or the question they ask before they can say the thing they came to say. TEST before emitting: identify the most important thing said in this scene — is it the first thing said? If yes, restructure. Give it at least two beats of oblique approach before it arrives. The longer the approach, the more devastation in the arrival.
+BAD: Jesse enters. "Let her go, Captain. She didn't do it. I did it all."
+BETTER: Jesse enters. Looks at Sadie first. Doesn't speak to Miller. Then quietly: "How long has she been in here?" Then silence. Then: "Let her go, Captain. She didn't do it."
+
+PHYSICAL-BEFORE-VERBAL (mandatory in charged scenes): For any scene where a character receives devastating or transformative information — a betrayal revealed, a confession made, an identity shattered, a sacrifice offered — write at least one physical reaction beat BEFORE their verbal response. The body responds first. The mouth follows.
+Bad stage direction: "(shocked)" — emotion label, not behavior.
+Good: "(sits back slowly, both hands flat on the table, staring at nothing)" or "(jaw tight, not looking at her, very still)"
+The physical beat must describe what the body DOES, not what it FEELS. A character who receives life-altering information and immediately responds verbally is scripted, not human.
+
+THE SILENCE BEAT (mandatory — at least one per episode): Identify the single moment in this episode where something lands so hard that the character receiving it cannot immediately respond. Mark it explicitly: (Visual: [Character] goes very still. A beat. Then —). Every reference episode must contain at least one silence beat in its most charged scene. If every important moment in the episode has an immediate verbal response, find the moment most deserving of silence and insert it.
+
+POWER SHIFT / WHAT'S NOT SAID / PREPARED ANSWER / CROSS-PURPOSE (mandatory per dialogue scene):
+POWER SHIFT: Before writing each dialogue scene, answer: who has power at the START (information, leverage, control)? Who has it at the END? What is the specific line or action where it transfers? Power must shift in every dialogue scene. A scene where the same person holds power throughout has no dramatic engine.
+WHAT'S NOT SAID: In every key scene, identify the central thing a character cannot or will not say yet. That unsaid thing must create pressure on every line they DO say — their dialogue bends around it. If a character says everything directly with no evasion, the scene has no subtext dimension.
+PREPARED ANSWER SYNDROME (avoid): Characters in emotionally charged situations do not answer important questions cleanly, immediately, or completely. Real people: process before responding (a beat, looking away); deflect back ("Why are you asking me this now?"); answer what they WISH were being asked; respond to the FEELING behind the question rather than its content; reconstruct genuinely ("I… I think it was… no, wait"); give incomplete answers that trail off. The instant complete on-point answer is the most common scripted tell. Every time a character answers a loaded question cleanly and immediately, the scene loses credibility. Before writing any response to a charged question: what does this character do in the beat before answering? What can't they say yet? What are they really responding to?
+CROSS-PURPOSE DIALOGUE: Both characters must be pursuing their own agenda simultaneously — and those agendas must not cleanly align. The scene's tension comes from two different needs running against each other. A scene where one character asks and the other answers has only ONE agenda operating. Before writing any dialogue scene: name what Character A needs from this conversation, name what Character B needs, confirm these are different enough to create friction.
 
 ━━━ OUTPUT FORMAT — EXACTLY ONE [H3], CANONICAL BEAT FORMAT ━━━
 
@@ -2383,6 +2408,7 @@ SETUP-PAYOFF DISCIPLINE:
 - Every payoff in late phases must trace back to a setup in earlier phases. A revenge payoff requires an injustice setup. A betrayal payoff requires a trust setup. A reveal payoff requires a hidden-truth setup.
 - Every setup planted in early phases must pay off in a later phase. Setups without payoffs are hollow plants.
 - The Structural Audit (within Series Summary) is mandatory. List every setup→payoff pairing. Flag every loose thread. Goal: zero loose threads.
+- REVEAL SEQUENCING (mandatory addition to Structural Audit): After mapping all setup→payoff pairs, run the reveal sequence audit: (1) Name the CENTRAL MYSTERY ENGINE — the audience's primary unanswered question driving the first half. (2) At what episode is it definitively answered? (3) Before or after the series midpoint? (4) If before midpoint: name the REPLACEMENT ENGINE driving the second half — it must be as compelling as the original. Mystery of identity → logistics of escape is a downgrade; flag it if no compelling replacement is named. Reveal order principle: audience slightly behind protagonist in Phases 1-4, at parity in Phase 5, ahead of specific SECONDARY characters (not the protagonist) in Phases 6-8. Flag any 3+ episode stretch where the audience is fully ahead of ALL characters — this is watching-characters-catch-up, the lowest-tension state.
 
 MOTIVATED SCENE CONSTRUCTION — NO CONTRIVANCE:
 - Every character at every location in the Phase Breakdown must have their own prior reason to be there — independent of what they are about to find, witness, or experience. This applies to finding objects, overhearing conversations, chance encounters, and simply being present at a key moment.
@@ -2402,6 +2428,20 @@ CHARACTER KNOWLEDGE STATE:
 - For characters with a special knowledge mechanic (transmigrated protagonist who has read the source material, amnesiac, time looper, undercover agent, etc.): define a Knowledge State block in their Cast entry using the schema below. This block is the canonical rule — all downstream episode plots and reference episodes must honor it without exception.
 - Violations are structural errors: a character cannot act on information they cannot have, nor express ignorance of something they demonstrably know.
 
+SYMPATHY ARCHITECTURE (mandatory — for any story with a moral reversal):
+If the protagonist commits crimes, is revealed as morally compromised, or undergoes an identity reversal at any point — the skeleton must plan the sympathy bridge. Without this, the second half runs on plot mechanics the audience has stopped caring about.
+Before completing Phase 5+, record in the Series Summary:
+(1) SYMPATHY BASIS (Phase 1-3): The foundational reason the audience roots for the protagonist. One sentence. They are wronged / They are vulnerable / They face something worse / They have something precious to lose / They carry something the audience recognises in itself.
+(2) SYMPATHY TEST EVENTS: For each phase where the protagonist does something morally costly, name the maintenance mechanism: (a) cost they genuinely pay — not risk, actual loss; (b) the antagonist is doing something worse; (c) genuine non-strategic vulnerability is shown; (d) the injustice that drove them to this is re-established as real; (e) they sacrifice something for someone else with no personal benefit. If no mechanism is named: "Sympathy gap — Phase N. No maintenance mechanism. Flag before plotting."
+(3) SYMPATHY BRIDGE (after midpoint reversal): The NEW basis for audience sympathy. Cannot be the same as Phase 1-3 — that basis has been complicated or destroyed. No new basis = CRITICAL SKELETON GAP.
+The sympathy bridge is not about making the protagonist likeable. It is structural permission for the audience to keep watching. A morally compromised protagonist the audience has stopped caring about cannot be rescued by good dialogue.
+
+SECONDARY CHARACTER ARC VISIBILITY (mandatory tag in Phase Breakdown):
+The Character Arc Evolution section describes what SHOULD be happening to secondary characters. This rule ensures those arcs are actually VISIBLE on screen.
+For every primary secondary character, the Phase Breakdown must include at least one episode per phase where their internal arc is visibly carried on screen. Tag it: "[Character] visible arc beat: Ep X — [what the audience sees of their internal state]"
+If no episode in a phase carries a secondary character's arc: "WARNING: [Character]'s arc in Phase N is described but has no visible episode. Their development is invisible to the audience during this phase. Assign at least one scene — even brief — where the audience sees their internal state, not just their plot function."
+A secondary character who appears in scenes but whose emotional arc is never shown — only implied — may as well not have an arc. The skeleton must schedule it to be seen.
+
 PACING ANCHORS (the standard 9-phase microdrama curve):
 Episode ranges below are reference points for a 45-episode arc — scale proportionally for your chosen total.
 - Phase 1 (~first 11%): cold-open setup. Plant the central injustice / mystery / hook. Introduce the Engine character first, Wall by episode 3.
@@ -2418,6 +2458,17 @@ COMPRESSION DISCIPLINE:
 - Source has 80+ chapters or 100+ episodes? Pick + merge + cut to the chosen episode total (35–45). The skeleton must complete a full setup-payoff arc within that window — don't leave the spine open-ended.
 - Source has 30 chapters or less? Expand by adding microdrama-specific moments — cliffhangers, reveals, betrayals, reversals — to fill the target arc. Lean toward fewer episodes (35–38) rather than padding.
 - Always state material compression decisions in Series Summary.
+
+MIDPOINT EMOTIONAL PROCESSING (mandatory for moral reversal stories):
+For any story where the protagonist undergoes a major identity or moral reversal at or near the midpoint — revealed as criminal, villain, manipulator, the thing they most feared being — the phase immediately following must include at least one episode whose central beat is the protagonist's HUMAN RESPONSE to what they have just learned about themselves. Not a tactical episode. Not a scheming episode. The protagonist is not planning their next move — they are sitting with what they now know.
+Tag this episode in the Phase Breakdown: "[RECKONING BEAT] — Ep X: protagonist's internal response to the reversal. This episode's BEAT is not tactical. The protagonist confronts who they are."
+Why: skipping the reckoning beat turns the protagonist into a plot function rather than a person. The audience has just had their understanding of the protagonist inverted — they need to see the protagonist have a human response before following them further. A protagonist who receives the most devastating truth about themselves and immediately pivots to strategy reads as a character whose emotional life was never real.
+
+FINAL ACT PERSONAL ANTAGONIST (mandatory for Phases 7-9):
+The Phase 7-9 breakdown must name the PERSON the protagonist is fighting in the final act. Not a system, not a process — a person with a face and a personal stake.
+If the primary obstacle is institutional (audit, investigation, legal process, deadline): name the human who embodies it and their personal stake in defeating the protagonist — something beyond their job description.
+Format: "[Name] — want: [what they need to achieve] — personal stake: [why this is personal, not just professional]"
+If no personal antagonist exists in Phases 7-9: "WARNING: Final act has no human antagonist — protagonist runs against [system]. This produces anticlimactic resolution. Consider elevating [character] with a named personal stake."
 
 MULTI-SEASON / MULTI-ARC:
 - If source spans multiple seasons, books, or arcs: focus the FIRST season / FIRST arc only. State it in [H1]: "(Season 1, <N>-episode arc)".
@@ -2644,6 +2695,7 @@ SPINE COHERENCE:
 SETUP-PAYOFF DISCIPLINE:
 - Every payoff must trace back to a setup. Every setup must pay off.
 - The Structural Audit (within Series Summary) is mandatory. List every setup→payoff pairing. Flag every loose thread.
+- REVEAL SEQUENCING (mandatory addition to Structural Audit): Name the CENTRAL MYSTERY ENGINE — the audience's primary unanswered question driving the first half. At what episode is it definitively answered? Before or after midpoint? If before: name the REPLACEMENT ENGINE for the second half — must be as compelling as the original. Flag downgrades (identity mystery → escape logistics = downgrade). Reveal order principle: audience slightly behind protagonist in Phases 1-4, at parity in Phase 5, ahead of specific secondary characters in Phases 6-8. Flag any 3+ episode stretch where audience is fully ahead of ALL characters.
 
 MOTIVATED SCENE CONSTRUCTION — NO CONTRIVANCE:
 - Every character at every location must have their own prior reason to be there.
@@ -2656,6 +2708,12 @@ CHARACTER KNOWLEDGE STATE:
 - Every character's knowledge is governed by what they have actually lived through, witnessed, been told, or could reasonably infer from events up to that point in the story. This is the default for all characters.
 - For characters with a special knowledge mechanic (transmigrated protagonist who has read the source material, amnesiac, time looper, undercover agent, etc.): define a Knowledge State block in their Cast entry using the schema below. This block is the canonical rule — all downstream episode plots and reference episodes must honor it without exception.
 - Violations are structural errors: a character cannot act on information they cannot have, nor express ignorance of something they demonstrably know.
+
+SYMPATHY ARCHITECTURE (mandatory — for any story with a moral reversal):
+If the protagonist commits crimes, is revealed as morally compromised, or undergoes an identity reversal at any point — record in the Series Summary: (1) SYMPATHY BASIS (Phase 1-3): the foundational reason the audience roots for the protagonist — one sentence; (2) SYMPATHY TEST EVENTS: for each phase with a morally costly protagonist action, name the maintenance mechanism (cost paid / antagonist worse / genuine vulnerability / injustice re-established / selfless sacrifice) — if none: "Sympathy gap — Phase N. Flag before plotting"; (3) SYMPATHY BRIDGE after midpoint reversal: the NEW basis for audience sympathy — cannot be the same as Phase 1-3. No new basis = CRITICAL SKELETON GAP. The sympathy bridge is structural permission for the audience to keep watching, not about making the protagonist likeable.
+
+SECONDARY CHARACTER ARC VISIBILITY (mandatory tag in Phase Breakdown):
+For every primary secondary character, the Phase Breakdown must tag at least one episode per phase where their internal arc is visibly carried on screen: "[Character] visible arc beat: Ep X — [what the audience sees of their internal state]". If no episode carries it: "WARNING: [Character]'s arc in Phase N is described but has no visible episode. Assign at least one scene." A secondary character whose arc is only described — never shown — may as well not have one. When updating a skeleton: ⚡ Changed from previous: <note any arc visibility changes>
 
 PACING ANCHORS (the standard 9-phase microdrama curve):
 Episode ranges below are reference points for a 45-episode arc — scale proportionally for your chosen total.
@@ -2672,6 +2730,12 @@ Episode ranges below are reference points for a 45-episode arc — scale proport
 COMPRESSION DISCIPLINE:
 - Choose the most natural episode count between 35 and 45 based on what the existing plots + source material cover. State the chosen count in the [H1] header.
 - If the writer's message specifies a target number, use that number exactly.
+
+MIDPOINT EMOTIONAL PROCESSING (mandatory for moral reversal stories):
+For any story where the protagonist undergoes a major identity or moral reversal at or near the midpoint: the phase immediately following must include at least one episode whose central beat is the protagonist's HUMAN RESPONSE — not tactical planning, not scheming, but sitting with what they now know about themselves. Tag it in the Phase Breakdown: "[RECKONING BEAT] — Ep X: protagonist's internal response to the reversal. This episode's BEAT is not tactical." Skipping this beat turns the protagonist into a plot function. When updating: ⚡ Changed from previous: <note if reckoning beat was added or moved>
+
+FINAL ACT PERSONAL ANTAGONIST (mandatory for Phases 7-9):
+Name the PERSON the protagonist is fighting in the final act — not a system, a process, or a deadline. If the obstacle is institutional (audit, investigation, legal process): name the human who embodies it and their personal stake beyond their job. Format: "[Name] — want: [what they need to achieve] — personal stake: [why personal, not just professional]". If none: "WARNING: Final act has no human antagonist — protagonist runs against [system]. Anticlimactic risk. Consider elevating [character] with a named personal stake."
 
 MULTI-SEASON / MULTI-ARC:
 - Focus the FIRST season / FIRST arc only. State it in [H1]: "(Season 1, <N>-episode arc)".
@@ -2860,7 +2924,7 @@ Score the provided episode on 5 dimensions (20% each, score 1–5 per dimension)
    tense. Do not use SERIES SUMMARY for this — the skeleton's arc plan is invisible to the viewer.
    Score 5 = gut-punch with genuine uncertainty. Score 1 = episode ends flatly with no pull.
 
-3. PACE — Evaluate on three criteria, weighted equally within this dimension:
+3. PACE — Evaluate on four criteria, weighted equally within this dimension:
    a) Event density — count meaningful events: new character introduced, A/B plot progression,
       information reveal, plot twist, relationship shift, decision with consequence.
       Well-paced = multiple developments; flat = 1–2.
@@ -2874,28 +2938,53 @@ Score the provided episode on 5 dimensions (20% each, score 1–5 per dimension)
       and genre-trope moves they would anticipate reduce the score. Do not use SERIES SUMMARY —
       the skeleton's planned arc is not what the audience knows. A genuinely surprising episode
       earns a higher score.
+   d) Sympathy state — if the protagonist has been revealed as morally compromised in any prior
+      episode: does this episode give the audience at least one concrete reason to keep caring
+      about them? Name it specifically. Valid: a genuine cost they pay, a non-strategic moment
+      of vulnerability, an act done for someone else with no personal benefit.
+      Invalid: "audience curiosity" (curiosity ≠ sympathy), "still the protagonist"
+      (position ≠ permission). If absent in a post-reversal episode, flag it regardless of
+      other Pace scores.
 
-4. DIALOGUE — Evaluate on five criteria:
-   a) VO lines — voice-over serves the audience directly and may carry necessary exposition.
-      Do not penalise VO for being expository. Judge it for clarity and relevance only.
-   b) Emotional truth — does each line carry the character's emotional state in that moment?
-      Flat or generic phrasing where charged emotion is warranted reduces the score.
-   c) Plot and reveal load — does the exchange advance plot, deliver a reveal, or shift a
-      relationship arc? Dialogue that neither advances nor reveals anything is filler.
-   d) Relationship and personality fit — does the line reflect who this character is AND who
-      they are speaking to? A character in conflict, romantic tension, or a power dynamic
-      should sound different than they would with a neutral party. Quote lines that feel
-      interchangeable between any two characters.
-   e) Information state — does each character speak in line with what they actually know?
-      Flag any line where a character reveals information they could not have, or fails to
-      react to information they demonstrably possess. Name the character, the line, and the
-      knowledge violation.
+4. DIALOGUE — Evaluate on eight criteria:
+   a) SUBTEXT — In scenes involving confession, sacrifice, betrayal, or major emotional reversal:
+      is the most important statement approached obliquely before being stated directly?
+      Quote any peak-scene line stated on first contact that should have arrived after evasion.
+   b) PHYSICAL ANCHORING — For scenes where characters receive devastating or transformative
+      information: does a physical reaction beat precede verbal response? Quote any moment
+      where a character receives life-altering information and immediately responds verbally
+      with no physical beat. Stage direction "(shocked)" is not a physical beat.
+   c) POWER SHIFT — For each dialogue scene: who holds power at the start? At the end?
+      Name the specific line where it transferred. Flag any scene where power never shifts —
+      it has no dramatic engine.
+   d) PREPARED ANSWER SYNDROME — Do characters answer loaded questions cleanly, immediately,
+      and completely? Quote any exchange where a character receives a significant question and
+      delivers an instant, complete, on-point response. State what they should have done
+      instead: processed, deflected, reconstructed, answered the feeling rather than the question.
+   e) CROSS-PURPOSE DIALOGUE — In each dialogue scene: are both characters pursuing their own
+      agenda, or is one simply responding to the other? Quote any scene that operates as
+      question-answer with only one active agenda. Name what the second character should have
+      needed from this conversation.
+   f) VOICE DISTINCTIVENESS — Cover the character name on each line. Can you tell who is
+      speaking from the words alone? Quote any interchangeable line.
+   g) EMOTIONAL TRUTH — Does each line carry the character's specific state RIGHT NOW in this
+      scene — not their general series state, their state under this specific pressure?
+      Quote flat or generic lines where charged specificity is warranted.
+   h) INFORMATION STATE — Does each character speak in line with what they actually know?
+      Name the character, the line, and the violation.
+   VO lines are evaluated separately from dialogue: judge only for clarity and relevance — do not penalise for being expository.
 
 5. EMOTIONAL ESCALATION — Tension and stakes build through the episode with a clear arc from
    open to close. Every high-impact moment — taunt, aggressive dialogue, information reveal,
    lie caught, confrontation — must be followed by a reaction beat showing the emotional impact
    on the receiving character. Cutting away before the reaction drains the scene of power.
    Flag each missed reaction beat: name the moment and what was skipped.
+
+CHARACTER PRESENCE AUDIT (mandatory, unscored): Scan the provided previous episodes. Has any primary character been absent from 3 or more consecutive episodes as of this one? If yes: name the character, their last appearance episode, their last known emotional state. Flag: "Extended primary character absence is a structural risk — their arc may be running silently offscreen with no audience connection. Confirm this absence is intentional and their off-screen state is consistent with where they were last seen." If no extended absence: state "No primary character absent 3+ consecutive episodes."
+
+PHASE HEALTH CHECK (mandatory, unscored): Using the Series Summary, determine which phase (1-9) this episode belongs to. Confirm the episode behaves per its phase role: Phase 1-2 = plant setups, establish world, do not pay off major threads; Phase 3-4 = escalation begins, first reveals permitted in Phase 4; Phase 5 = mid-series turn, board fundamentally different by phase-end; Phase 6-7 = climbing to climax, branches converging; Phase 8 = climax, major payoffs; Phase 9 = resolution, no new threads opened. If the episode's behavior contradicts its phase role: "PHASE MISMATCH: This Phase [N] episode is behaving like Phase [X] — [describe the specific contradiction]." If consistent: "Phase [N] behavior confirmed."
+
+CHARACTER ARC CONTRIBUTION (mandatory, unscored): Does this episode visibly advance at least one primary character's arc? Arc means emotional state, self-understanding, key relationships, or fundamental position in the story — not just plot movement. A character can be in every scene, deliver lines, and move plot without their arc moving at all. For each primary character appearing here: where are they emotionally at the start, where at the end, what caused the change (or: if unchanged, is their stasis deliberate and visible)? If no primary character's arc moves in this episode: "SERIES HEALTH RISK: No primary character arc advanced in this episode. Pure plot movement without character development is structurally hollow."
 
 KNOWLEDGE STATE CHECK (mandatory, unscored): for every character in this episode, verify that their dialogue and actions reflect only what they could actually know at this point in the story.
 - Standard characters know what they have witnessed, been told, or could reasonably infer from events up to and including this episode — nothing more.
@@ -2923,6 +3012,15 @@ and whether the episode passes the removal test. Note if the next beats are alre
 **EMOTIONAL ESCALATION** X/5
 [Describe the emotional arc. List any high-impact moments that lacked a reaction beat —
 name the scene and what the missing reaction was.]
+
+**CHARACTER PRESENCE AUDIT**
+[No primary character absent 3+ consecutive episodes. / Name + last episode + last state + flag if present.]
+
+**PHASE HEALTH CHECK**
+[Phase N behavior confirmed. / PHASE MISMATCH: Phase N episode behaving like Phase X — describe contradiction.]
+
+**CHARACTER ARC CONTRIBUTION**
+[For each primary character: entry state → exit state → cause. / SERIES HEALTH RISK if no arc moved.]
 
 **KNOWLEDGE STATE CHECK**
 [No violations. / For each violation: character name — quoted line or described action — boundary crossed.]
@@ -3074,6 +3172,16 @@ For each significant relationship shift visible in the provided episodes, assess
 RAPID SHIFT flag: relationship that changes materially in a single episode without a sufficient named cause.
 ASSERTED SHIFT flag: relationship described as having changed ("they're closer now," "the tension has eased") with no visible causal beat in the script.
 
+SECONDARY ARC SILENCE FLAG:
+For any primary secondary character (not the protagonist): in the provided episodes, is their emotional arc VISIBLE — or only implied? A character can appear in every scene and function in the plot while their internal arc is completely invisible.
+If a significant secondary character appears in 2+ of the provided episodes but no scene shows their internal emotional state — only their plot function — flag it:
+
+FLAG FORMAT:
+[CHARACTER] — Secondary arc invisible in provided episodes | Score: [N]/10
+Plot function: [what they do in these episodes]
+Arc invisible: [what they feel about the central situation — never shown, only assumed]
+Fix: [what scene type or beat would make their internal state visible]
+
 FLAG FORMAT:
 [RELATIONSHIP: A ↔ B] — Ep [X] | Score: [N]/10
 Shift: [From what state to what state]
@@ -3152,6 +3260,72 @@ Then work through the four dimensions. Under each dimension, lead with what work
 Always cite the episode. Never say "sometimes characters feel illogical" — name the character, name the episode, name the specific behavior.
 
 For scenes or decisions that score 8–10, a single line acknowledgment is sufficient. Save depth for the gaps.
+
+---
+
+DIMENSION 5: DIALOGUE QUALITY
+
+An outsider reading scripts immediately notices when dialogue sounds written rather than lived. This dimension is pure text analysis — no series context required. For each significant dialogue exchange in the provided episodes:
+
+A) SUBTEXT — Does the most important thing in the scene arrive obliquely, or is it stated directly on first contact? Flag any scene where a character opens with the central truth immediately.
+FLAG FORMAT:
+[SCENE] — Ep [X] | Score: [N]/10
+Direct statement: [quote the line that arrived too early]
+Gap: [what oblique approach should have preceded it — physical action, deflection, indirect circling]
+Fix: [one sentence on restructuring the approach]
+
+B) PHYSICAL ANCHORING — When characters receive devastating or transformative information: does a physical reaction beat appear before their verbal response? Quote any moment where life-altering information lands and the character immediately responds verbally.
+FLAG FORMAT:
+[CHARACTER] — Ep [X] | Score: [N]/10
+Missed beat: [what information was received, what verbal response immediately followed]
+Fix: [what physical behavior should have appeared first — specific to this character, not a generic label]
+
+C) POWER SHIFT — In each dialogue scene: does power transfer between characters? Name who holds power at the start and end. Flag any scene where the same person controls the exchange throughout.
+FLAG FORMAT:
+[SCENE: A ↔ B] — Ep [X] | Score: [N]/10
+Power at start: [who, why] / Power at end: [same / transferred to B]
+Transfer beat: [the specific line or action — or "None found"]
+Gap + Fix: [if no transfer: what moment could shift it]
+
+D) PREPARED ANSWER SYNDROME — Do characters answer loaded questions cleanly, immediately, and completely? Real people in charged situations process, deflect, reconstruct, trail off, or answer the feeling rather than the question. Quote any exchange where a character receives a significant question and delivers an instant, complete, on-point response.
+FLAG FORMAT:
+[CHARACTER] — Ep [X] | Score: [N]/10
+Prepared answer: [quote the question and the immediate complete response]
+Gap: [what this character should have done — processed, deflected, reconstructed, answered the emotion not the content]
+Fix: [how to restructure their response to feel genuinely arrived at]
+
+E) CROSS-PURPOSE DIALOGUE — In real conversations, both characters pursue their own agenda. Flag any scene that operates as pure question-answer with only one active agenda.
+FLAG FORMAT:
+[SCENE: A → B] — Ep [X] | Score: [N]/10
+Active agenda: [Character A — what they need from this conversation]
+Missing agenda: [Character B — "responds only, no independent agenda found"]
+Gap: [what the scene loses] / Fix: [what Character B's competing need could be and how it creates friction]
+
+F) WHAT'S NOT SAID — In key scenes: is there a central unsaid thing creating pressure on every line that IS said? A character who says everything directly with no evasion has no subtext layer.
+FLAG FORMAT:
+[SCENE] — Ep [X] | Score: [N]/10
+Unsaid thing: [what cannot be said yet, and why]
+Pressure visible: [yes / no — is it bending the lines that ARE said?]
+Fix: [if not visible: how to make the unsaid thing shape the dialogue that is said]
+
+G) SILENCE BEAT — Does the episode contain at least one moment where something lands so hard that a character cannot immediately respond — marked by a pause before reply? Flag only if absent.
+FLAG FORMAT:
+[EPISODE] — No silence beat found | Score: [N]/10
+Most deserving moment: [which scene most warranted a pause and did not get one]
+Fix: insert silence beat at [specific moment]
+
+H) VOICE DISTINCTIVENESS — Cover the character name on each line. Can you tell who's speaking? Quote any line that could belong to any character in the episode.
+FLAG FORMAT:
+[CHARACTER] — Ep [X] | Score: [N]/10
+Interchangeable line: [quote it]
+Fix: [what voice-specific element — rhythm, vocabulary, verbal tic, what this character never says — would mark it as theirs]
+
+DIMENSION 5 SCORING:
+10 = every exchange has subtext, physical anchoring, power shifts, no prepared answers
+7-9 = mostly works, one or two specific gaps
+4-6 = functional but flat — information is exchanged but no scene has texture
+1-3 = multiple critical dialogue failures — scenes do not feel lived in
+Lead with what works (scores 8-10). Save depth for gaps.
 
 ---
 
