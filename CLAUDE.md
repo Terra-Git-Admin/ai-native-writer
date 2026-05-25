@@ -1,5 +1,35 @@
 # AI Native Writer — CLAUDE.md
 
+## Active Work (25 May 2026)
+
+- **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/ (Cloud Run, asia-south1, auto-deploys from `main`)
+- **Latest shipped**: PR #59 — Framework-level prompt upgrades across 5 agents (derived from Surface series deep analysis)
+- **Total prompts in DB**: 23 (seeded from code on server restart)
+- **Known open bug**: `suspicious.overwrite` reviewer-stale-tab race still unfixed (diagnostic logging live via `DEBUG_SAVE_TRACE=true`)
+- **Deferred**: Plot Chunks button hidden in `WorkbookActions.tsx` until prompt fixed; Reference Episode bracket noise; Chat-prompt over-references active tab (Bug 6)
+
+### Recent PRs (since last CLAUDE.md update)
+- PR #59 — Framework-level prompt upgrades: sympathy architecture, reveal sequencing, secondary arc visibility, dialogue quality (subtext/silence/power shift/prepared answer/cross-purpose), Quality Agent 5→8 dialogue criteria + 3 new mandatory checks, Outsiders Perspective Dimension 5 (Dialogue Quality)
+- PR #58 — Research Agent + Outsiders Perspective prompt improvements (original names, name remapping workflow, emotion continuity rules, relationship velocity audits)
+- PR #57 — Research Agent + Outsiders Perspective Agent initial build (v0.2.0)
+- PR #56 — Default thinking checkbox to checked
+- PR #55 — Comment mark preserved on resolve; thinking mode always on
+- PR #54 — Diagnostic logs for comment mark loss investigation
+- PR #53 — Comment sidebar: episode filter, resolve UX, click sync
+- PR #52 — Character knowledge state consistency (V1)
+- PR #51 — Ref episode chat routing, lastRefN fallback, user_guidance column guard
+- PR #50 — Skeleton: beat-level episode entries, auto-path, chat-triggered jobs
+
+## Local Dev
+
+```bash
+cd /d/plotpix/ai-native-writer && npm run dev   # starts on :3000
+```
+`BYPASS_AUTH=true` in `.env.local` skips OAuth (Google redirect URI not registered for localhost).
+DB: `D:/plotpix/ai-native-writer/data/writer.db` (auto-created, gitignored).
+
+---
+
 ## What this is
 
 An AI-native scriptwriting tool for a team that writes vertical mobile microdramas. One writer owns a document, others review and comment. Built as a self-hosted Next.js app. Two production deployments: MacMini (Docker + Tailscale) and Ubuntu server (static IP).
@@ -185,7 +215,7 @@ Max 50 versions per doc. Owner accesses via "History" button → `VersionHistory
 
 ## Prompts panel
 
-Accessible from both homepage and doc header. Dropdown of all 5 prompts. Admins can edit; others read-only. Changes saved to DB immediately; take effect on next AI request. On server restart, all prompts are upserted from code constants (code is source of truth on restart).
+Accessible from both homepage and doc header. Dropdown of all 23 prompts. Admins can edit; others read-only. Changes saved to DB immediately; take effect on next AI request. On server restart, all prompts are upserted from code constants (code is source of truth on restart).
 
 ## Document style guide (baked into all prompts)
 
@@ -278,3 +308,14 @@ One OAuth 2.0 Client ID per deployment. In Google Cloud Console → APIs & Servi
 - **`parseTaggedLines` regex**: Use `\s*(.+)` not `\s*(.*)` — the `+` requires at least one content character. Empty matches cause `insertContentAt` to fail silently when Tiptap tries to insert empty text nodes.
 - **`findAndReplace` strategy order**: Cross-block (strategy 3) MUST run before prefix fallback (strategy 4). A 60-char prefix of a multi-block original always matches the heading/first block alone — prefix runs first → inserts into heading only, old paragraphs remain → duplication.
 - **Toolbar performance**: Subscribe to both `selectionUpdate` AND `transaction` for toolbar reactivity. Use rAF batching to collapse both into one re-render per frame. Do NOT use `useEditorState` — it only subscribes to `transaction`, missing cursor-move updates.
+
+---
+
+## Session Files
+
+Read at session start if present: `MEMORY.md` and `ERRORS.md` in this project root.
+- `MEMORY.md` — decisions, what was rejected, session summaries
+- `ERRORS.md` — failed approaches and what worked instead
+
+Update `MEMORY.md` after significant decisions. Log to `ERRORS.md` after 2+ failed attempts on the same problem.
+Session-end trigger ("session end" / "wrapping up" / "let's stop here") → write summary to `MEMORY.md`.
