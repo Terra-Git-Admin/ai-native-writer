@@ -524,6 +524,25 @@ export default function AIChatSidebar({
       return;
     }
 
+    // On workbook or predefined_episodes tab, detect pilot episode generation
+    // intent and route to the pilot_episode job. Generates 3 complete Episode 1
+    // options from Original Research + Characters — no skeleton or plot needed.
+    const isPilotTab =
+      activeTab.type === "workbook" ||
+      activeTab.type === "custom" ||
+      activeTab.type === "predefined_episodes";
+    const PILOT_ACTION_RE = /\b(write|create|generate|draft|make|build)\b/i;
+    const PILOT_NOUN_RE = /\bpilot(\s+ep(isode)?)?\b/i;
+    const isPilotIntent =
+      isPilotTab &&
+      PILOT_ACTION_RE.test(input) &&
+      PILOT_NOUN_RE.test(input);
+    if (isPilotIntent && !isAIBusy) {
+      void handleStartJob("pilot_episode");
+      setInput("");
+      return;
+    }
+
     // Snapshot the apply context at SEND time. The active tab can shift
     // while the LLM streams; the apply target is the tab the writer was
     // looking at when they hit Send. selectionAtSubmit is preserved as a
@@ -778,6 +797,18 @@ export default function AIChatSidebar({
                   )}
                   {aiJob.state.status === "completed" && aiJob.state.output && (
                     <>
+                      {/* Pilot episode outputs to chat only — no workbook append.
+                          The history persist effect already added it to chat
+                          history; this button just clears the active job UI. */}
+                      {aiJob.state.kind === "pilot_episode" ? (
+                        <button
+                          onClick={() => aiJob.reset()}
+                          className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          Done
+                        </button>
+                      ) : (
+                      <>
                       <button
                         onClick={handleDiscardJob}
                         className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
@@ -804,6 +835,8 @@ export default function AIChatSidebar({
                           return `${verb} ${tabLabel}`;
                         })()}
                       </button>
+                    </>
+                      )}
                     </>
                   )}
                   {(aiJob.state.status === "failed" ||

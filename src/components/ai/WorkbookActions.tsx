@@ -32,6 +32,12 @@ const ACTIONS: { kind: JobKind; label: string; description: string }[] = [
       "Build or update the skeleton based on existing predefined episodes and plots (authoritative). If a skeleton already exists, outputs the new version with ⚡ change callouts per section so you can review what changed before committing.",
   },
   {
+    kind: "pilot_episode",
+    label: "Write Pilot Episode",
+    description:
+      "Generate 3 complete Episode 1 options directly from Original Research + Characters. Same spine across all 3 — different delivery mechanic, plot point pacing, and cliffhanger. Scriptwriter picks, merges, and finalises.",
+  },
+  {
     kind: "next_episode_plot",
     label: "Create Next Episode Plot",
     description:
@@ -78,6 +84,7 @@ export const WORKBOOK_ACTION_LABELS: Record<JobKind, string> = {
   plot_chunks: "Create Plot Chunks",
   next_episode_plot: "Create Next Episode Plot",
   next_reference_episode: "Create Next Reference Episode",
+  pilot_episode: "Write Pilot Episode",
   format_tab: "Format Tab",
   series_skeleton: "Skeleton — From Research",
   series_skeleton_predefined: "Skeleton — From Predefined",
