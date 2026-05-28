@@ -24,6 +24,7 @@ import {
   PLOT_CHUNKS_SYSTEM_PROMPT,
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
+  PILOT_EPISODE_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
   SERIES_SKELETON_SYSTEM_PROMPT,
   SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT,
@@ -341,6 +342,62 @@ ${charactersTagged || "(empty)"}
 Task: Expand the Microdrama Plot above into ONE full reference episode for Episode ${targetN} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetN} block. No preamble, no commentary, no alternatives. The reference episode realises the plot — every beat in the plot must surface in the episode.`;
 }
 
+// ─── pilot_episode ───
+//
+// Generates THREE full predefined Episode 1 variants from Original Research
+// + Characters. No skeleton or plot dependency — goes directly to the core
+// spine of the series. Episode 1 plots (EP1 + EP2) are included if they
+// exist but treated as orientation only, not as a binding blueprint.
+
+async function loadPilotEpisodeContext(input: ActionInput): Promise<string> {
+  const { documentId } = input;
+  const docTabs = await loadDocumentTabs(documentId);
+
+  const researchTagged = tiptapJsonToTagged(
+    docTabs.seriesOverview?.content ?? null
+  );
+  const charactersTagged = tiptapJsonToTagged(
+    docTabs.characters?.content ?? null
+  );
+
+  // Both are required — the pilot agent needs the series core and character voices.
+  const researchLen = researchTagged.replace(/\s/g, "").length;
+  const charLen = charactersTagged.replace(/\s/g, "").length;
+  if (researchLen < 200) {
+    throw new Error(
+      "Original Research tab is empty or too short. Add source material there first — the Pilot Episode agent reads from it to find the core spine of the series."
+    );
+  }
+  if (charLen < 50) {
+    throw new Error(
+      "Characters tab is empty. Add at least the main character profiles — the Pilot Episode agent needs these to write distinct dialogue and character-specific staging."
+    );
+  }
+
+  // Pull EP1 and EP2 plots if they exist — orientation only.
+  const plotsTagged = tiptapJsonToTagged(
+    docTabs.microdramaPlots?.content ?? null
+  );
+  const plotSections = splitTabByH3(plotsTagged);
+  const ep1Plot = plotSections[0];
+
+  const plotBlock =
+    ep1Plot
+      ? `## Episode 1 Plot (your blueprint — follow these beats across all 3 options)
+${ep1Plot.content}`
+      : "## Episode 1 Plot\n(none yet — write the pilot from Original Research and Characters alone)";
+
+  return `## Original Research (primary source material — the series this adapts from)
+${researchTagged}
+
+## Characters (voice profiles — use these to write distinct dialogue)
+${charactersTagged}
+
+${plotBlock}
+
+Task: Write THREE complete Episode 1 reference episodes per the system-prompt format. Same core spine and characters across all three. Differ in: delivery mechanic, pacing of plot point release, and cliffhanger type. All pilot hard rules apply to each option.`;
+}
+
 // ─── format_tab ───
 //
 // Restructures a single tab's content into its canonical format. Reads the
@@ -556,6 +613,12 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "next_reference_episode",
     systemPromptFallback: NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
     loadContext: loadNextReferenceEpisodeContext,
+  },
+  pilot_episode: {
+    kind: "pilot_episode",
+    systemPromptId: "pilot_episode",
+    systemPromptFallback: PILOT_EPISODE_SYSTEM_PROMPT,
+    loadContext: loadPilotEpisodeContext,
   },
   format_tab: {
     kind: "format_tab",

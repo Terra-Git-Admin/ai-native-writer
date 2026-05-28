@@ -8,6 +8,7 @@ const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "plot_chunks",
   "next_episode_plot",
   "next_reference_episode",
+  "pilot_episode",
   "format_tab",
   "series_skeleton",
   "series_skeleton_predefined",
