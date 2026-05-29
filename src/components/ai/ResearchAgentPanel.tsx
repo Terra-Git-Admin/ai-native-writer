@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import type { TabRow } from "@/components/editor/TabRail";
+import type { ApplyToTabResult } from "@/app/doc/[id]/page";
 
 interface Message {
   role: "user" | "assistant";
@@ -9,18 +11,66 @@ interface Message {
 
 interface ResearchAgentPanelProps {
   documentId: string;
+  tabs: TabRow[];
+  onApplyToTab: (
+    tabId: string,
+    content: string,
+    mode: "replace" | "append",
+    opts?: { label?: string }
+  ) => Promise<ApplyToTabResult>;
   onClose: () => void;
+  // Called after the initial research report is successfully applied to the
+  // Original Research tab — used to auto-trigger the next step (e.g. Pilot Episode).
+  onResearchApplied?: () => void;
+}
+
+// Convert the research agent's markdown output to the structural tag format
+// expected by the editor (series_overview tab). Only called for the first
+// research report, not for follow-up questions.
+function researchMarkdownToTagged(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = ["[H1] Original Research"];
+
+  for (const line of lines) {
+    const t = line.trim();
+    // Skip empty lines, horizontal rules, and markdown table rows
+    if (!t || t === "---" || /^\|[-| :]+\|/.test(t) || t.startsWith("| Original Name") || t.startsWith("| ---")) {
+      continue;
+    }
+    if (t.startsWith("### ")) {
+      out.push(`[H3] ${t.slice(4)}`);
+    } else if (t.startsWith("## ")) {
+      // Normalize "Original Episodes — Season 1" → "Original Episodes"
+      const heading = t.slice(3).replace(/\s*[—–-]\s*Season\s*\d+$/i, "").trim();
+      out.push(`[H2] ${heading}`);
+    } else if (t.startsWith("| ")) {
+      // Skip table rows (name mapping tables from character renaming)
+      continue;
+    } else {
+      // Strip markdown bold/italic markers, keep content
+      const plain = t
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/\*([^*]+)\*/g, "$1");
+      if (plain) out.push(`[P] ${plain}`);
+    }
+  }
+
+  return out.join("\n");
 }
 
 export default function ResearchAgentPanel({
   documentId,
+  tabs,
+  onApplyToTab,
   onClose,
+  onResearchApplied,
 }: ResearchAgentPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [applyStatus, setApplyStatus] = useState<"idle" | "applying" | "done" | "error">("idle");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -34,8 +84,13 @@ export default function ResearchAgentPanel({
     const text = input.trim();
     if (!text || isStreaming) return;
 
+    // Capture before the state update — if no messages yet, this is the
+    // initial research report that should auto-apply to the Original Research tab.
+    const isInitialReport = messages.length === 0;
+
     setInput("");
     setError(null);
+    setApplyStatus("idle");
 
     const newMessages: Message[] = [...messages, { role: "user", content: text }];
     setMessages(newMessages);
@@ -70,11 +125,30 @@ export default function ResearchAgentPanel({
         }
       }
 
+      const assistantContent = accumulated.replace(/^[012]\n/, "");
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: accumulated.replace(/^[012]\n/, "") },
+        { role: "assistant", content: assistantContent },
       ]);
       setStreamingContent("");
+
+      // Auto-apply the initial report to the Original Research tab.
+      if (isInitialReport) {
+        const researchTab = tabs.find((t) => t.type === "series_overview");
+        if (researchTab) {
+          setApplyStatus("applying");
+          try {
+            const tagged = researchMarkdownToTagged(assistantContent);
+            const result = await onApplyToTab(researchTab.id, tagged, "replace", {
+              label: "Original Research",
+            });
+            setApplyStatus(result.ok ? "done" : "error");
+            if (result.ok) onResearchApplied?.();
+          } catch {
+            setApplyStatus("error");
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Research failed");
     } finally {
@@ -177,6 +251,22 @@ export default function ResearchAgentPanel({
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {applyStatus === "applying" && (
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+            Saving to Original Research tab…
+          </div>
+        )}
+        {applyStatus === "done" && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+            ✓ Saved to Original Research tab
+          </div>
+        )}
+        {applyStatus === "error" && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Could not save to Original Research tab — copy manually if needed.
           </div>
         )}
 
