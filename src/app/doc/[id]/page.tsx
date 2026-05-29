@@ -69,6 +69,10 @@ export default function DocumentPage() {
     episodeIndex: number;
   } | null>(null);
   const [researchAgentOpen, setResearchAgentOpen] = useState(false);
+  // Set to true when Research Agent is opened because Pilot Episode was
+  // triggered but Original Research was empty — auto-fires pilot job after
+  // research is applied.
+  const pilotPendingRef = useRef(false);
   const [outsidersModalOpen, setOutsidersModalOpen] = useState(false);
   const [outsidersPanelRequest, setOutsidersPanelRequest] = useState<{
     episodeTabId: string;
@@ -775,6 +779,10 @@ export default function DocumentPage() {
               }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}
+              onOpenResearchAgent={() => {
+                pilotPendingRef.current = true;
+                setResearchAgentOpen(true);
+              }}
               onSetTitle={(newTitle) => {
                 setTitle(newTitle);
                 fetch(`/api/documents/${params.id}`, {
@@ -812,7 +820,19 @@ export default function DocumentPage() {
           <div className="w-96 border-l border-gray-200 bg-gray-50">
             <ResearchAgentPanel
               documentId={doc.id}
-              onClose={() => setResearchAgentOpen(false)}
+              tabs={tabs}
+              onApplyToTab={applyToTab}
+              onClose={() => {
+                setResearchAgentOpen(false);
+                pilotPendingRef.current = false;
+              }}
+              onResearchApplied={async () => {
+                if (!pilotPendingRef.current) return;
+                pilotPendingRef.current = false;
+                setResearchAgentOpen(false);
+                setAiSidebarOpen(true);
+                await aiJob.start("pilot_episode");
+              }}
             />
           </div>
         )}

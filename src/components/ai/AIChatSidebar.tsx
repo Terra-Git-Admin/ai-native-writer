@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
-import { buildAIContext } from "@/lib/ai/context-engine";
+import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import WorkbookActions, {
   WORKBOOK_ACTION_LABELS,
 } from "@/components/ai/WorkbookActions";
@@ -111,6 +111,7 @@ interface AIChatSidebarProps {
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
   onClose: () => void;
+  onOpenResearchAgent?: () => void;
 }
 
 export default function AIChatSidebar({
@@ -128,6 +129,7 @@ export default function AIChatSidebar({
   onSetThinking,
   onSetTitle,
   onClose,
+  onOpenResearchAgent,
 }: AIChatSidebarProps) {
   // Selection-based "Edit with AI" was removed (Bug 4 fix, 29 Apr 2026).
   // The sidebar now always operates in chat mode for free-form prompts;
@@ -185,6 +187,18 @@ export default function AIChatSidebar({
   const handleStartJob = useCallback(
     async (kind: JobKind, opts?: { userGuidance?: string }) => {
       if (isAIBusy || isStreaming) return;
+
+      // Pilot Episode requires Original Research. If it's empty, open the
+      // Research Agent instead of starting a job that will immediately fail.
+      if (kind === "pilot_episode") {
+        const researchTab = tabs.find((t) => t.type === "series_overview");
+        const researchTagged = tiptapJsonToTagged(researchTab?.content ?? null);
+        if (researchTagged.replace(/\s/g, "").length < 200) {
+          onOpenResearchAgent?.();
+          return;
+        }
+      }
+
       // Format Document reads the tab fresh from DB at job-run time. Without
       // a flush, recent typing that's still in the autosave debounce window
       // is invisible to the LLM. Flush is a no-op for kinds that don't read
@@ -200,7 +214,7 @@ export default function AIChatSidebar({
         setError(r.error ?? "Could not start AI job.");
       }
     },
-    [aiJob, isAIBusy, isStreaming, onFlushPendingSave]
+    [aiJob, isAIBusy, isStreaming, onFlushPendingSave, tabs, onOpenResearchAgent]
   );
 
   // Apply the most recent completed job's output to its origin tab. Routing
