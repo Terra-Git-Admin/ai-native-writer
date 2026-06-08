@@ -383,7 +383,7 @@ async function loadPilotEpisodeContext(input: ActionInput): Promise<string> {
 
   const plotBlock =
     ep1Plot
-      ? `## Episode 1 Plot (your blueprint — follow these beats across all 3 options)
+      ? `## Episode 1 Plot (orientation only — adapt or deviate freely; options need not be rooted in it)
 ${ep1Plot.content}`
       : "## Episode 1 Plot\n(none yet — write the pilot from Original Research and Characters alone)";
 
@@ -395,7 +395,7 @@ ${charactersTagged}
 
 ${plotBlock}
 
-Task: Write THREE complete Episode 1 reference episodes per the system-prompt format. Same core spine and characters across all three. Differ in: delivery mechanic, pacing of plot point release, and cliffhanger type. All pilot hard rules apply to each option.`;
+Task: Write THREE complete Episode 1 options per the system-prompt format. They must be THREE GENUINELY DIFFERENT pilots — distinct strategic pitches on the same series spine and lead(s), NOT three drafts of one episode. Options need not be rooted in the Episode 1 plot. Each opens on a character-reveal fused with a sensory grab in the first 5–10 seconds, and each freezes on an unresolved cliffhanger. All pilot hard rules apply to each option.`;
 }
 
 // ─── format_tab ───
