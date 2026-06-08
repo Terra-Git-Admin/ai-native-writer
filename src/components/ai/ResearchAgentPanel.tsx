@@ -24,12 +24,12 @@ interface ResearchAgentPanelProps {
   onResearchApplied?: () => void;
 }
 
-// Convert the research agent's markdown output to the structural tag format
-// expected by the editor (series_overview tab). Only called for the first
+// Convert a markdown block to the structural tag format expected by the
+// editor, prefixed with the given [H1] title. Only called for the first
 // research report, not for follow-up questions.
-function researchMarkdownToTagged(text: string): string {
+function markdownToTagged(text: string, h1Title: string): string {
   const lines = text.split("\n");
-  const out: string[] = ["[H1] Original Research"];
+  const out: string[] = [`[H1] ${h1Title}`];
 
   for (const line of lines) {
     const t = line.trim();
@@ -56,6 +56,36 @@ function researchMarkdownToTagged(text: string): string {
   }
 
   return out.join("\n");
+}
+
+// Split the research report into its "## Characters" section and everything
+// else. The research prompt always emits a top-level "## Characters" block of
+// full character profiles; that belongs in the dedicated Characters tab (the
+// Pilot Episode agent hard-requires it), not dumped into Original Research
+// with the rest of the report. Returns the Characters body WITHOUT its own
+// heading so markdownToTagged can re-title it as [H1] Characters.
+function splitResearchAndCharacters(text: string): {
+  researchMd: string;
+  charactersMd: string | null;
+} {
+  const lines = text.split("\n");
+  const charIdx = lines.findIndex((l) => /^##\s+characters\s*$/i.test(l.trim()));
+  if (charIdx === -1) return { researchMd: text, charactersMd: null };
+
+  // The Characters section runs until the next level-2 heading or end of text.
+  // (/^##\s+/ matches "## Foo" but not "### Foo", so [H3] character entries
+  // inside the section don't terminate it.)
+  let endIdx = lines.length;
+  for (let i = charIdx + 1; i < lines.length; i++) {
+    if (/^##\s+/.test(lines[i].trim())) {
+      endIdx = i;
+      break;
+    }
+  }
+
+  const charactersBody = lines.slice(charIdx + 1, endIdx).join("\n").trim();
+  const researchMd = [...lines.slice(0, charIdx), ...lines.slice(endIdx)].join("\n");
+  return { researchMd, charactersMd: charactersBody || null };
 }
 
 export default function ResearchAgentPanel({
@@ -132,16 +162,34 @@ export default function ResearchAgentPanel({
       ]);
       setStreamingContent("");
 
-      // Auto-apply the initial report to the Original Research tab.
+      // Auto-apply the initial report: the report body → Original Research,
+      // and the "## Characters" section → the dedicated Characters tab. Routing
+      // characters to their own tab is what lets the Pilot Episode agent run —
+      // it hard-requires a non-empty Characters tab (actions.ts loadPilotEpisodeContext).
       if (isInitialReport) {
         const researchTab = tabs.find((t) => t.type === "series_overview");
         if (researchTab) {
           setApplyStatus("applying");
           try {
-            const tagged = researchMarkdownToTagged(assistantContent);
-            const result = await onApplyToTab(researchTab.id, tagged, "replace", {
+            const { researchMd, charactersMd } =
+              splitResearchAndCharacters(assistantContent);
+
+            const researchTagged = markdownToTagged(researchMd, "Original Research");
+            const result = await onApplyToTab(researchTab.id, researchTagged, "replace", {
               label: "Original Research",
             });
+
+            // Route the Characters section to the Characters tab when present.
+            // Awaited before onResearchApplied so the auto-fired pilot job sees
+            // a populated Characters tab.
+            const charactersTab = tabs.find((t) => t.type === "characters");
+            if (charactersTab && charactersMd) {
+              const charactersTagged = markdownToTagged(charactersMd, "Characters");
+              await onApplyToTab(charactersTab.id, charactersTagged, "replace", {
+                label: "Characters",
+              });
+            }
+
             setApplyStatus(result.ok ? "done" : "error");
             if (result.ok) onResearchApplied?.();
           } catch {
