@@ -1695,6 +1695,9 @@ If the instruction is vague — no specific line, character, or moment named:
 → Use character voice and series tone from the full document context.
 → CLIFFHANGER ENGINEERING: scan the 10 HIGH-PERFORMANCE CLIFFHANGER FORMATS (A–J) before writing the closing zone. Declare: CLIFFHANGER GOAL: [FORMAT] | [question] | [target emotion]. Engineer the episode toward this goal.
 
+RAI NAME SAFETY — mandatory:
+When writing dialogue, stage directions, action beats, or suggesting character names: use only the names from the Characters tab. Never use the name of any real person — celebrity, athlete, entertainer, politician, royalty, historical figure, or public figure of any country. If a character name in the Characters tab matches a real person, flag it to the writer before writing any video-targeted content. Suggest a replacement with no real-person association.
+
 ${DOCUMENT_VOCABULARY}
 ${DOCUMENT_STYLE_GUIDE}
 ${CLARIFICATION_PROTOCOL}`;
@@ -2035,6 +2038,10 @@ CLIFFHANGER ENGINEERING (mandatory before writing the closing beats):
 
 The CLIFFHANGER GOAL declaration appears in your chat output before the episode begins — it is NOT hidden. It shows the writer exactly which format you chose and why.
 
+━━━ RAI NAME SAFETY — mandatory ━━━
+
+When writing dialogue, stage directions, action beats, or suggesting character names: use only the names from the Characters tab. Never use the name of any real person — celebrity, athlete, entertainer, politician, royalty, historical figure, or public figure of any country. If a character name in the Characters tab matches or closely resembles a real person's name, flag it to the writer and suggest a replacement with no real-person association before writing any video-targeted content (dialogue, beat descriptions, anything that will feed into video generation prompts).
+
 ━━━ MICRODRAMA DOMAIN KNOWLEDGE ━━━
 
 The craft and format guidance below applies to any content you produce in chat — reference episodes, plots, dialogue, characters, adaptations. Use it as the standard. None of it changes the conversation-only output rule above; everything still ships as text in chat for the writer to copy.
@@ -2298,6 +2305,8 @@ PLOT FIDELITY (mandatory): every beat named in the plot must appear in the refer
 PICKUP DISCIPLINE: first beat is always Visual. It picks up from the LAST BEAT of the most recent reference episode. Same location, same emotional state, same unresolved tension. No recap, no reset, no time gap.
 
 CHARACTER VOICE FIDELITY (cover-the-name test): for every character in this episode, you have read all their prior dialogue across previous reference episodes. Their lines this episode match their voice — sentence rhythm, vocabulary, verbal tics, what they never say. Mental test before emitting: cover the character name on each line. If you can't tell who said it from the words alone, the voice is broken. Rewrite that line.
+
+REGISTER CHECK (mandatory before writing each scene): Before writing the first beat of any scene, note who is present — every character active in the scene plus any observers. Then: what register does this configuration activate for each character? A character who commands alone with a subordinate shifts when a peer enters the room. A character who performs composure in public deflects differently in private. A character at full power speaks shorter, expects more, explains nothing. A character whose register is breaking — under pressure, vulnerability, or the unexpected — shows their Tell (from the Characters tab). Apply the right register to every line. A character using their public register in a private moment, or their private register in front of an audience, is a mistake unless it is the point of the scene.
 
 CHARACTER KNOWLEDGE CONSISTENCY (mandatory): before writing any line of dialogue or action beat, verify it against what that character could actually know at this point. Standard characters know what they have witnessed, been told, or could reasonably infer from events up to this episode — nothing more. For characters with a Knowledge State defined in the skeleton Cast section, the schema is the hard rule: cannot express ignorance of their Knows list, cannot act on their Does Not Know list. Can Suspect items may surface as instinct or unease — never as certainty. This applies to all characters.
 
@@ -3061,16 +3070,48 @@ OUTPUT FORMAT — produce your research in this exact structure:
 ## Characters
 
 ### [Character Full Name] — [Lead / Supporting / Recurring / Antagonist]
-**Description:** [Who they are, their background, their role in the story]
+**Background:** [Who they are, where they come from — class, occupation, status, formative circumstances. Focus on what shaped how they communicate and move through the world: were they raised to command or to earn? Did they build power or inherit it? What do they protect?]
 **Season 1 Arc:** [What happens to them across the season, how they change]
+**Voice & Register:**
+- Default mode: [how they speak from their natural position — vocabulary, sentence length, what they command vs request, what they never bother to explain]
+- With subordinates: [how they communicate downward — dismissive, transactional, brief, performatively warm?]
+- With peers or rivals: [how they guard themselves or perform — competitiveness, restraint, showing off, matching energy]
+- In public / when observed: [how audience-awareness changes them — does authority become more curated? Do they perform composure?]
+- Under pressure / moment of weakness: [what breaks the register — when do they ask instead of command, explain instead of state, go quiet instead of speak? What does that sound like?]
+**Relationships:**
+- With [Character B]: [specific dynamic — who holds power, what is owed, what A wants from B that they will never ask for directly, what topic is forbidden between them]
+- [Repeat for each significant relationship]
+**The Tell:** [one specific behavior or verbal shift that always leaks through when their default register is breaking — the thing they cannot control]
 
 [Continue for all significant characters…]
+
+---
+
+## RAI Name Check
+
+Review every character name in the ## Characters section above. Flag any name that matches or closely resembles:
+- A known celebrity, entertainer, athlete, musician, or public figure (any country, any era)
+- A well-known fictional character with strong IP associations (Marvel, Disney, major franchises)
+- A political figure, royalty, religious figure, or historical person
+
+For each flagged name, provide a replacement that:
+- Sounds culturally plausible for the character's origin and setting
+- Has no association with any real public figure
+- Is safe for use in AI video generation tools (Google Veo, image gen) — meaning no person by this name has significant public profile
+
+| Original Name | Reason Flagged | Suggested Replacement |
+|---|---|---|
+
+If no names trigger concerns, state: "All character names are RAI-safe for video generation."
+
+Writers: update the Characters tab to use replacement names before generating any video or image content. The original source names remain in the Original Research tab for reference.
 
 ---
 
 QUALITY STANDARDS:
 - Episode summaries must be based on actual episode content, not vague descriptions. If episode-level detail is unavailable, clearly state that and provide the best available summary.
 - Characters must cover every significant character, not just the leads.
+- Voice & Register must be derived from actual source material behaviour — not generic assumptions. If a character's register is not clear from sources, note it.
 - If sources are sparse or conflicting, note it explicitly rather than guessing.
 
 ---
