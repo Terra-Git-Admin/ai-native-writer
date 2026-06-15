@@ -714,6 +714,8 @@ Format A: [UL] CharacterName (stage direction): "spoken line"
 Format B: [UL] CharacterName: (stage direction) "spoken line"
 Format C: [UL] CharacterName: "spoken line"    ← when no direction is needed
 
+Double quotes are mandatory on every spoken line — without them, downstream systems cannot identify the line as canonical dialogue. This applies to every format variant. There are no exceptions.
+
 Over radio or comms: [UL] CharacterName (V.O., over radio): "line"
 
 Stage directions must be character-specific physical actions or precise emotional states — not generic labels:
@@ -750,8 +752,9 @@ No quotes. No asterisks. No INTERNAL MONOLOGUE prefix.
 When to use V.O.:
 — In solo scenes where a character has no one to speak to: V.O. is the primary beat type
 — In multi-character scenes: when the character's internal thought is essential and cannot be expressed through action or dialogue
+— When a character receives a revelation that changes their understanding and they cannot process it aloud — because they are performing composure, under surveillance, or physically isolated — V.O. is required, not optional. This is the moment the audience needs to be inside their head. If this moment exists in the episode and there is no V.O., the interior is lost.
 — Never use V.O. to explain what is visually obvious, or to restate what was just said in dialogue
-— Frequency is character-dependent: a protagonist narrator (rom-com lead, solo-mission character in a thriller) uses V.O. freely across all scene types; supporting or antagonist characters use it rarely, only at moments of genuine extremity
+— Frequency is character-dependent: a protagonist narrator uses V.O. freely; supporting or antagonist characters use it rarely, only at moments of genuine extremity
 
 [TONE] TAG on V.O. (required):
 V.O. has no visible body — the tone tag is the only delivery signal available. It must capture the character's interior register at this exact moment: where they are on their arc of realizing, deciding, or breaking. Not the emotion. The mode — the quality of how this thought is held.
@@ -805,6 +808,7 @@ Before writing a single beat, read:
    The final beat of the previous episode is where this episode opens.
    Check how each character has spoken so far — match their established voice exactly, do not drift.
    Check what has already been revealed — never repeat what the viewer already knows, never contradict what has happened.
+   Match the formatting of existing episodes exactly: dialogue quote style, stage direction placement, V.O. format. Format drift between episodes breaks reader continuity and disrupts downstream extraction. Your episode must be indistinguishable in format from the ones already written.
 
 5. BEFORE WRITING ANY DIALOGUE-HEAVY SEQUENCE — for each character pair in the scene:
    What does A want from B in this scene?
@@ -2379,7 +2383,7 @@ STAGE DIRECTIONS — physical and character-specific:
 - Good: "voice going very quiet" / "jaw tight, not looking at her" / "hand frozen on the doorknob"
 - Stage direction tells the actor exactly what the body does. Generic emotion labels do not.
 
-V.O. SPARINGLY: V.O. is the character's interior. Use it 0-3 times per episode max. Overusing V.O. tells instead of shows.
+V.O.: at least one per episode in any episode containing a character who receives significant information or undergoes an interior shift they cannot voice aloud. Maximum 3. Zero is not valid when such a moment exists. Overusing V.O. tells instead of shows — but zero erases the interior entirely.
 
 SUBTEXT RULE — PEAK SCENES (mandatory): For any scene involving confession, sacrifice, betrayal, major emotional reversal, or a declaration of love/guilt/hatred — the most important statement must NOT be the first thing said. The character must approach it obliquely first: a physical action before words, an indirect opening line that circles the truth, a deflection that fails, or the question they ask before they can say the thing they came to say. TEST before emitting: identify the most important thing said in this scene — is it the first thing said? If yes, restructure. Give it at least two beats of oblique approach before it arrives. The longer the approach, the more devastation in the arrival.
 BAD: Jesse enters. "Let her go, Captain. She didn't do it. I did it all."
@@ -2397,6 +2401,16 @@ POWER SHIFT: Before writing each dialogue scene, answer: who has power at the ST
 WHAT'S NOT SAID: In every key scene, identify the central thing a character cannot or will not say yet. That unsaid thing must create pressure on every line they DO say — their dialogue bends around it. If a character says everything directly with no evasion, the scene has no subtext dimension.
 PREPARED ANSWER SYNDROME (avoid): Characters in emotionally charged situations do not answer important questions cleanly, immediately, or completely. Real people: process before responding (a beat, looking away); deflect back ("Why are you asking me this now?"); answer what they WISH were being asked; respond to the FEELING behind the question rather than its content; reconstruct genuinely ("I… I think it was… no, wait"); give incomplete answers that trail off. The instant complete on-point answer is the most common scripted tell. Every time a character answers a loaded question cleanly and immediately, the scene loses credibility. Before writing any response to a charged question: what does this character do in the beat before answering? What can't they say yet? What are they really responding to?
 CROSS-PURPOSE DIALOGUE: Both characters must be pursuing their own agenda simultaneously — and those agendas must not cleanly align. The scene's tension comes from two different needs running against each other. A scene where one character asks and the other answers has only ONE agenda operating. Before writing any dialogue scene: name what Character A needs from this conversation, name what Character B needs, confirm these are different enough to create friction.
+
+━━━ MANDATORY PRE-EMIT CHECKS — run on the draft before emitting, fix before proceeding ━━━
+
+PREPARED ANSWER CHECK: For every charged line in the draft — a revelation, accusation, demand, or emotional bombshell — find the next beat. If it is a verbal response from the recipient, it fails. Insert a physical beat first: what the body does in the moment of receiving the blow. This is its own Visual beat or a silent stage direction before the verbal response. Only after the body has registered the impact does the mouth respond.
+
+SILENCE CHECK: Identify the single most devastating moment in this episode. Is the first response to it verbal? If yes — cut the verbal response, replace with an explicit silence beat (Visual: [Character] goes very still. A beat. Then —), and move the verbal response after it.
+
+V.O. CHECK: Does this episode contain a moment where a character receives significant information or undergoes an interior shift they cannot voice aloud? If yes and there is no V.O. — add one at that moment.
+
+QUOTES CHECK: Scan every TYPE B dialogue line. Every spoken line must be in double quotes. Any line missing quotes — add them.
 
 ━━━ OUTPUT FORMAT ━━━
 
