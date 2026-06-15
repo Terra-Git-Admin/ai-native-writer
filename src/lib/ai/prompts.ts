@@ -648,6 +648,24 @@ STRUCTURE:
 ...
 [UL] last beat            ← NO CLIFFHANGER label — episode ends on the freeze
 
+━━━ SEQUENCE GROUPING (mandatory) ━━━
+
+Mark each scene change with a [P] header line before its beats:
+[P] Seq N — [Location] | [Time of day] | [Characters present]
+
+A new sequence begins when ANY of the following change:
+— Location
+— Time of day
+— A character enters or exits and fundamentally shifts the dynamic
+
+Location name: use the specific name of the space, not a category or shorthand. The name must be specific enough to uniquely identify this location within the series.
+
+Time of day: one of six values exactly — dawn / morning / midday / afternoon / dusk / night.
+
+Characters present: list only those physically in the scene. When a character appears in a non-default physical state, append that state to their name.
+
+If the source material already has explicit scene headers or grouping markers, honor those directly.
+
 ━━━ THREE BEAT TYPES — USE THESE EXACT FORMATS ━━━
 
 ── TYPE A: VISUAL / ACTION ──
@@ -675,6 +693,21 @@ Offscreen sound or voice:
 [UL] [CharacterName] (O.S.): "line"
 [UL] [CharacterName] (O.S., shouting): "line"
 
+Spatial information framework (all sequence types — no exceptions):
+Every scene-opening Visual beat must encode three categories of information. These apply regardless of sequence type — confrontation, phone call, flashback, action, solo reaction, three-character negotiation, transit, or any other configuration.
+
+GEOGRAPHY
+The physical configuration of every entity in the scene: who is where, positioned relative to what. Described at the position level, not the room level. Includes every character present and the objects, devices, or architectural elements that define spatial relationships. When an object creates a power relationship, ownership of that object is part of the geography. When a character enters or exits mid-sequence, geography updates: encode their mode of arrival, where they stop, and whose existing geography shifts as a result. In sequences where only one character is physically present, their body in relation to the space and its elements is the full geography — this must be written with the same specificity as a multi-character configuration.
+
+FORCES
+What entity is driving the change in this sequence. A force is any person, device, object, event, or revelation whose presence or action produces a shift. Forces may be off-screen — a caller, a message sender, an absent party whose decision lands in this scene. An off-screen force's identity and relational weight must be established at the beat where they first act in the sequence. Downstream systems cannot infer these from dialogue alone, and they cannot be reconstructed later in the pipeline.
+
+STATE ARC
+What condition the sequence begins in and what condition it ends in — for the characters, for the power or information balance, for the physical situation. Both the opening state and the closing state must be explicitly present. A sequence whose end state is not meaningfully different from its start state has no dramatic function and will produce flat shots across its length.
+
+Character state description:
+When a character appears in a non-default physical state — injured, disguised, different costume, different age — the Visual beat must describe the specific physical markers that distinguish this state. The downstream system uses these markers to select the correct visual variant. A state that is named but not described cannot be matched to a variant.
+
 ── TYPE B: DIALOGUE ──
 Spoken lines. Stage direction is embedded inside the attribution — not outside it.
 Format A: [UL] CharacterName (stage direction): "spoken line"
@@ -701,6 +734,14 @@ DIALOGUE PURPOSE HIERARCHY — each line should serve at least one (in priority 
   2. Future plot point: plants something that pays off in a later episode
   3. Character arc or relationship: reveals who this person is becoming, or shifts how two characters relate
 
+[TONE] TAG (required on every dialogue line):
+The tone tag captures delivery intent — it is the primary signal for downstream audio performance and shot emotion. It is not an emotion label. It describes how the line is physically delivered: the mode of speech, the speaker's relationship to the listener, the thing being withheld beneath the words.
+
+1–3 words. The test: it must locate the moment precisely. A strong tone tag distinguishes this delivery from any other line in the episode. A tag that could apply to half the lines in a tense scene is not specific enough.
+
+  Format: CHARACTER (stage direction): "line" [tone]
+  Format (no stage direction needed): CHARACTER: "line" [tone]
+
 ── TYPE C: V.O. ──
 A character's internal thought — what cannot be shown on screen.
 Format: [UL] CharacterName (V.O.): thought
@@ -711,6 +752,10 @@ When to use V.O.:
 — In multi-character scenes: when the character's internal thought is essential and cannot be expressed through action or dialogue
 — Never use V.O. to explain what is visually obvious, or to restate what was just said in dialogue
 — Frequency is character-dependent: a protagonist narrator (rom-com lead, solo-mission character in a thriller) uses V.O. freely across all scene types; supporting or antagonist characters use it rarely, only at moments of genuine extremity
+
+[TONE] TAG on V.O. (required):
+V.O. has no visible body — the tone tag is the only delivery signal available. It must capture the character's interior register at this exact moment: where they are on their arc of realizing, deciding, or breaking. Not the emotion. The mode — the quality of how this thought is held.
+  Format: CHARACTER (V.O.): interior thought [tone]
 
 ━━━ BEAT COUNT AND COMPOSITION ━━━
 
@@ -2310,6 +2355,15 @@ REGISTER CHECK (mandatory before writing each scene): Before writing the first b
 
 CHARACTER KNOWLEDGE CONSISTENCY (mandatory): before writing any line of dialogue or action beat, verify it against what that character could actually know at this point. Standard characters know what they have witnessed, been told, or could reasonably infer from events up to this episode — nothing more. For characters with a Knowledge State defined in the skeleton Cast section, the schema is the hard rule: cannot express ignorance of their Knows list, cannot act on their Does Not Know list. Can Suspect items may surface as instinct or unease — never as certainty. This applies to all characters.
 
+SHOT-GEN SIGNALS (mandatory — encode in output, not just in planning):
+This predefined episode feeds a downstream shot generation pipeline that reads exactly what you write. Signals omitted here cannot be recovered downstream. Three must be encoded at the source:
+
+SEQ GROUPING: Start every new scene with [P] Seq N — Location | Time of day | Characters. The pipeline reads sequence boundaries exactly as written — it cannot infer them reliably from an unstructured beat stream. See SEQUENCE GROUPING rules in CANONICAL_REF_EPISODE_FORMAT.
+
+REGISTER IN VISUAL BEATS: REGISTER CHECK (above) tells you to think about register before writing. You must also encode it in the Visual beat when the register is non-obvious — when a character is performing composure, suppressing, holding back, or breaking through. The encoding has two layers: the surface behavior (what the camera would see on the body) and the gap (what that body state signals about the interior that the surface conceals). The downstream system reads the physical description to assign shot emotion. A description that names the emotion without showing the body produces flat shots.
+
+SPATIAL ANCHORING: Every scene-opening Visual beat must encode geography, forces, and state arc — the three dimensions that apply to every sequence type regardless of configuration. See the spatial information framework in CANONICAL_REF_EPISODE_FORMAT.
+
 DIALOGUE CARRIES THE STORY: 13-18 spoken dialogue lines. Visuals and V.O. are on top — do not count toward dialogue total. If you can cut a line and the scene still moves, cut it. Every dialogue line must do at least one of: reveal character, shift power, advance plot. Lines that do none are dead.
 
 BEAT RHYTHM: 4-6 consecutive dialogue lines before a Visual beat interrupts. Never a Visual beat after every single dialogue line — that fragments the read. Never 10+ dialogue lines in a row without a Visual breath.
@@ -2344,27 +2398,31 @@ WHAT'S NOT SAID: In every key scene, identify the central thing a character cann
 PREPARED ANSWER SYNDROME (avoid): Characters in emotionally charged situations do not answer important questions cleanly, immediately, or completely. Real people: process before responding (a beat, looking away); deflect back ("Why are you asking me this now?"); answer what they WISH were being asked; respond to the FEELING behind the question rather than its content; reconstruct genuinely ("I… I think it was… no, wait"); give incomplete answers that trail off. The instant complete on-point answer is the most common scripted tell. Every time a character answers a loaded question cleanly and immediately, the scene loses credibility. Before writing any response to a charged question: what does this character do in the beat before answering? What can't they say yet? What are they really responding to?
 CROSS-PURPOSE DIALOGUE: Both characters must be pursuing their own agenda simultaneously — and those agendas must not cleanly align. The scene's tension comes from two different needs running against each other. A scene where one character asks and the other answers has only ONE agenda operating. Before writing any dialogue scene: name what Character A needs from this conversation, name what Character B needs, confirm these are different enough to create friction.
 
-━━━ OUTPUT FORMAT — EXACTLY ONE [H3], CANONICAL BEAT FORMAT ━━━
+━━━ OUTPUT FORMAT ━━━
 
 [H3] Episode N: <Title — copied from the plot's [H3] label>
 
-[UL] (Visual: Picks up immediately from Episode N-1. <Where we are, who is here, what their bodies are doing.>)
+[P] Seq 1 — <Location> | <Time of day> | <Characters present>
 
-[UL] <CHARACTER> (<emotion-specific stage direction>): "<line>"
+[UL] (Visual: Picks up immediately from Episode N-1. <Geography: who is where relative to what. Forces in play. Opening state.>)
 
-[UL] <CHARACTER> (<stage direction>): "<line>"
+[UL] <CHARACTER> (<specific physical stage direction>): "<line>" [<tone>]
 
-[UL] (Visual: <action beat — what physically happens>)
+[UL] (Visual: <Entry beat — how they enter, where they land, who sees them and what changes.>)
 
-[UL] <CHARACTER> (V.O.): <interior thought — no quotes>
+[UL] <CHARACTER> (V.O.): <interior thought — no quotes> [<tone>]
 
-[UL] <CHARACTER> (<stage direction>): "<line>"
+[UL] <CHARACTER> (<stage direction>): "<line>" [<tone>]
 
-… continue with 13-18 spoken dialogue lines, plus Visual + V.O. beats on top.
+[P] Seq 2 — <Location> | <Time of day> | <Characters present>
 
-[UL] <last beat — unresolved freeze. Could be a Visual ("the door slowly opening, his shadow on the wall"), a Dialogue line that hangs ("CLAIRE: 'You're not my brother.'"), or both. NO label.>
+[UL] …
 
-That's the entire output. One [H3] block, no preamble, no commentary, no "End." marker.
+… continue with 13-18 spoken dialogue lines plus Visual + V.O. beats. Every dialogue and V.O. line carries a [tone] tag. Every new scene opens with a [P] Seq header.
+
+[UL] <last beat — unresolved freeze. Visual, Dialogue, or both. NO label.>
+
+Output is [H3] + [P] Seq headers + [UL] beats. No preamble, no commentary, no "End." marker.
 
 ━━━ MICRODRAMA DOMAIN KNOWLEDGE ━━━
 
