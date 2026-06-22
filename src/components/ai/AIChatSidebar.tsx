@@ -533,26 +533,7 @@ export default function AIChatSidebar({
       REF_EP_ACTION_RE.test(input) &&
       REF_EP_NOUN_RE.test(input);
     if (isRefEpIntent && !isAIBusy) {
-      void handleStartJob("next_reference_episode");
-      setInput("");
-      return;
-    }
-
-    // On workbook or predefined_episodes tab, detect pilot episode generation
-    // intent and route to the pilot_episode job. Generates 3 complete Episode 1
-    // options from Original Research + Characters — no skeleton or plot needed.
-    const isPilotTab =
-      activeTab.type === "workbook" ||
-      activeTab.type === "custom" ||
-      activeTab.type === "predefined_episodes";
-    const PILOT_ACTION_RE = /\b(write|create|generate|draft|make|build)\b/i;
-    const PILOT_NOUN_RE = /\bpilot(\s+ep(isode)?)?\b/i;
-    const isPilotIntent =
-      isPilotTab &&
-      PILOT_ACTION_RE.test(input) &&
-      PILOT_NOUN_RE.test(input);
-    if (isPilotIntent && !isAIBusy) {
-      void handleStartJob("pilot_episode");
+      void handleStartJob("next_reference_episode", { userGuidance: input });
       setInput("");
       return;
     }
