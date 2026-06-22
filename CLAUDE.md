@@ -42,7 +42,7 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 ## Active Work
 
 - **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
-- **Latest shipped**: PR #65 — predefined episode prompt improvements (merged 15 Jun 2026)
+- **Latest shipped**: PR #67 — pilot episode action-button-only, predefined episode context priority (userGuidance → last 5 ref eps → plot → characters), skeleton leak fix in chat (merged 22 Jun 2026)
 - **Total prompts in DB**: 24 (seeded from `prompts.ts` on restart)
 - **Cloud Run config**: `max-instances=1` (SQLite single-writer), `concurrency=50` (bumped 22 Jun 2026 from 20 — 429s under multi-user load)
 
@@ -57,9 +57,19 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 - **V.O. required**: when a character receives a revelation they cannot voice aloud — not optional
 - **Pre-emit checks**: PREPARED ANSWER (physical beat before verbal response), SILENCE (devastating moment must freeze first), V.O., QUOTES — run on draft before emitting
 
+### Predefined Episode Context Priority (as of PR #67 — 22 Jun 2026)
+
+`next_reference_episode` job context order (highest → lowest influence):
+1. **Writer guidance** — text typed in chat before triggering the job (`userGuidance`); overrides everything
+2. **Last 5 reference episodes** — capped from full chain; voice + continuity reference
+3. **Microdrama plot** — structural blueprint for the episode being expanded
+4. **Characters** — voice consistency only
+
+Series Skeleton is **excluded** from general chat context on the `predefined_episodes` tab (it was leaking in and confusing scene-level generation).
+
 ### Pending (NOT pushed)
 
-- **Branch `fix/pilot-routing-and-comment-bugs`** (commit `98c3a5d`, build passed): pilot button routing fix (Research Agent now splits `## Characters` to correct tab) + `PILOT_EPISODE_SYSTEM_PROMPT` rewrite. Comment race (#2/#3) investigated, report-only. Push + PR to `main` pending.
+- **Comment race (#2/#3)** — reviewer poll/save race investigated, report-only. Fix-option decision pending. See `COMMENT-RACE-INVESTIGATION.md`.
 
 ### AI Agents (all in `src/components/ai/` + `src/app/api/documents/[id]/`)
 
@@ -68,12 +78,12 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 | Research Agent | `research` | Chat + Google Search; original names + name remapping workflow |
 | Outsiders Perspective | `outsiders` | Admin-only episode analyzer; emotion/relationship velocity audits |
 | Quality Agent | `quality_eval` | One-shot episode eval; Gemini 2.5 Pro + thinking; admin-only |
-| Pilot Episode Agent | `pilot_episode` | 3 EP1 variants in chat; plain prose; conversion-first, 3 genuinely different pilots, hook doctrine (unpushed rewrite in `fix/pilot-routing-and-comment-bugs`) |
+| Pilot Episode Agent | `pilot_episode` | 3 EP1 variants; plain prose; conversion-first, 3 genuinely different pilots, hook doctrine — **action button only, not triggerable via chat** |
 
 ### Known open issues (do not accidentally touch)
 
 - **`suspicious.overwrite` + lost comment highlight — ONE reviewer poll/save race** — ROOT-CAUSED: reviewer poll (`Editor.tsx:895-907`) overwrites editor every 5s with no in-flight guard, racing the 500ms debounced commentMark save. Full report + 4 ranked fixes in `COMMENT-RACE-INVESTIGATION.md`. Report-only — awaiting fix-option decision. Do not modify poll logic in `Editor.tsx` without reading the report.
-- **Context cluster (3 symptoms, 1 root cause)** — do not patch individually: (1) Skeleton grabs all tab context regardless of conversation. (2) Chat context triggers wrong agent. (3) "This is good, change X" discards finalized output. Root cause: every AI call is stateless, no concept of approved/working-copy state. Fix requires 3 layers. RCA dive needed before any code changes.
+- **Context cluster (3 symptoms, 1 root cause)** — (1) ~~Skeleton leaks into predefined_episodes chat~~ **FIXED PR #67** — skeleton now excluded from `buildAIContext` when active tab is `predefined_episodes`. (2) ~~Pilot chat intent triggers wrong agent~~ **FIXED PR #67** — pilot is now action-button-only. (3) "This is good, change X" discards finalized output — **still open**. Root cause: stateless AI, no approved/working-copy concept. (3) requires full 3-layer fix; do not patch individually.
 - **Plot Chunks button hidden** — in `WorkbookActions.tsx`, intentionally hidden until `PLOT_CHUNKS_SYSTEM_PROMPT` is fixed. Do not unhide.
 - **Reference Episode bracket noise** — AI hallucinates scenes when EP plot body < 30 chars. Fix deferred.
 - **Chat Bug 6** — chat-prompt over-references active tab on gibberish input. Fix deferred.
