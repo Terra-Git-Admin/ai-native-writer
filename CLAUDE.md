@@ -42,8 +42,24 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 ## Active Work
 
 - **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
-- **Latest shipped**: PR #60 — Pilot Episode Agent
+- **Latest shipped**: PR #65 — predefined episode prompt improvements (merged 15 Jun 2026)
 - **Total prompts in DB**: 24 (seeded from `prompts.ts` on restart)
+- **Cloud Run config**: `max-instances=1` (SQLite single-writer), `concurrency=50` (bumped 22 Jun 2026 from 20 — 429s under multi-user load)
+
+### Predefined Episode Format (as of PR #65 — 15 Jun 2026)
+
+`CANONICAL_REF_EPISODE_FORMAT` and `NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT` were significantly updated. Key format changes writers and downstream systems must know:
+
+- **Seq N headers**: every scene change opens with `[P] Seq N — Location | Time of day | Characters present`
+- **`[tone]` tags**: required on every TYPE B dialogue line and TYPE C V.O. line — `"line" [tone]`
+- **Quotes mandatory**: all spoken dialogue in double quotes — without them batch_gen cannot extract lines
+- **Spatial framework**: scene-opening Visual beats encode GEOGRAPHY / FORCES / STATE ARC
+- **V.O. required**: when a character receives a revelation they cannot voice aloud — not optional
+- **Pre-emit checks**: PREPARED ANSWER (physical beat before verbal response), SILENCE (devastating moment must freeze first), V.O., QUOTES — run on draft before emitting
+
+### Pending (NOT pushed)
+
+- **Branch `fix/pilot-routing-and-comment-bugs`** (commit `98c3a5d`, build passed): pilot button routing fix (Research Agent now splits `## Characters` to correct tab) + `PILOT_EPISODE_SYSTEM_PROMPT` rewrite. Comment race (#2/#3) investigated, report-only. Push + PR to `main` pending.
 
 ### AI Agents (all in `src/components/ai/` + `src/app/api/documents/[id]/`)
 
@@ -52,11 +68,12 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 | Research Agent | `research` | Chat + Google Search; original names + name remapping workflow |
 | Outsiders Perspective | `outsiders` | Admin-only episode analyzer; emotion/relationship velocity audits |
 | Quality Agent | `quality_eval` | One-shot episode eval; Gemini 2.5 Pro + thinking; admin-only |
-| Pilot Episode Agent | `pilot_episode` | 3 EP1 variants in chat; plain prose; same beats, differs on hook + cliffhanger type |
+| Pilot Episode Agent | `pilot_episode` | 3 EP1 variants in chat; plain prose; conversion-first, 3 genuinely different pilots, hook doctrine (unpushed rewrite in `fix/pilot-routing-and-comment-bugs`) |
 
 ### Known open issues (do not accidentally touch)
 
-- **`suspicious.overwrite`** — reviewer-stale-tab race condition unfixed. Diagnostic logging live via `DEBUG_SAVE_TRACE=true` in Cloud Run env. Do not modify poll logic in `Editor.tsx` without understanding this.
+- **`suspicious.overwrite` + lost comment highlight — ONE reviewer poll/save race** — ROOT-CAUSED: reviewer poll (`Editor.tsx:895-907`) overwrites editor every 5s with no in-flight guard, racing the 500ms debounced commentMark save. Full report + 4 ranked fixes in `COMMENT-RACE-INVESTIGATION.md`. Report-only — awaiting fix-option decision. Do not modify poll logic in `Editor.tsx` without reading the report.
+- **Context cluster (3 symptoms, 1 root cause)** — do not patch individually: (1) Skeleton grabs all tab context regardless of conversation. (2) Chat context triggers wrong agent. (3) "This is good, change X" discards finalized output. Root cause: every AI call is stateless, no concept of approved/working-copy state. Fix requires 3 layers. RCA dive needed before any code changes.
 - **Plot Chunks button hidden** — in `WorkbookActions.tsx`, intentionally hidden until `PLOT_CHUNKS_SYSTEM_PROMPT` is fixed. Do not unhide.
 - **Reference Episode bracket noise** — AI hallucinates scenes when EP plot body < 30 chars. Fix deferred.
 - **Chat Bug 6** — chat-prompt over-references active tab on gibberish input. Fix deferred.
