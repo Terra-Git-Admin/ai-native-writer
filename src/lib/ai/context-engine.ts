@@ -279,8 +279,9 @@ export function buildAIContext(args: BuildContextArgs): string {
   // Characters — full always.
   if (charactersTagged) sections.push(`## Characters\n${charactersTagged}`);
 
-  // Series Skeleton — full always (authoritative spine).
-  if (skeletonTagged.trim()) {
+  // Series Skeleton — included in all tabs except predefined_episodes, where
+  // skeleton content confuses episode generation by overriding scene-level choices.
+  if (skeletonTagged.trim() && activeTab.type !== "predefined_episodes") {
     sections.push(`## Series Skeleton\n${skeletonTagged}`);
   }
 

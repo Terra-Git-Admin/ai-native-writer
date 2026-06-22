@@ -272,7 +272,7 @@ Task: Propose ONE microdrama plot for Episode ${nextEpisodeNumber}. This episode
 async function loadNextReferenceEpisodeContext(
   input: ActionInput
 ): Promise<string> {
-  const { documentId } = input;
+  const { documentId, userGuidance } = input;
   const docTabs = await loadDocumentTabs(documentId);
 
   const plotsTagged = tiptapJsonToTagged(
@@ -326,20 +326,35 @@ async function loadNextReferenceEpisodeContext(
     docTabs.characters?.content ?? null
   );
 
-  return `## Microdrama Plot for Episode ${targetN} (expanding into the next reference episode)
-${targetPlot.content}
+  // Cap to the 5 most recent reference episodes.
+  const refSlice = refSections.slice(-5);
 
-## Previous Reference Episodes (full chain — your voice + continuity reference, your first beat picks up from the LAST beat of the most recent reference episode below)
+  const sections: string[] = [];
+
+  // 1. Writer guidance — highest priority, overrides everything else.
+  if (userGuidance?.trim()) {
+    sections.push(`## Writer Guidance (HIGHEST PRIORITY — honour these instructions above all else)\n${userGuidance.trim()}`);
+  }
+
+  // 2. Previous reference episodes — last 5, voice + continuity reference.
+  sections.push(`## Previous Reference Episodes (last ${refSlice.length} — your voice + continuity reference; your first beat picks up from the LAST beat of the most recent episode below)
 ${
-  refSections.length > 0
-    ? refSections.map((s) => s.content).join("\n\n")
+  refSlice.length > 0
+    ? refSlice.map((s) => s.content).join("\n\n")
     : "(none yet — this is the first reference episode; open with the scene the plot opens on)"
-}
+}`);
 
-## Characters (canonical voice profiles — use these to write distinct dialogue)
-${charactersTagged || "(empty)"}
+  // 3. Microdrama plot — the structural blueprint to expand.
+  sections.push(`## Microdrama Plot for Episode ${targetN} (the structural blueprint — every beat in this plot must surface in the episode)
+${targetPlot.content}`);
 
-Task: Expand the Microdrama Plot above into ONE full reference episode for Episode ${targetN} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetN} block. No preamble, no commentary, no alternatives. The reference episode realises the plot — every beat in the plot must surface in the episode.`;
+  // 4. Characters — lowest priority, for voice consistency only.
+  sections.push(`## Characters (canonical voice profiles — use for dialogue consistency)
+${charactersTagged || "(empty)"}`);
+
+  sections.push(`Task: Expand the Microdrama Plot above into ONE full reference episode for Episode ${targetN} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetN} block. No preamble, no commentary, no alternatives.`);
+
+  return sections.join("\n\n");
 }
 
 // ─── pilot_episode ───
