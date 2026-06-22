@@ -207,7 +207,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
       saveTimeout.current = setTimeout(() => {
         saveDocument(editor.getJSON());
-      }, 1000);
+      }, 180_000);
     },
   });
 
@@ -972,6 +972,18 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
+  }, [editor, isOwner, saveDocument]);
+
+  // Force-save every 5 minutes even if the writer never stops typing.
+  // Caps the maximum data-loss window regardless of debounce state.
+  useEffect(() => {
+    if (!editor || !isOwner) return;
+    const interval = setInterval(() => {
+      if (saveStatusRef.current === "unsaved") {
+        saveDocument(editor.getJSON());
+      }
+    }, 300_000);
+    return () => clearInterval(interval);
   }, [editor, isOwner, saveDocument]);
 
   const handleAddComment = useCallback(() => {
