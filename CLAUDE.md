@@ -42,7 +42,7 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 ## Active Work
 
 - **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
-- **Latest shipped**: PR #67 — pilot episode action-button-only, predefined episode context priority (userGuidance → last 5 ref eps → plot → characters), skeleton leak fix in chat (merged 22 Jun 2026)
+- **Latest shipped**: PR #69 — series skeleton format overhaul: narrative plotlines + phase breakdown, delta diff on regen (merged 23 Jun 2026)
 - **Total prompts in DB**: 24 (seeded from `prompts.ts` on restart)
 - **Cloud Run config**: `max-instances=1` (SQLite single-writer), `concurrency=50` (bumped 22 Jun 2026 from 20 — 429s under multi-user load)
 
@@ -66,6 +66,18 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 4. **Characters** — voice consistency only
 
 Series Skeleton is **excluded** from general chat context on the `predefined_episodes` tab (it was leaking in and confusing scene-level generation).
+
+### Series Skeleton Format (as of PR #69 — 23 Jun 2026)
+
+Both `SERIES_SKELETON_SYSTEM_PROMPT` and `SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT` output a new format:
+
+**Plotline Architecture** — each plot is `[H3] Plot A (Spine): <name>` + one narrative paragraph. No sub-fields (Arc / Central question / Emotional engine / Phase trajectory / Key reveals).
+
+**Phase Breakdown** — each phase is `[H3] Phase N: <Title>` (no episode range) + free narrative `[P]` paragraphs. No episode numbers, no `OPEN → BEAT → CLOSE` labels. Typically 3–6 paragraphs per phase.
+
+**Section order** — Plotline Architecture and Phase Breakdown come first. Series Summary + Supporting Reference (Cast, Arc Evolution, Structural Audit) are below a `─────` separator.
+
+**Predefined regen delta** — when regenerating against an existing skeleton, a compact `[H2] Changes from Previous Skeleton` block appears after `[H1]`, with one `[P] •` bullet per changed/added/removed plot. Block omitted entirely if no plots changed.
 
 ### Pending (NOT pushed)
 
