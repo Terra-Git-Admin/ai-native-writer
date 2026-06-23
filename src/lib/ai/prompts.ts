@@ -2604,64 +2604,55 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 
 [H1] Series Skeleton — <Series Title> (Season 1, <N>-episode arc)
 
+[H2] Plotline Architecture
+
+[H3] Plot A (Spine): <name>
+[P] <One paragraph. Who the protagonist is, what forces them into the spine conflict, who or what is the central antagonist or obstacle, and how the spine resolves.>
+
+[H3] Plot B (Branch): <name>
+[P] <One paragraph. What this branch introduces, how it tangles with the spine, and at which phase it converges back into the spine.>
+
+[H3] <Plot C (Branch): <name> — one [H3] per additional branch the source genuinely requires. Omit if no additional branches exist.>
+[P] <One paragraph.>
+
+[H2] Phase Breakdown
+
+[H3] Phase 1: <Phase Title>
+[P] <Narrative paragraph — one story beat or cluster of beats. Who drives it, what pressure it creates, what shifts. No episode numbers. No OPEN/BEAT/CLOSE labels. Pure narrative.>
+[P] <Next beat — continue until the phase's events are fully mapped. Typically 3–6 [P] lines per phase.>
+
+[H3] Phase 2: <Phase Title>
+[P] <narrative beat>
+[P] <narrative beat>
+[P] <as many as needed>
+
+[H3] Phase 3: <Phase Title>
+[same shape]
+
+[H3] Phase 4: <Phase Title>
+[same shape]
+
+[H3] Phase 5: <Phase Title>
+[same shape]
+
+[H3] Phase 6: <Phase Title>
+[same shape]
+
+[H3] Phase 7: <Phase Title>
+[same shape]
+
+[H3] Phase 8: <Phase Title>
+[same shape]
+
+[H3] Phase 9: <Phase Title>
+[same shape]
+
+[P] ─────────────────────────────────────────────────────────────────────────────
+
 [H2] Series Summary
 
 [H3] Overview
 [P] <~150 words. Genre + genre contract (the specific hurt and the guaranteed release). Protagonist want vs need vs block. The spine in one sentence. Why this is microdrama-shaped (vertical mobile, 60-90s episodes, hook-cliffhanger pacing). Any compression or expansion decisions — merges, drops, expansions named explicitly here.>
-
-[H2] Plotline Architecture
-
-[H3] PLOT-A (Spine): <name>
-[P] Arc: <start state → first turn → midpoint reversal → climax → resolution in one sentence>
-[P] Central question: <The one audience question this plot is built to answer — "Will X achieve Y?" / "Is X really Z?" / "Can X survive Y?">
-[P] Emotional engine: <what drives the protagonist through this plot — fear / obsession / love / revenge / need for truth — and why it is powerful enough to sustain 35–45 episodes>
-[P] Phase trajectory: Phase 1: <spine state entering and exiting> / Phase 2: <change> / Phase 3: <escalation or complication> / Phase 4: <peak before reversal> / Phase 5: <midpoint — board changes> / Phase 6: <climb to climax> / Phase 7: <pre-climax pressure> / Phase 8: <climax — central confrontation and answer> / Phase 9: <resolution>
-[P] Key reveals: <3–5 pivotal information moments tied to this plot — each with phase + episode tag. e.g. "Phase 2 Ep 8: [Character] discovers [X]. Phase 5 Ep 22: truth about [Y] surfaces. Phase 8 Ep 39: final confrontation reveals [Z].">
-
-[H3] PLOT-B (Branch — converges Phase <N>): <name>
-[P] Function: <heart / mirror / accelerant — one sentence on what this branch contributes that the spine cannot contain>
-[P] Arc: <what it introduces → how it complicates or accelerates the spine → what specific event triggers convergence back into the spine>
-[P] Phase trajectory: Introduced Phase <N> (Ep <X>) → active through Phases <X>–<Y> → converges Phase <N> (Ep <X>): <trigger>
-[P] Key reveals: <1–3 pivotal moments from this branch, with phase + episode tags>
-
-[H3] <PLOT-C, PLOT-D … one [H3] per additional branch the source + microdrama structure genuinely requires. Each must have a named convergence point. Omit if no additional branches exist.>
-
-[H2] Phase Breakdown
-
-[H3] Phase 1: Ep 1–<N> — <Phase Title>
-[P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep 1: OPEN — <situation/pressure> → HOOK — <the specific image, situation, or revelation that poses the series' central question in the most gripping way — not setup, this is the bait that makes the audience unable to stop watching> → BEAT — <central action or conversation; if dialogue: [surface topic / what each char really wants / what's revealed vs withheld]> → CLOSE — <cliffhanger: what shifts, what unbearable question is opened>
-[P] Ep 2: OPEN — <situation/pressure> → BEAT — <central action or conversation> → CLOSE — <cliffhanger: specific moment that creates forward pull>
-[P] Ep 3: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] Ep 4: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] Ep <N>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-
-[H3] Phase 2: Ep <X>–<Y> — <Phase Title>
-[P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep <X>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] <one [P] per episode>
-[P] Ep <Y>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-
-[H3] Phase 3: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 4: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 5: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 6: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 7: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 8: Ep <X>–<Y> — <Phase Title>
-[same shape]
-
-[H3] Phase 9: Ep <X>–<N_total> — <Phase Title>
-[same shape — ensure episode numbers are contiguous and the final episode is exactly the chosen total]
 
 [H2] Supporting Reference
 
@@ -2826,9 +2817,7 @@ INPUT MODE — PREDEFINED EPISODES ARE AUTHORITATIVE:
 - The context block contains "## Existing Microdrama Plots" and "## Existing Reference Episodes" — BOTH are authoritative. Reverse-engineer the spine and branches from them. Do not contradict anything established in these.
 - "## Original Research" is background context only — use it to fill gaps in phases not covered by existing episodes, but existing episodes always override research.
 - If existing plots disagree with each other, flag this in the Structural Audit.
-- If a "## Previous Series Skeleton" is present in context: you are UPDATING the skeleton, not creating from scratch. Generate the new skeleton, then within each section that has changed, add a CHANGE CALLOUT on its own line immediately after the changed content:
-  [P] ⚡ Changed from previous: <one sentence describing what specifically changed and why — e.g., "Phase 3 mid-reveal moved from Ep 13 to Ep 11 to match predefined episode 11 beat">
-  Add change callouts only where content differs from the previous version. If a section is unchanged, output it without any callout. This lets the writer scan diffs before committing.
+- If a "## Previous Series Skeleton" is present in context: you are UPDATING the skeleton, not creating from scratch. Generate: (1) a compact delta block immediately after [H1] listing ONLY Plotline Architecture changes — one bullet per changed/added/removed plot, max one phrase each, omit the block entirely if no plots changed; (2) inline ⚡ callouts after any changed Phase Breakdown or Supporting Reference sections. Do not add ⚡ callouts inside Plotline Architecture — the delta block covers that.
 
 READING PREDEFINED EPISODES:
 Each [H3] in the Reference Episodes context is one episode — opening state + closing cliffhanger.
@@ -2840,48 +2829,42 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 
 [H1] Series Skeleton — <Series Title> (Season 1, <N>-episode arc)
 
+[H2] Changes from Previous Skeleton
+[P] • <Plot label>: <one phrase — what changed> (e.g. "Plot B: convergence moved Phase 7 → Phase 6 to match Ep 24 beat")
+[P] • <one bullet per changed/added/removed plot — omit this entire [H2] block if no plots changed>
+
+[H2] Plotline Architecture
+
+[H3] Plot A (Spine): <name>
+[P] <One paragraph. Who the protagonist is, what forces them into the spine conflict, who or what is the central antagonist or obstacle, and how the spine resolves.>
+
+[H3] Plot B (Branch): <name>
+[P] <One paragraph. What this branch introduces, how it tangles with the spine, and at which phase it converges back into the spine.>
+
+[H3] <Plot C (Branch): <name> — omit if no additional branches>
+[P] <One paragraph.>
+
+[H2] Phase Breakdown
+
+[H3] Phase 1: <Phase Title>
+[P] <Narrative paragraph — one story beat or cluster of beats. Who drives it, what pressure it creates, what shifts. No episode numbers. No OPEN/BEAT/CLOSE labels. Pure narrative.>
+[P] <Next beat — continue until the phase's events are fully mapped. Typically 3–6 [P] lines per phase.>
+[P] ⚡ Changed from previous: <if this phase changed — one sentence> (omit if unchanged)
+
+[H3] Phase 2: <Phase Title>
+[P] <narrative beat>
+[P] <narrative beat>
+[P] ⚡ Changed from previous: <if changed — one sentence> (omit if unchanged)
+
+[H3] Phase 3–9: <Phase Title>
+[same shape for each phase]
+
+[P] ─────────────────────────────────────────────────────────────────────────────
+
 [H2] Series Summary
 
 [H3] Overview
 [P] <~150 words. Genre + genre contract. Protagonist want vs need vs block. The spine in one sentence. Why this is microdrama-shaped. Any compression or expansion decisions. If updating: ⚡ Changed from previous: <what changed in the overview>>
-
-[H2] Plotline Architecture
-
-[H3] PLOT-A (Spine): <name>
-[P] Arc: <start state → first turn → midpoint reversal → climax → resolution in one sentence>
-[P] Central question: <The one audience question this plot is built to answer — "Will X achieve Y?" / "Is X really Z?" / "Can X survive Y?">
-[P] Emotional engine: <what drives the protagonist through this plot — fear / obsession / love / revenge / need for truth — and why it is powerful enough to sustain 35–45 episodes>
-[P] Phase trajectory: Phase 1: <spine state entering and exiting> / Phase 2: <change> / Phase 3: <escalation or complication> / Phase 4: <peak before reversal> / Phase 5: <midpoint — board changes> / Phase 6: <climb to climax> / Phase 7: <pre-climax pressure> / Phase 8: <climax — central confrontation and answer> / Phase 9: <resolution>
-[P] Key reveals: <3–5 pivotal information moments tied to this plot — each with phase + episode tag. e.g. "Phase 2 Ep 8: [Character] discovers [X]. Phase 5 Ep 22: truth about [Y] surfaces. Phase 8 Ep 39: final confrontation reveals [Z].">
-[P] ⚡ Changed from previous: <if plot arc changed — one sentence> (omit if unchanged)
-
-[H3] PLOT-B (Branch — converges Phase <N>): <name>
-[P] Function: <heart / mirror / accelerant — one sentence on what this branch contributes that the spine cannot contain>
-[P] Arc: <what it introduces → how it complicates or accelerates the spine → what specific event triggers convergence back into the spine>
-[P] Phase trajectory: Introduced Phase <N> (Ep <X>) → active through Phases <X>–<Y> → converges Phase <N> (Ep <X>): <trigger>
-[P] Key reveals: <1–3 pivotal moments from this branch, with phase + episode tags>
-[P] ⚡ Changed from previous: <if branch changed — one sentence> (omit if unchanged)
-
-[H3] <PLOT-C, PLOT-D … omit if no additional branches>
-
-[H2] Phase Breakdown
-
-[H3] Phase 1: Ep 1–<N> — <Phase Title>
-[P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep 1: OPEN — <situation/pressure> → HOOK — <the specific image, situation, or revelation that poses the series' central question in the most gripping way — not setup, this is the bait that makes the audience unable to stop watching> → BEAT — <central action or conversation; if dialogue: [surface topic / what each char really wants / what's revealed vs withheld]> → CLOSE — <cliffhanger: what shifts, what unbearable question is opened>
-[P] Ep 2: OPEN — <situation/pressure> → BEAT — <central action or conversation> → CLOSE — <cliffhanger: specific moment that creates forward pull>
-[P] Ep <N>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] ⚡ Changed from previous: <if this phase changed — one sentence> (omit if unchanged)
-
-[H3] Phase 2: Ep <X>–<Y> — <Phase Title>
-[P] <One sentence: where spine enters, what fundamentally shifts, where it exits.>
-[P] Ep <X>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] <one [P] per episode>
-[P] Ep <Y>: OPEN — <...> → BEAT — <...> → CLOSE — <cliffhanger: ...>
-[P] ⚡ Changed from previous: <if changed — one sentence> (omit if unchanged)
-
-[H3] Phase 3–9: Ep <X>–<Y> — <Phase Title>
-[same shape for each phase — ensure episode numbers are contiguous and the final episode is exactly the chosen total]
 
 [H2] Supporting Reference
 
