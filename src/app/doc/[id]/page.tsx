@@ -642,22 +642,22 @@ export default function DocumentPage() {
               Research Agent
             </button>
           )}
+          {activeTab?.type === "predefined_episodes" && (
+            <button
+              onClick={() => setOutsidersModalOpen(true)}
+              className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
+            >
+              Outsiders View
+            </button>
+          )}
           {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
-              <>
-                <button
-                  onClick={() => setOutsidersModalOpen(true)}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
-                >
-                  Outsiders View
-                </button>
-                <button
-                  onClick={() => setQualityModalOpen(true)}
-                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-                >
-                  Quality Agent
-                </button>
-              </>
+              <button
+                onClick={() => setQualityModalOpen(true)}
+                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+              >
+                Quality Agent
+              </button>
             )}
           <button
             onClick={() => {
