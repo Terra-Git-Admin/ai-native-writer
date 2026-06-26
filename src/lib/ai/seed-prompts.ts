@@ -43,6 +43,7 @@ import {
   QUALITY_AGENT_SYSTEM_PROMPT,
   RESEARCH_AGENT_SYSTEM_PROMPT,
   OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT,
+  OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -72,6 +73,7 @@ const DEFAULTS = [
   { id: "quality_agent", label: "Quality Agent", content: QUALITY_AGENT_SYSTEM_PROMPT },
   { id: "research_agent", label: "Research Agent", content: RESEARCH_AGENT_SYSTEM_PROMPT },
   { id: "outsiders_perspective", label: "Outsiders Perspective Agent", content: OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT },
+  { id: "outsiders_perspective_brief", label: "Outsiders Perspective Agent (Brief)", content: OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {

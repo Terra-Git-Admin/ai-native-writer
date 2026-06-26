@@ -5,7 +5,10 @@ import { db } from "@/lib/db";
 import { documents, tabs, prompts } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
-import { OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT } from "@/lib/ai/prompts";
+import {
+  OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT,
+  OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT,
+} from "@/lib/ai/prompts";
 
 interface TiptapNode {
   type: string;
@@ -66,6 +69,8 @@ export async function POST(
 
   const { id } = await params;
 
+  const isAdmin = (session.user as { role?: string }).role === "admin";
+
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
     columns: { id: true },
@@ -114,10 +119,12 @@ export async function POST(
   const plotSections = extractEpisodeSections(plotsTab?.content ?? null);
   const currentPlot = plotSections[idx] ?? null;
 
+  const promptId = isAdmin ? "outsiders_perspective" : "outsiders_perspective_brief";
   const promptRow = await db.query.prompts.findFirst({
-    where: eq(prompts.id, "outsiders_perspective"),
+    where: eq(prompts.id, promptId),
   });
-  const basePrompt = promptRow?.content || OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT;
+  const basePrompt = promptRow?.content ||
+    (isAdmin ? OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT : OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT);
 
   // Build context block — only what a viewer would know + writer's intent for this ep
   const contextParts: string[] = [];
