@@ -2342,7 +2342,7 @@ The writer's intent: the last [H3] in the Microdrama Plots tab is the plot for T
 ━━━ INPUTS YOU RECEIVE (in this order in the user message) ━━━
 
 1. **Latest Microdrama Plot** — the one and only plot to expand. Every beat named in the plot must surface in the reference episode. Do not drift away from it; do not invent beats not in the plot.
-2. **Previous Reference Episodes (full chain)** — every prior episode in order. Use these for character voice fidelity, pacing calibration, and the exact LAST BEAT of the most recent reference episode (your first beat picks up from there).
+2. **Previous Reference Episodes (last N episodes — a window, not the full chain)** — the most recent reference episodes in order. You do not have the complete episode history; earlier episodes exist that you have not seen. Mine what you do have for: character voice and register, all events/revelations/relationship shifts visible in this window, and what each character currently knows and feels. Where characters reference events from before this window, treat those references as ground truth about what happened. Infer earlier context from what the dialogue and situations surface. Your first beat picks up from the LAST BEAT of the most recent episode below.
 3. **Characters** — voice profiles. Use these to keep dialogue distinct.
 
 ━━━ HARD RULES — INTERNAL CHECKLIST BEFORE EMITTING ━━━
