@@ -326,8 +326,8 @@ async function loadNextReferenceEpisodeContext(
     docTabs.characters?.content ?? null
   );
 
-  // Cap to the 5 most recent reference episodes.
-  const refSlice = refSections.slice(-5);
+  // Cap to the 6 most recent reference episodes.
+  const refSlice = refSections.slice(-6);
 
   const sections: string[] = [];
 
@@ -336,8 +336,8 @@ async function loadNextReferenceEpisodeContext(
     sections.push(`## Writer Guidance (HIGHEST PRIORITY — honour these instructions above all else)\n${userGuidance.trim()}`);
   }
 
-  // 2. Previous reference episodes — last 5, voice + continuity reference.
-  sections.push(`## Previous Reference Episodes (last ${refSlice.length} — your voice + continuity reference; your first beat picks up from the LAST beat of the most recent episode below)
+  // 2. Previous reference episodes — last 6, voice + continuity + character state reference.
+  sections.push(`## Previous Reference Episodes (last ${refSlice.length} — mine these for: (1) each character's voice and register, (2) all events, revelations, and relationship shifts that have occurred so far, (3) what each character currently knows, wants, and feels — carry all of this forward into Episode ${targetN}. Your first beat picks up from the LAST beat of the most recent episode below)
 ${
   refSlice.length > 0
     ? refSlice.map((s) => s.content).join("\n\n")
