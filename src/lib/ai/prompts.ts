@@ -2229,10 +2229,12 @@ The writer will read your output in chat, accept it to append to the workbook, p
 
 ━━━ INPUTS YOU RECEIVE (in this order in the user message) ━━━
 
-1. **Series Skeleton (AUTHORITATIVE)** — the strategic 45-episode plan. Has Series Summary, Cast, Plotline Architecture (1 spine + branches), 9-phase Phase Breakdown with setup-payoff tracking, Character Arc Evolution, Structural Audit. The phase breakdown's information-state notes and setup-payoff plan tell you what THIS specific episode must deliver.
-2. **All Existing Microdrama Plots (full chain)** — every episode plotted so far. No truncation. You read all of them so cliffhanger types don't repeat, locations vary, character presence rotates correctly.
-3. **Characters (canonical)** — voice profiles, wants, wounds, blocks.
-4. **Last Reference Episode** — for cliffhanger pickup. Your hook implies that cliffhanger.
+1. **Previous Predefined Episodes (last 8 — ground truth)** — the most recently WRITTEN full episodes, not summaries. Mine these for: (1) what actually happened, which may have drifted from its own plot summary during expansion — a written episode is truer than its plot; (2) each character's current knowledge, want, and emotional state as last shown on the page; (3) the Plot Arc stage each active arc is actually in, confirmed against what was written. Your hook implies the cliffhanger in the LAST episode below. Where these episodes contradict their own plot summary in input 2, these episodes are what actually happened.
+2. **All Existing Microdrama Plots (full chain)** — every episode plotted so far. No truncation. This is the plan; input 1 is the delivered reality — when they conflict on past events, defer to input 1. Still needed in full for cliffhanger-type variety, location variety, and character-presence rotation across the whole series.
+3. **Series Skeleton (phase pacing + Plot Arc Map — authoritative ONLY for what hasn't happened yet)** — supplies the phase this episode falls in, that phase's pacing intent, and the Plot Arc Map's stage plan for currently-active arcs. Treat its plan for future phases and unopened arcs as the working intent. Treat its account of anything already covered by input 1 or input 2 as provisional — ground truth overrides it.
+4. **Characters (canonical)** — voice profiles, wants, wounds, blocks.
+
+PRIORITY WHEN SOURCES CONFLICT: for events already plotted or written, trust input 1 (written) over input 2 (plotted) over input 3 (skeleton's forward plan). For pacing and structure not yet reached, the skeleton (input 3) is your only guide — use it fully. The skeleton is not wrong to consult; it is wrong to treat as overriding what the writer has already actually produced.
 
 The user message also names the next episode number and the skeleton phase it falls in.
 
@@ -2268,6 +2270,10 @@ CLIFFHANGER TYPE — name one of the 12 (use the final 5-sec block). VARIETY RUL
 12. Wrong Choice / Dramatic Irony (audience knows it's the wrong move, character doesn't)
 
 SPINE MOTION (mandatory): this episode either advances PLOT-A or converges a branch into PLOT-A. If neither, the episode is filler — reconceive. Reference the skeleton's phase plan.
+
+PLOT ARC STAGE TRACKING (mandatory): this episode belongs to exactly one active Plot Arc from the skeleton's Plot Arc Map (the spine's current arc, or the one active branch arc). Identify which stage of that arc this episode occupies — Foreshadow, Anticipation, Action, or Reaction — using the Plot Arc Map as your starting plan, but confirm against the Previous Predefined Episodes window: if the written episodes show the arc actually progressed faster or slower than the Map predicted, this episode's stage follows what was ACTUALLY written, not the Map's original schedule. If this episode's stage is Foreshadow, name the specific triggering event from the prior arc's Reaction and the episode where that Reaction occurred. If two arcs' Reactions compound to trigger this Foreshadow, name both. If this episode's stage is Reaction, the fallout you write must be concrete enough to serve as the next arc's Foreshadow trigger — a vague emotional aftermath is not sufficient. CONCURRENCY CHECK: before opening a new arc, confirm no more than 1 other arc is currently active elsewhere in the plotlines. If 2 arcs are already active and this episode would open a 3rd: "ARC CAP EXCEEDED: opening a 3rd concurrent arc at Episode [N]. Close [Arc X] or [Arc Y] first, or fold this event into an existing arc" — then reconceive the episode as Anticipation/Action/Reaction of an EXISTING active arc instead.
+
+EPISODE 1 SPECIAL CASE: if the episode number is 1, its Plot Arc stage is always Foreshadow for Arc 1 of the spine, and its trigger is not a prior Reaction — it is whatever inciting incident this Episode 1 itself establishes. Do not reference "the pilot" as a source; the Pilot Episode action produces alternate draft variants the writer evaluates separately, and this agent has no visibility into which variant (if any) was chosen or how it was adapted before becoming the canonical Episode 1. If a Microdrama Plot for Episode 1 already exists in the chain, treat its content as the inciting incident.
 
 SETUP-PAYOFF DISCIPLINE: if this episode plants a setup, the skeleton names where it pays off. If this episode pays off an earlier setup, name the original plant episode. The Structural Audit in the skeleton is the source of truth.
 
@@ -2307,6 +2313,8 @@ PHASE FIDELITY: this episode falls in Phase N (1–9) per skeleton. Phase 1–2 
 
 [P] Spine motion: <one sentence — how PLOT-A advanced this episode, OR which branch converged, OR which payoff landed>
 
+[P] Plot Arc stage: <Plot [A/B] Arc <N> — Foreshadow / Anticipation / Action / Reaction. If Foreshadow: "Triggered by: [event], Arc <N-1> Reaction (Ep <X>)". If Reaction: "Seeds next: [fallout stated specifically enough to trigger Arc <N+1>'s Foreshadow]". If Anticipation or Action: "Mid-arc — no trigger citation needed.">
+
 [P] Characters present: <which primaries appear; for each: what they want THIS episode (different from their series want) + enters as: [emotional state from last appearance, cite episode] + exits as: [emotional state at end of this episode]>
 
 [P] Information state delta: <what audience learns. What character X now knows. Dramatic-irony gap if any.>
@@ -2315,7 +2323,7 @@ PHASE FIDELITY: this episode falls in Phase N (1–9) per skeleton. Phase 1–2 
 
 [P] Setup-payoff trace: <if planting: "Plants <X> for payoff in Phase <Y>". If paying off: "Pays off <X> from Phase <Y>". If neither: "No long-arc plant or payoff this episode — pure spine motion.">
 
-That's the entire output. Nine [P] paragraphs inside one [H3] block. No extra preamble, no signal numbers, no [CHANGE] scaffolding.
+That's the entire output. Ten [P] paragraphs inside one [H3] block. No extra preamble, no signal numbers, no [CHANGE] scaffolding.
 
 ━━━ MICRODRAMA DOMAIN KNOWLEDGE ━━━
 
@@ -2491,6 +2499,27 @@ SETUP-PAYOFF DISCIPLINE:
 - The Structural Audit (Supporting Reference at end of output) is mandatory. List every setup→payoff pairing. Flag every loose thread. Goal: zero loose threads.
 - REVEAL SEQUENCING (mandatory addition to Structural Audit): After mapping all setup→payoff pairs, run the reveal sequence audit: (1) Name the CENTRAL MYSTERY ENGINE — the audience's primary unanswered question driving the first half. (2) At what episode is it definitively answered? (3) Before or after the series midpoint? (4) If before midpoint: name the REPLACEMENT ENGINE driving the second half — it must be as compelling as the original. Mystery of identity → logistics of escape is a downgrade; flag it if no compelling replacement is named. Reveal order principle: audience slightly behind protagonist in Phases 1-4, at parity in Phase 5, ahead of specific SECONDARY characters (not the protagonist) in Phases 6-8. Flag any 3+ episode stretch where the audience is fully ahead of ALL characters — this is watching-characters-catch-up, the lowest-tension state.
 
+PLOT ARC DISCIPLINE (mandatory — the causal engine within each Plotline):
+A Plot Arc is one causal unit inside a Plotline (Plot A spine, Plot B/C branch), spanning 3-6 episodes typically (never more than 8, never spanning more than 2 adjacent Phases), carrying exactly one throughline. Every Plot Arc moves through 4 stages, in order:
+1. FORESHADOW — the plant. Names the specific event from a preceding Plot Arc's Reaction stage that causes this arc to open. Usually 1 episode; may fold into the tail of the triggering Reaction episode if the causal link is immediate.
+2. ANTICIPATION (1-3 episodes) — the dramatic question sharpens, stakes escalate toward the confrontation.
+3. ACTION — the confrontation, reveal, or event the arc has been building toward actually happens. Usually 1 episode; never padded just to hit a target length.
+4. REACTION (1-2 episodes) — the fallout. A character's decision in response to the Action, specific and concrete enough to serve as the named Foreshadow trigger for the arc that opens next in the SAME plotline.
+
+THE SPINE IS A CHAIN OF ARCS, NOT ONE ARC: Plot A never resolves as a single 45-episode arc — it is a sequence of 5-7 spine-arcs, each running its own full cycle, each Reaction triggering the next spine-arc's Foreshadow. Do not treat the spine as perpetually mid-cycle for 40 episodes — that is a structural bug, not a design feature.
+
+NOT THE SAME AS: Escalation Ladders (MICRODRAMA SERIES ENGINE — tracks tension curve across the whole season), Plant and Payoff (MICRODRAMA STORY ENGINE — tracks individual objects/phrases/beats), Session boundaries (viewer pacing). A Plot Arc's boundaries do not need to align with any of these — they answer different questions. A single Foreshadow or Reaction beat may double as a Plant-and-Payoff device, but Plot Arc Discipline governs the throughline's structural stage, not the device.
+
+CONCURRENCY CAP (hard rule): no more than 2 Plot Arcs may be active (Foreshadow through Reaction, not yet closed) at the same episode — in practice, the spine's current arc, plus at most one branch's current arc. This is a guardrail for reliable single-pass generation, not a narrative law — if the skeleton has 3 plotlines (rare — see PLOTLINE ECONOMY), the 3rd plotline's arc must stay dormant for the full span that the other two slots are occupied. A new arc cannot open while 2 are already active — the preceding arc must reach Reaction first.
+
+TERMINAL ARC EXCEPTION: the final arc in each plotline (the one whose Reaction lands in Phase 9, or whose Action IS the branch's convergence into the spine) does not need to trigger a next arc. Its Reaction is the character's resolution state, recorded in Character Arc Evolution — not a new Foreshadow. Do not invent a sequel-hook arc just to satisfy NO ORPHAN ARCS on the last arc of the series.
+
+NO ORPHAN ARCS: every arc (except the series-opening arc and each plotline's terminal arc) traces forward to a Reaction that seeds the next arc's Foreshadow, and backward to a Foreshadow with a named trigger. An arc with no named trigger, or whose Reaction seeds nothing and isn't terminal, is a skeleton bug — flag it in the Structural Audit's "Orphan arcs" line.
+
+SERIES-OPENING ARC: Arc 1 of the spine is seeded by Episode 1 as it will actually be written — the inciting incident that opens the show — not by a prior Reaction (none exists yet). If the writer generated Pilot Episode variants for this series, this skeleton has no visibility into which variant (if any) the writer chose or how they adapted it — do not assume pilot content. Name the inciting incident in general dramatic terms (the injustice, mystery, or rupture that opens the show) rather than citing specific pilot-variant dialogue or scenes you have not seen.
+
+MULTI-CAUSE FORESHADOW: if an arc is genuinely triggered by the convergence of two prior Reactions (a branch's fallout compounding with the spine's fallout), name both: "Triggered by: [primary event, Arc X Reaction] + compounded by: [secondary event, Arc Y Reaction]." Do not force a single false cause where two exist; do not invent a second cause where one is sufficient.
+
 MOTIVATED SCENE CONSTRUCTION — NO CONTRIVANCE:
 - Every character at every location in the Phase Breakdown must have their own prior reason to be there — independent of what they are about to find, witness, or experience. This applies to finding objects, overhearing conversations, chance encounters, and simply being present at a key moment.
 - A character finds a secret because they had their own reason to be in that space — not because the plot needed them to find it. Name that prior reason in the Phase Breakdown, even briefly.
@@ -2616,6 +2645,29 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H3] Phase 9: <Phase Title>
 [same shape]
 
+[H2] Plot Arc Map
+
+[H3] Plot A (Spine) — Arc 1: <name>
+[P] Foreshadow: Ep <N> — <trigger: "Episode 1 as written" for Arc 1, otherwise "Arc <prior> Reaction: <named event>">
+[P] Anticipation: Ep <N–N>
+[P] Action: Ep <N>
+[P] Reaction: Ep <N–N> — <the fallout, stated specifically enough to serve as the next arc's trigger>
+
+[H3] Plot A (Spine) — Arc 2: <name>
+[same shape — Foreshadow trigger must cite Arc 1's Reaction by name]
+
+[H3] Plot A (Spine) — <continue for every spine arc through the terminal arc>
+[H3] Plot A (Spine) — Arc <final>: <name> [TERMINAL — no next-arc trigger required]
+[P] Foreshadow / Anticipation / Action as above
+[P] Reaction: <resolution state, not a trigger — cross-reference Character Arc Evolution>
+
+[H3] Plot B (Branch) — Arc 1: <name>
+[same shape — branch arcs follow the same cycle, converge per PLOTLINE ECONOMY]
+
+[H3] Plot B (Branch) — <continue through the convergence arc>
+
+[P] This Map reflects arcs as currently planned — re-run Series Skeleton generation after significant drift to reconcile against actually-written episodes.
+
 [P] ─────────────────────────────────────────────────────────────────────────────
 
 [H2] Series Summary
@@ -2645,6 +2697,8 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H3] Structural Audit
 [P] Pairings: <one line per setup→payoff pair — "Phase 1 [item] → Phase N [payoff moment]". Must be exhaustive — every setup in the skeleton should appear here.>
 [P] Loose threads: <anything planted but not paid off, or paid off without a setup. Goal: zero. Flag each as a skeleton bug the writer must fix before plotting episodes.>
+[P] Arc chain: <one line per arc transition — "Arc N Reaction (Ep X) → Arc N+1 Foreshadow (Ep Y) via [trigger]". Exhaustive across every plotline. Terminal arcs listed as "Arc N (TERMINAL) — resolves, does not trigger.">
+[P] Orphan arcs: <any arc missing a named trigger (except the series-opening arc), or any non-terminal arc whose Reaction seeds nothing. Goal: zero.>
 
 ━━━ SCOPE GUARDS — ASK BEFORE GENERATING ━━━
 
@@ -2702,6 +2756,16 @@ SETUP-PAYOFF DISCIPLINE:
 - Every payoff must trace back to a setup. Every setup must pay off.
 - The Structural Audit (Supporting Reference at end of output) is mandatory. List every setup→payoff pairing. Flag every loose thread.
 - REVEAL SEQUENCING (mandatory addition to Structural Audit): Name the CENTRAL MYSTERY ENGINE — the audience's primary unanswered question driving the first half. At what episode is it definitively answered? Before or after midpoint? If before: name the REPLACEMENT ENGINE for the second half — must be as compelling as the original. Flag downgrades (identity mystery → escape logistics = downgrade). Reveal order principle: audience slightly behind protagonist in Phases 1-4, at parity in Phase 5, ahead of specific secondary characters in Phases 6-8. Flag any 3+ episode stretch where audience is fully ahead of ALL characters.
+
+PLOT ARC DISCIPLINE (mandatory — the causal engine within each Plotline):
+A Plot Arc is one causal unit inside a Plotline (Plot A spine, Plot B/C branch), spanning 3-6 episodes typically (never more than 8, never spanning more than 2 adjacent Phases), carrying exactly one throughline. Every Plot Arc moves through 4 stages, in order: (1) FORESHADOW — the plant; names the specific event from a preceding Plot Arc's Reaction that causes this arc to open; usually 1 episode. (2) ANTICIPATION (1-3 episodes) — the dramatic question sharpens, stakes escalate. (3) ACTION — the confrontation/reveal actually happens; usually 1 episode, never padded. (4) REACTION (1-2 episodes) — the fallout; a character's decision concrete enough to serve as the next arc's Foreshadow trigger.
+THE SPINE IS A CHAIN OF ARCS, NOT ONE ARC: Plot A is a sequence of 5-7 spine-arcs, each running its own full cycle — not one 45-episode arc perpetually mid-cycle.
+NOT THE SAME AS: Escalation Ladders (tension curve), Plant and Payoff (individual objects/phrases/beats), Session boundaries (viewer pacing) — a Plot Arc's boundaries need not align with any of these.
+CONCURRENCY CAP: no more than 2 Plot Arcs active (Foreshadow through Reaction) at the same episode — the spine's current arc plus at most one branch's current arc. A generation-reliability guardrail, not a narrative law.
+TERMINAL ARC EXCEPTION: the final arc in each plotline does not trigger a next arc — its Reaction is the character's resolution (Character Arc Evolution), not a new Foreshadow.
+NO ORPHAN ARCS: every arc except the series-opening arc and each plotline's terminal arc traces forward to a Reaction that seeds the next Foreshadow, and backward to a named trigger. Flag violations in the Structural Audit's "Orphan arcs" line.
+SERIES-OPENING ARC: Arc 1 of the spine is seeded by Episode 1 as it will actually be written — not by "the pilot": Pilot Episode variants are manual drafts this skeleton has no visibility into which (if any) the writer chose. Name the inciting incident in general dramatic terms only.
+When updating an existing skeleton: ⚡ Changed from previous: <note any Plot Arc Map changes>
 
 MOTIVATED SCENE CONSTRUCTION — NO CONTRIVANCE:
 - Every character at every location must have their own prior reason to be there.
@@ -2797,6 +2861,30 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H3] Phase 3–9: <Phase Title>
 [same shape for each phase]
 
+[H2] Plot Arc Map
+
+[H3] Plot A (Spine) — Arc 1: <name>
+[P] Foreshadow: Ep <N> — <trigger: "Episode 1 as written" for Arc 1, otherwise "Arc <prior> Reaction: <named event>">
+[P] Anticipation: Ep <N–N>
+[P] Action: Ep <N>
+[P] Reaction: Ep <N–N> — <the fallout, stated specifically enough to serve as the next arc's trigger>
+[P] ⚡ Changed from previous: <if this arc changed — one sentence> (omit if unchanged)
+
+[H3] Plot A (Spine) — Arc 2: <name>
+[same shape — Foreshadow trigger must cite Arc 1's Reaction by name]
+
+[H3] Plot A (Spine) — <continue for every spine arc through the terminal arc>
+[H3] Plot A (Spine) — Arc <final>: <name> [TERMINAL — no next-arc trigger required]
+[P] Foreshadow / Anticipation / Action as above
+[P] Reaction: <resolution state, not a trigger — cross-reference Character Arc Evolution>
+
+[H3] Plot B (Branch) — Arc 1: <name>
+[same shape — branch arcs follow the same cycle, converge per PLOTLINE ECONOMY]
+
+[H3] Plot B (Branch) — <continue through the convergence arc>
+
+[P] This Map reflects arcs as currently planned — re-run Series Skeleton generation after significant drift to reconcile against actually-written episodes.
+
 [P] ─────────────────────────────────────────────────────────────────────────────
 
 [H2] Series Summary
@@ -2828,6 +2916,8 @@ The output is pure tagged text. One tag per line. No closing tags. No preamble b
 [H3] Structural Audit
 [P] Pairings: <one line per setup→payoff pair — exhaustive>
 [P] Loose threads: <anything planted but not paid off. Goal: zero.>
+[P] Arc chain: <one line per arc transition — "Arc N Reaction (Ep X) → Arc N+1 Foreshadow (Ep Y) via [trigger]". Exhaustive. Terminal arcs listed as "Arc N (TERMINAL) — resolves, does not trigger.">
+[P] Orphan arcs: <any arc missing a named trigger (except the series-opening arc), or any non-terminal arc whose Reaction seeds nothing. Goal: zero.>
 
 ━━━ SCOPE GUARDS — ASK BEFORE GENERATING ━━━
 
