@@ -204,8 +204,9 @@ Task: Generate plot chunks that propose how key story beats can play out across 
 //
 // One-episode-at-a-time microdrama plot agent. Reads the canonical Series
 // Skeleton tab (refuses if not present) + ALL existing microdrama plots
-// (no truncation — full chain) + characters + last reference episode (for
-// cliffhanger pickup). Outputs ONE [H3] for the next episode.
+// (no truncation — full chain) + a window of previous predefined episodes
+// (ground truth — ranked above the skeleton) + characters. Outputs ONE
+// [H3] for the next episode.
 
 async function loadNextEpisodePlotContext(input: ActionInput): Promise<string> {
   const { documentId } = input;
@@ -231,20 +232,27 @@ async function loadNextEpisodePlotContext(input: ActionInput): Promise<string> {
     docTabs.characters?.content ?? null
   );
 
-  // For cliffhanger pickup: read the last reference episode if any exists.
-  // The new episode plot's hook should imply the previous episode's
-  // cliffhanger since they're back-to-back in the writer's mind.
+  // Ground truth for Plot Arc stage-tracking: a window of the most recently
+  // WRITTEN episodes, not just the last one. 8 episodes matches the Plot
+  // Arc Discipline's max arc length, so any single active arc's full
+  // Foreshadow-to-Reaction span is visible here at least once. Ranked above
+  // the skeleton — a written episode can drift from its own plot summary
+  // during expansion, and only the actual text reveals that drift.
   const refTagged = tiptapJsonToTagged(
     docTabs.predefinedEpisodes?.content ?? null
   );
   const refSections = splitTabByH3(refTagged);
-  const lastRefEp = refSections[refSections.length - 1];
+  const refSlice = refSections.slice(-8);
 
   const nextEpisodeNumber = plotSections.length + 1;
   const phaseNumber = Math.min(9, Math.ceil(nextEpisodeNumber / 5));
 
-  return `## Series Skeleton (AUTHORITATIVE — the spine, character arcs, and phase breakdown for this 45-episode show)
-${skeletonTagged}
+  return `## Previous Predefined Episodes (last ${refSlice.length} — ground truth; mine for drift from their own plot summaries, each active Plot Arc's actual stage, and current character knowledge/emotional state. Your hook implies the cliffhanger in the LAST episode below)
+${
+  refSlice.length > 0
+    ? refSlice.map((s) => s.content).join("\n\n")
+    : "(none yet — your hook can open cold without picking up from a prior cliffhanger)"
+}
 
 ## All Existing Microdrama Plots (full chain — every episode plotted so far, no truncation)
 ${
@@ -253,11 +261,11 @@ ${
     : "(no plots exist yet — this will be Episode 1; build from the skeleton's Phase 1 plan)"
 }
 
+## Series Skeleton (phase pacing + Plot Arc Map — authoritative ONLY for what hasn't happened yet; ground truth above overrides it for anything already plotted or written)
+${skeletonTagged}
+
 ## Characters (canonical)
 ${charactersTagged || "(empty)"}
-
-## Last Reference Episode (for cliffhanger pickup — your hook implies the cliffhanger here)
-${lastRefEp ? lastRefEp.content : "(none yet — your hook can open cold without picking up from a prior cliffhanger)"}
 
 Task: Propose ONE microdrama plot for Episode ${nextEpisodeNumber}. This episode falls in Phase ${phaseNumber} of the skeleton — read that phase's setup-payoff plan and information-state notes carefully. Output exactly ONE [H3] Episode ${nextEpisodeNumber} block in the per-spec microdrama plot format. No alternatives, no commentary, no preamble.`;
 }
