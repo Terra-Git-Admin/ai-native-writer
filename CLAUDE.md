@@ -30,11 +30,13 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 | File | Purpose |
 |---|---|
 | `src/app/api/ai/edit/route.ts` | Single AI endpoint — handles all modes (edit, draft, feedback, format, chat, agents) |
-| `src/lib/ai/prompts.ts` | All 24 prompt constants — source of truth on server restart; upserted to DB |
+| `src/lib/ai/prompts.ts` | All 25 prompt constants — source of truth on server restart; upserted to DB |
 | `src/app/api/prompts/route.ts` | Prompt DB seeding — registers all prompt IDs in DEFAULTS |
 | `src/components/ai/AIChatSidebar.tsx` | Chat sidebar — mode detection, streaming, signal protocol, change parsing |
 | `src/components/editor/Editor.tsx` | Tiptap editor — `replaceRange`, `findAndReplace`, `highlightSelection`, `CommentMark` |
 | `src/components/editor/WorkbookActions.tsx` | Workbook tab action buttons — triggers agent job kinds |
+| `src/components/ai/StoryboardPanel.tsx` | Admin storyboard panel — per-beat image cards (beat text + image + prompt); auto-fetches on mount |
+| `src/app/api/documents/[id]/visualize/route.ts` | Storyboard API — admin-only; gemini-2.5-flash prompt gen + parallel Imagen 3 calls |
 | `src/lib/db/index.ts` | Lazy DB singleton + Proxy — **do not rewrite** (see Architecture) |
 | `src/lib/auth.ts` | Lazy NextAuth init — **do not rewrite** (see Architecture) |
 | `src/lib/db/schema.ts` | Drizzle schema — run `npx drizzle-kit push` after changes |
@@ -42,8 +44,8 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 ## Active Work
 
 - **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
-- **Latest shipped**: PR #69 — series skeleton format overhaul: narrative plotlines + phase breakdown, delta diff on regen (merged 23 Jun 2026)
-- **Total prompts in DB**: 24 (seeded from `prompts.ts` on restart)
+- **Latest shipped**: PR #75 — Plot Arc Discipline (Foreshadow/Anticipation/Action/Reaction) + Next Episode Plot context reprioritized over skeleton (merged 1 Jul 2026)
+- **Total prompts in DB**: 25 (seeded from `prompts.ts` on restart)
 - **Cloud Run config**: `max-instances=1` (SQLite single-writer), `concurrency=50` (bumped 22 Jun 2026 from 20 — 429s under multi-user load)
 
 ### Predefined Episode Format (as of PR #65 — 15 Jun 2026)
@@ -57,13 +59,15 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 - **V.O. required**: when a character receives a revelation they cannot voice aloud — not optional
 - **Pre-emit checks**: PREPARED ANSWER (physical beat before verbal response), SILENCE (devastating moment must freeze first), V.O., QUOTES — run on draft before emitting
 
-### Predefined Episode Context Priority (as of PR #67 — 22 Jun 2026)
+### Predefined Episode Context Priority (as of PR #74 — 29 Jun 2026)
 
 `next_reference_episode` job context order (highest → lowest influence):
 1. **Writer guidance** — text typed in chat before triggering the job (`userGuidance`); overrides everything
-2. **Last 5 reference episodes** — capped from full chain; voice + continuity reference
+2. **Last 6 reference episodes** — window (not full chain); model mines for character state, events, revelations, relationship shifts, and what each character knows — plus voice + scene pickup
 3. **Microdrama plot** — structural blueprint for the episode being expanded
 4. **Characters** — voice consistency only
+
+System prompt now tells the model it has a **partial window** (not full chain) — it infers earlier context from what the visible episodes reference rather than assuming it has seen everything.
 
 Series Skeleton is **excluded** from general chat context on the `predefined_episodes` tab (it was leaking in and confusing scene-level generation).
 
@@ -79,6 +83,36 @@ Both `SERIES_SKELETON_SYSTEM_PROMPT` and `SERIES_SKELETON_PREDEFINED_SYSTEM_PROM
 
 **Predefined regen delta** — when regenerating against an existing skeleton, a compact `[H2] Changes from Previous Skeleton` block appears after `[H1]`, with one `[P] •` bullet per changed/added/removed plot. Block omitted entirely if no plots changed.
 
+### Plot Arc Discipline (as of PR #75 — 1 Jul 2026)
+
+New structural layer between Plotline (whole-series) and Episode (single ep): a **Plot Arc** is a 3-6 episode (never more than 8) causal unit inside a Plotline, cycling through 4 stages in order:
+1. **Foreshadow** — the plant; must name the specific event from the prior arc's Reaction that triggers it
+2. **Anticipation** (1-3 eps) — the dramatic question sharpens, stakes escalate
+3. **Action** — the confrontation/reveal actually happens
+4. **Reaction** (1-2 eps) — the fallout, concrete enough to serve as the next arc's Foreshadow trigger
+
+**Concurrency cap**: max 2 Plot Arcs active at once (spine's current arc + at most one branch's current arc) — framed as a generation-reliability guardrail, not narrative law. The spine is a *chain* of 5-7 arcs, not one 45-episode arc. Each plotline's terminal arc is exempt from triggering a next arc (its Reaction is the character's resolution instead).
+
+**Series-opening arc**: Arc 1 is seeded by Episode 1 as actually written — never by "the pilot." The Pilot Episode job produces 3 manual draft variants with no auto-merge path into canonical continuity, so neither Skeleton nor Next Episode Plot has visibility into pilot content.
+
+**Does not overlap** with the existing Escalation Ladder (`MICRODRAMA_SERIES_ENGINE` — tension curve), Plant-and-Payoff (`MICRODRAMA_STORY_ENGINE` — object/phrase devices), or Session boundaries (viewer pacing) — explicitly reconciled in the prompt text since all three land in a similar 5-8 episode envelope.
+
+**Where it lives**: `SERIES_SKELETON_SYSTEM_PROMPT` + predefined variant get a new `[H2] Plot Arc Map` output section (after Phase Breakdown) + 2 new Structural Audit lines (Arc chain, Orphan arcs). `NEXT_EPISODE_PLOT_SYSTEM_PROMPT` gets a `PLOT ARC STAGE TRACKING` hard rule + a 10th output field (`Plot Arc stage`).
+
+Design was independently audited before shipping — caught and fixed two structural bugs: the spine would have been treated as one perpetual 45-episode arc, and the series finale would have been flagged as an "orphan arc" bug.
+
+**Not yet done**: live-verify by actually regenerating a Series Skeleton and a Next Episode Plot on a real doc to confirm the model follows these rules sensibly — shipped without that test pass per explicit instruction.
+
+### Next Episode Plot Context Priority (as of PR #75 — 1 Jul 2026)
+
+`next_episode_plot` job context order (highest → lowest influence) — reordered to demote the Skeleton, mirroring the PR #74 fix already applied to `next_reference_episode`:
+1. **Previous Predefined Episodes** — window of last 8 (was: only the last 1, cliffhanger-pickup only). Ground truth — mined for drift from plot summaries, each active Plot Arc's actual stage, and current character knowledge/emotional state.
+2. **All Existing Microdrama Plots** — full chain, unchanged.
+3. **Series Skeleton** — demoted from "AUTHORITATIVE" to "phase pacing + Plot Arc Map — authoritative only for what hasn't happened yet." Ground truth (1, 2) overrides it for anything already plotted or written.
+4. **Characters** — unchanged, voice consistency only.
+
+`loadNextEpisodePlotContext` in `actions.ts` updated to match — windows `predefinedEpisodes` to `.slice(-8)` instead of taking only the last section.
+
 ### Pending (NOT pushed)
 
 - **Comment race (#2/#3)** — reviewer poll/save race investigated, report-only. Fix-option decision pending. See `COMMENT-RACE-INVESTIGATION.md`.
@@ -88,9 +122,10 @@ Both `SERIES_SKELETON_SYSTEM_PROMPT` and `SERIES_SKELETON_PREDEFINED_SYSTEM_PROM
 | Agent | Job kind | Notes |
 |---|---|---|
 | Research Agent | `research` | Chat + Google Search; original names + name remapping workflow |
-| Outsiders Perspective | `outsiders` | Admin-only episode analyzer; emotion/relationship velocity audits |
+| Outsiders Perspective | `outsiders` | All authenticated users. Admin gets full 5-dimension analysis (`outsiders_perspective`). Non-admin gets compact brief format (`outsiders_perspective_brief`) — 1–2 bullets per section (Plot & Scene, Dialogue, Hook & Emotion), no scorecard. Route detects `isAdmin` and selects prompt accordingly. |
 | Quality Agent | `quality_eval` | One-shot episode eval; Gemini 2.5 Pro + thinking; admin-only |
 | Pilot Episode Agent | `pilot_episode` | 3 EP1 variants; plain prose; conversion-first, 3 genuinely different pilots, hook doctrine — **action button only, not triggerable via chat** |
+| Storyboard | `visualize` | Admin-only. One image per beat of the latest predefined episode. Two-step: one `gemini-2.5-flash` call generates all N image prompts as JSON (story-communication framing — who/where/emotion/dialogue staging, no cinematography language), then N parallel Imagen 3 calls (16:9). Results in `StoryboardPanel.tsx` right panel (520px). Button visible in editor toolbar when admin + predefined_episodes tab. |
 
 ### Known open issues (do not accidentally touch)
 
