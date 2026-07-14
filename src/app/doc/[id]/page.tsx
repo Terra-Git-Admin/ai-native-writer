@@ -8,6 +8,7 @@ import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
 import QualityAgentModal from "@/components/ai/QualityAgentModal";
 import QualityAgentPanel from "@/components/ai/QualityAgentPanel";
+import StoryboardPanel from "@/components/ai/StoryboardPanel";
 import ResearchAgentPanel from "@/components/ai/ResearchAgentPanel";
 import OutsidersPerspectivePanel from "@/components/ai/OutsidersPerspectivePanel";
 import OutsidersPerspectiveModal from "@/components/ai/OutsidersPerspectiveModal";
@@ -68,6 +69,7 @@ export default function DocumentPage() {
     episodeLabel: string;
     episodeIndex: number;
   } | null>(null);
+  const [storyboardOpen, setStoryboardOpen] = useState(false);
   const [researchAgentOpen, setResearchAgentOpen] = useState(false);
   // Set to true when Research Agent is opened because Pilot Episode was
   // triggered but Original Research was empty — auto-fires pilot job after
@@ -652,12 +654,24 @@ export default function DocumentPage() {
           )}
           {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
-              <button
-                onClick={() => setQualityModalOpen(true)}
-                className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-              >
-                Quality Agent
-              </button>
+              <>
+                <button
+                  onClick={() => setQualityModalOpen(true)}
+                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+                >
+                  Quality Agent
+                </button>
+                <button
+                  onClick={() => setStoryboardOpen((o) => !o)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    storyboardOpen
+                      ? "bg-fuchsia-100 text-fuchsia-700"
+                      : "bg-fuchsia-600 text-white hover:bg-fuchsia-700"
+                  }`}
+                >
+                  Storyboard
+                </button>
+              </>
             )}
           <button
             onClick={() => {
@@ -855,6 +869,14 @@ export default function DocumentPage() {
               episodeLabel={qualityPanelRequest.episodeLabel}
               episodeIndex={qualityPanelRequest.episodeIndex}
               onClose={() => setQualityPanelRequest(null)}
+            />
+          </div>
+        )}
+        {storyboardOpen && (
+          <div className="w-[520px] border-l border-gray-200 bg-white">
+            <StoryboardPanel
+              documentId={doc.id}
+              onClose={() => setStoryboardOpen(false)}
             />
           </div>
         )}
