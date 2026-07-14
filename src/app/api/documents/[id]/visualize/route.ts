@@ -159,28 +159,40 @@ export async function POST(
     );
   }
 
-  // Step 2: Parallel Imagen 3 calls — one per beat
-  const results = await Promise.allSettled(
-    beatLines.map(async (beatText, i): Promise<StoryboardFrame> => {
-      const promptEntry = imagePrompts.find((p) => p.beatIndex === i) ?? imagePrompts[i];
-      const prompt = promptEntry?.prompt ?? beatText;
-      try {
-        const img = await callImagen3(apiKey, prompt);
-        return { beatIndex: i, beatText, prompt, ...img };
-      } catch (err) {
-        return {
-          beatIndex: i,
-          beatText,
-          prompt,
-          error: err instanceof Error ? err.message : String(err),
-        };
-      }
-    })
-  );
+  // Step 2: Imagen 3 calls — batched 3 at a time to stay under QPM quota
+  const BATCH_SIZE = 3;
+  const BATCH_DELAY_MS = 1200;
+  const storyboard: StoryboardFrame[] = [];
 
-  const storyboard: StoryboardFrame[] = results.map((r) =>
-    r.status === "fulfilled" ? r.value : { beatIndex: 0, beatText: "", prompt: "", error: "Unknown error" }
-  );
+  for (let i = 0; i < beatLines.length; i += BATCH_SIZE) {
+    const batch = beatLines.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (beatText, j): Promise<StoryboardFrame> => {
+        const idx = i + j;
+        const promptEntry = imagePrompts.find((p) => p.beatIndex === idx) ?? imagePrompts[idx];
+        const prompt = promptEntry?.prompt ?? beatText;
+        try {
+          const img = await callImagen3(apiKey, prompt);
+          return { beatIndex: idx, beatText, prompt, ...img };
+        } catch (err) {
+          return {
+            beatIndex: idx,
+            beatText,
+            prompt,
+            error: err instanceof Error ? err.message : String(err),
+          };
+        }
+      })
+    );
+    for (const r of batchResults) {
+      storyboard.push(
+        r.status === "fulfilled" ? r.value : { beatIndex: 0, beatText: "", prompt: "", error: "Unknown error" }
+      );
+    }
+    if (i + BATCH_SIZE < beatLines.length) {
+      await new Promise((res) => setTimeout(res, BATCH_DELAY_MS));
+    }
+  }
 
   return NextResponse.json({ episodeTitle: episode.title, storyboard });
 }
