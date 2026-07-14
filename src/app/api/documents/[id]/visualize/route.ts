@@ -71,6 +71,19 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
+    return await postHandler(request, params);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[visualize] unhandled error:", msg);
+    return NextResponse.json({ error: `Internal error: ${msg}` }, { status: 500 });
+  }
+}
+
+async function postHandler(
+  request: NextRequest,
+  params: Promise<{ id: string }>
+) {
   const session = await auth();
   const isAdmin = (session?.user as { role?: string })?.role === "admin";
   if (!session?.user || !isAdmin) {
