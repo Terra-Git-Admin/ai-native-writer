@@ -577,12 +577,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         saveStatus: saveStatusRef.current,
       });
       try {
-        // Tab-switch is an explicit "I'm done with this for now" gesture.
-        // Force a version snapshot so the writer can always come back to
-        // exactly this state — even if it's only 30s after the last
-        // throttled snapshot.
+        // Tab-switch flushes any pending edit. Version snapshot is NOT
+        // forced here — that fills the rolling window too fast. The
+        // throttled auto-save (1/5min) captures edits; Ctrl+S and
+        // pre-AI-apply still force snapshots at the meaningful moments.
         await saveDocument(editor.getJSON(), {
-          forceVersion: true,
+          forceVersion: false,
           reason: "tab-switch",
         });
         trace("client.flushPendingSave.ok", {

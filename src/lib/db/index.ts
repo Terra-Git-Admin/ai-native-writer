@@ -213,6 +213,13 @@ export function dbFileStats(): {
   };
 }
 
+// Wrapper so admin routes can trigger an immediate backup without access
+// to the module-private _sqlite/_dbPath handles.
+export async function forceBackupNow(): Promise<void> {
+  if (!_sqlite || !_dbPath) return;
+  await forceBackup(_sqlite, _dbPath);
+}
+
 // Proxy gives Turbopack a static `export const db` while deferring all
 // actual DB work until runtime property access. Auth.ts uses getDb()
 // directly because DrizzleAdapter does instanceof checks Proxy can't

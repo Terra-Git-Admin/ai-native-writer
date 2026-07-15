@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, dbFileStats } from "@/lib/db";
 import { documents, tabs, comments, documentVersions } from "@/lib/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { compareDocs, extractCommentMarkIds } from "@/lib/commentMarks";
 import {
@@ -18,15 +18,28 @@ import {
 // Two paths in:
 // 1. Auto-debounced save (`force=false`, default): at most one row per 5
 //    minutes per (doc, tab) so rapid typing doesn't flood the table.
-// 2. User-intent checkpoint (`force=true`): tab-switch flush, manual Ctrl+S.
-//    Bypasses the throttle. Writers asked for a snapshot at every "I'm done
-//    with this for now" or "save this version please" gesture.
+// 2. User-intent checkpoint (`force=true`): manual Ctrl+S, pre-AI-apply.
+//    Bypasses the throttle.
 //
 // In both paths we de-duplicate against the last row's content — switching
 // tabs A→B→A with no edits in between should not generate three identical
-// snapshots. Prunes to last 200 per (doc, tab) so long-running docs don't
-// grow unbounded.
-const TAB_VERSION_HISTORY_LIMIT = 200;
+// snapshots.
+//
+// Retention: keep the newest TAB_VERSION_HISTORY_LIMIT snapshots PLUS one
+// "daily anchor" = the newest snapshot from before today (IST). The anchor
+// survives even after the rolling window scrolls past it, so a writer can
+// always jump back to where they left off on a previous day.
+const TAB_VERSION_HISTORY_LIMIT = 10;
+
+// Start of "today" in IST (UTC+5:30). The daily-anchor rule keeps the newest
+// snapshot from BEFORE this instant so a writer always has a stable
+// "where I left off previously" restore point.
+function startOfTodayIST(): Date {
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+  const nowIst = Date.now() + IST_OFFSET_MS;
+  const istMidnight = Math.floor(nowIst / 86_400_000) * 86_400_000;
+  return new Date(istMidnight - IST_OFFSET_MS);
+}
 async function maybeCreateTabVersion(
   documentId: string,
   tabId: string,
@@ -104,41 +117,40 @@ async function maybeCreateTabVersion(
     ...dbFileStats(),
   });
 
-  // Prune beyond TAB_VERSION_HISTORY_LIMIT per (doc, tab). Bumped from 50 to
-  // 200 since tab-switch + manual save now create force-version rows in
-  // addition to the throttled auto-saves.
-  const count = await db
-    .select({ count: sql<number>`COUNT(*)` })
+  // Prune: keep newest TAB_VERSION_HISTORY_LIMIT rows + daily anchor.
+  // Fetch id+createdAt only — no content column, cheap at ~11 rows.
+  const rows = await db
+    .select({
+      id: documentVersions.id,
+      createdAt: documentVersions.createdAt,
+    })
     .from(documentVersions)
     .where(
       and(
         eq(documentVersions.documentId, documentId),
         eq(documentVersions.tabId, tabId)
       )
-    );
-  if ((count[0]?.count ?? 0) > TAB_VERSION_HISTORY_LIMIT) {
-    const cutoff = await db
-      .select({ createdAt: documentVersions.createdAt })
-      .from(documentVersions)
-      .where(
-        and(
-          eq(documentVersions.documentId, documentId),
-          eq(documentVersions.tabId, tabId)
-        )
-      )
-      .orderBy(desc(documentVersions.createdAt))
-      .limit(1)
-      .offset(TAB_VERSION_HISTORY_LIMIT - 1);
-    if (cutoff.length > 0) {
+    )
+    .orderBy(desc(documentVersions.createdAt));
+
+  if (rows.length > TAB_VERSION_HISTORY_LIMIT) {
+    const keep = new Set<string>();
+    for (let i = 0; i < TAB_VERSION_HISTORY_LIMIT && i < rows.length; i++) {
+      keep.add(rows[i].id);
+    }
+    const startOfToday = startOfTodayIST();
+    const anchor = rows.find((r) => r.createdAt < startOfToday);
+    if (anchor) keep.add(anchor.id);
+
+    const toDelete = rows.filter((r) => !keep.has(r.id)).map((r) => r.id);
+    if (toDelete.length > 0) {
       await db
         .delete(documentVersions)
         .where(
           and(
             eq(documentVersions.documentId, documentId),
             eq(documentVersions.tabId, tabId),
-            sql`${documentVersions.createdAt} < ${Math.floor(
-              cutoff[0].createdAt.getTime() / 1000
-            )}`
+            inArray(documentVersions.id, toDelete)
           )
         );
     }
