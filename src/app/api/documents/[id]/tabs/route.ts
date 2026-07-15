@@ -172,7 +172,7 @@ export async function GET(
   );
 
   logEvent("tabs.get.timing", {
-    phase: "baseline",
+    phase: "idx",
     docId: id,
     tabCount,
     totalContentBytes,

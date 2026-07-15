@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 export const users = sqliteTable("users", {
@@ -72,70 +72,90 @@ export const documents = sqliteTable("documents", {
     .$defaultFn(() => new Date()),
 });
 
-export const tabs = sqliteTable("tabs", {
-  id: text("id").primaryKey(),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => documents.id, { onDelete: "cascade" }),
-  title: text("title").notNull().default("Untitled"),
-  // 'custom' | 'series_overview' | 'characters' | 'series_skeleton' |
-  // 'microdrama_plots' | 'predefined_episodes' | 'workbook'. Legacy values
-  // 'episode_plot', 'reference_episode', 'research' are migrated in place by
-  // the heal path on first tab fetch post-PR feat/fixed-tab-structure.
-  type: text("type").notNull().default("custom"),
-  sequenceNumber: integer("sequence_number"),
-  content: text("content"),
-  position: integer("position").notNull().default(0),
-  // The six canonical tabs (Original Research, Characters, Series Skeleton,
-  // Microdrama Plots, Predefined Episodes, Workbook) are seeded for every
-  // doc and flagged protected so title/type cannot be edited and the row
-  // cannot be deleted.
-  isProtected: integer("is_protected", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const tabs = sqliteTable(
+  "tabs",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Untitled"),
+    // 'custom' | 'series_overview' | 'characters' | 'series_skeleton' |
+    // 'microdrama_plots' | 'predefined_episodes' | 'workbook'. Legacy values
+    // 'episode_plot', 'reference_episode', 'research' are migrated in place by
+    // the heal path on first tab fetch post-PR feat/fixed-tab-structure.
+    type: text("type").notNull().default("custom"),
+    sequenceNumber: integer("sequence_number"),
+    content: text("content"),
+    position: integer("position").notNull().default(0),
+    // The six canonical tabs (Original Research, Characters, Series Skeleton,
+    // Microdrama Plots, Predefined Episodes, Workbook) are seeded for every
+    // doc and flagged protected so title/type cannot be edited and the row
+    // cannot be deleted.
+    isProtected: integer("is_protected", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [index("idx_tabs_doc_pos").on(table.documentId, table.position)]
+);
 
-export const comments = sqliteTable("comments", {
-  id: text("id").primaryKey(),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => documents.id, { onDelete: "cascade" }),
-  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
-  commentMarkId: text("comment_mark_id").notNull(), // matches mark ID in editor
-  content: text("content").notNull(),
-  quotedText: text("quoted_text"), // the selected text this comment refers to
-  authorId: text("author_id")
-    .notNull()
-    .references(() => users.id),
-  parentId: text("parent_id"), // null for root, comment ID for reply
-  resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
+    commentMarkId: text("comment_mark_id").notNull(), // matches mark ID in editor
+    content: text("content").notNull(),
+    quotedText: text("quoted_text"), // the selected text this comment refers to
+    authorId: text("author_id")
+      .notNull()
+      .references(() => users.id),
+    parentId: text("parent_id"), // null for root, comment ID for reply
+    resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_comments_doc_tab").on(table.documentId, table.tabId),
+  ]
+);
 
-export const documentVersions = sqliteTable("document_versions", {
-  id: text("id").primaryKey(),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => documents.id, { onDelete: "cascade" }),
-  // Nullable for pre-tabs legacy rows (migration 0002 or earlier). New snapshots
-  // created post-0003 always set tabId — writers work inside a specific tab.
-  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
-  content: text("content").notNull(), // Tiptap JSON snapshot
-  createdBy: text("created_by")
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const documentVersions = sqliteTable(
+  "document_versions",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    // Nullable for pre-tabs legacy rows (migration 0002 or earlier). New snapshots
+    // created post-0003 always set tabId — writers work inside a specific tab.
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
+    content: text("content").notNull(), // Tiptap JSON snapshot
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_docver_doc_tab_created").on(
+      table.documentId,
+      table.tabId,
+      table.createdAt
+    ),
+  ]
+);
 
 export const aiChatHistory = sqliteTable("ai_chat_history", {
   id: text("id").primaryKey(),
