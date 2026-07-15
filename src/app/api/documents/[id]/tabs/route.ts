@@ -3,11 +3,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { and, eq, max, sql } from "drizzle-orm";
+import { and, eq, max } from "drizzle-orm";
 import { logEvent, logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
-import { splitTiptapDocument, shouldSplit } from "@/lib/split-doc";
-import { healFixedTabs } from "@/lib/tab-heal";
 
 const VALID_TYPES: readonly string[] = [
   "custom",
@@ -21,107 +19,6 @@ const VALID_TYPES: readonly string[] = [
   "predefined_episodes",
   "workbook",
 ];
-
-// Docs created via POST /api/documents before the "seed default Main tab on
-// create" fix have zero tabs, so the doc page renders blank (no activeTabId →
-// Editor never mounts). Heal idempotently on first GET: insert a Main tab
-// identical to what migration 0002 seeds and point activeTabId at it.
-async function healMissingDefaultTab(
-  docId: string,
-  docContent: string | null
-): Promise<boolean> {
-  const existing = await db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(tabs)
-    .where(eq(tabs.documentId, docId));
-  if ((existing[0]?.count ?? 0) > 0) return false;
-
-  const tabId = nanoid(12);
-  const now = new Date();
-  await db.insert(tabs).values({
-    id: tabId,
-    documentId: docId,
-    title: "Main",
-    type: "custom",
-    sequenceNumber: null,
-    content: docContent,
-    position: 0,
-    createdAt: now,
-    updatedAt: now,
-  });
-  await db
-    .update(documents)
-    .set({ activeTabId: tabId, updatedAt: now })
-    .where(eq(documents.id, docId));
-
-  logTrace("tabs.heal.defaultMain", { docId, tabId });
-  return true;
-}
-
-// On first tabs-fetch after migration 0002, a doc has exactly one "Main" tab
-// holding all its pre-tab content. If that content has a canonical [H2]
-// structure, split it into typed tabs in place, keeping the original as
-// "Main (archive)" at position 0.
-async function autoSplitIfNeeded(docId: string): Promise<boolean> {
-  const rows = await db
-    .select()
-    .from(tabs)
-    .where(eq(tabs.documentId, docId))
-    .orderBy(tabs.position);
-
-  if (rows.length !== 1) return false;
-  const seed = rows[0];
-  if (/\(archive\)/i.test(seed.title)) return false;
-  if (!seed.content || !shouldSplit(seed.content)) return false;
-
-  const sections = splitTiptapDocument(seed.content);
-  if (sections.length === 0) return false;
-
-  const now = new Date();
-  // 1. Demote seed to "Main (archive)" at position 0.
-  await db
-    .update(tabs)
-    .set({
-      title: /\(archive\)/i.test(seed.title) ? seed.title : `${seed.title} (archive)`,
-      position: 0,
-      updatedAt: now,
-    })
-    .where(eq(tabs.id, seed.id));
-
-  // 2. Insert new typed tabs at positions 1..N.
-  let firstNewId: string | null = null;
-  for (let i = 0; i < sections.length; i++) {
-    const s = sections[i];
-    const newId = nanoid(12);
-    if (firstNewId === null) firstNewId = newId;
-    await db.insert(tabs).values({
-      id: newId,
-      documentId: docId,
-      title: s.title,
-      type: s.type,
-      sequenceNumber: s.sequenceNumber,
-      content: s.content,
-      position: i + 1,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  // 3. First typed tab becomes the active tab.
-  if (firstNewId) {
-    await db
-      .update(documents)
-      .set({ activeTabId: firstNewId })
-      .where(eq(documents.id, docId));
-  }
-
-  logTrace("tabs.autosplit.ok", {
-    docId,
-    sections: sections.length,
-  });
-
-  return true;
-}
 
 // GET /api/documents/[id]/tabs
 export async function GET(
@@ -137,25 +34,11 @@ export async function GET(
   const { id } = await params;
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { id: true, ownerId: true, content: true },
+    columns: { id: true },
   });
   if (!doc) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  // Heal docs that were created without a default Main tab (regression from
-  // tabs PR — POST /api/documents didn't seed one). Runs before auto-split
-  // so a healed doc with canonical structure still gets split on next open.
-  // Upgrade legacy docs to the five canonical protected tabs. Runs AFTER
-  // autoSplit so tabs that were just split out of Main get renamed/protected
-  // in the same request. Idempotent — later fetches see all five tabs
-  // already in canonical shape and skip.
-  const tHealStart = Date.now();
-  const healDefault = await healMissingDefaultTab(id, doc.content);
-  const healSplit = await autoSplitIfNeeded(id);
-  const healFixed = await healFixedTabs(id);
-  const msHeals = Date.now() - tHealStart;
-  const healRan = healDefault || healSplit || healFixed;
 
   const tReadStart = Date.now();
   const rows = await db
@@ -172,12 +55,12 @@ export async function GET(
   );
 
   logEvent("tabs.get.timing", {
-    phase: "baseline",
+    phase: "heal-skip",
     docId: id,
     tabCount,
     totalContentBytes,
-    healRan,
-    msHeals,
+    healRan: false,
+    msHeals: 0,
     msFinalRead,
     msTotal: Date.now() - t0,
   });
