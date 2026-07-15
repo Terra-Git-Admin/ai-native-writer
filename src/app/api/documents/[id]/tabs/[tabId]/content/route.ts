@@ -161,6 +161,7 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string; tabId: string }> }
 ) {
+  const t0 = Date.now();
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -186,6 +187,7 @@ export async function GET(
     return NextResponse.json({ error: "Tab not found" }, { status: 404 });
   }
 
+  const msTotal = Date.now() - t0;
   logEvent("tab.get.ok", {
     docId: id,
     docTabIdPath: tabId,
@@ -194,6 +196,14 @@ export async function GET(
     contentHash: contentHash(tab.content),
     contentLen: tab.content?.length ?? 0,
     ...trace,
+  });
+
+  logEvent("tab.content.timing", {
+    phase: "baseline",
+    docId: id,
+    tabId,
+    contentBytes: tab.content?.length ?? 0,
+    msTotal,
   });
 
   return NextResponse.json({
@@ -207,6 +217,7 @@ export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string; tabId: string }> }
 ) {
+  const t0 = Date.now();
   const session = await auth();
   const trace = readTraceHeaders(req);
 
@@ -381,12 +392,18 @@ export async function PUT(
   // Snapshot the saved content as a version row — at most one per 5 minutes
   // per (doc, tab). Owner-only, skip comment-mark-only saves (nothing to
   // snapshot). Non-fatal: a version failure must never break the save itself.
+  // Fire-and-forget: the actual content save above is already awaited (durable).
+  // On single-instance Cloud Run a container kill in the gap between response
+  // and this completing could drop the version snapshot — never the content itself.
+  let msVersionSnapshot = 0;
   if (isOwner && !commentMarkOnly && body.content) {
     try {
+      const tSnap = Date.now();
       await maybeCreateTabVersion(id, tabId, body.content, session.user.id, {
         force: forceVersion,
         reason: versionReason ?? undefined,
       });
+      msVersionSnapshot = Date.now() - tSnap;
     } catch (err) {
       warnTrace("tab.version.failed", {
         docId: id,
@@ -406,6 +423,9 @@ export async function PUT(
     updatedAt: now.toISOString(),
     contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
     hashAfter: contentHash(body.content ?? tab.content),
+    msTotal: Date.now() - t0,
+    msVersionSnapshot,
+    phase: "baseline",
     ...trace,
   });
 

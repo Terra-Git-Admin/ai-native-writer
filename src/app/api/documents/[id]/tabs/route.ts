@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { documents, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { and, eq, max, sql } from "drizzle-orm";
-import { logTrace } from "@/lib/saveTrace";
+import { logEvent, logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
 import { splitTiptapDocument, shouldSplit } from "@/lib/split-doc";
 import { healFixedTabs } from "@/lib/tab-heal";
@@ -128,6 +128,7 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const t0 = Date.now();
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -145,24 +146,41 @@ export async function GET(
   // Heal docs that were created without a default Main tab (regression from
   // tabs PR — POST /api/documents didn't seed one). Runs before auto-split
   // so a healed doc with canonical structure still gets split on next open.
-  await healMissingDefaultTab(id, doc.content);
-
-  // Lazy auto-split on first real fetch. Only runs when the doc is still a
-  // single-Main-tab state + the Main content has splittable structure.
-  // Idempotent: later fetches find >1 tab and skip.
-  await autoSplitIfNeeded(id);
-
   // Upgrade legacy docs to the five canonical protected tabs. Runs AFTER
   // autoSplit so tabs that were just split out of Main get renamed/protected
   // in the same request. Idempotent — later fetches see all five tabs
   // already in canonical shape and skip.
-  await healFixedTabs(id);
+  const tHealStart = Date.now();
+  const healDefault = await healMissingDefaultTab(id, doc.content);
+  const healSplit = await autoSplitIfNeeded(id);
+  const healFixed = await healFixedTabs(id);
+  const msHeals = Date.now() - tHealStart;
+  const healRan = healDefault || healSplit || healFixed;
 
+  const tReadStart = Date.now();
   const rows = await db
     .select()
     .from(tabs)
     .where(eq(tabs.documentId, id))
     .orderBy(tabs.position);
+  const msFinalRead = Date.now() - tReadStart;
+
+  const tabCount = rows.length;
+  const totalContentBytes = rows.reduce(
+    (s, r) => s + (r.content?.length ?? 0),
+    0
+  );
+
+  logEvent("tabs.get.timing", {
+    phase: "baseline",
+    docId: id,
+    tabCount,
+    totalContentBytes,
+    healRan,
+    msHeals,
+    msFinalRead,
+    msTotal: Date.now() - t0,
+  });
 
   return NextResponse.json(rows);
 }
