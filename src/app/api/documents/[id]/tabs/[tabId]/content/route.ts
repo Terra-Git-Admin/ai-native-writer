@@ -199,7 +199,7 @@ export async function GET(
   });
 
   logEvent("tab.content.timing", {
-    phase: "idx",
+    phase: "heal-skip",
     docId: id,
     tabId,
     contentBytes: tab.content?.length ?? 0,
@@ -425,7 +425,7 @@ export async function PUT(
     hashAfter: contentHash(body.content ?? tab.content),
     msTotal: Date.now() - t0,
     msVersionSnapshot,
-    phase: "idx",
+    phase: "heal-skip",
     ...trace,
   });
 
