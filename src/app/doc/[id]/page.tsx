@@ -785,18 +785,10 @@ export default function DocumentPage() {
               aiJob={aiJob}
               onApplyToTab={applyToTab}
               onFlushPendingSave={async () => {
-                try {
-                  await editorRef.current?.flushPendingSave?.();
-                } catch {
-                  /* logged via client-trace */
-                }
+                try { await editorRef.current?.flushPendingSave?.(); } catch { /* logged */ }
               }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}
-              onOpenResearchAgent={() => {
-                pilotPendingRef.current = true;
-                setResearchAgentOpen(true);
-              }}
               onSetTitle={(newTitle) => {
                 setTitle(newTitle);
                 fetch(`/api/documents/${params.id}`, {

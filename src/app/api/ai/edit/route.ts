@@ -4,15 +4,22 @@ import { db } from "@/lib/db";
 import { prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
+import { logTrace } from "@/lib/saveTrace";
 import {
   EDIT_SYSTEM_PROMPT,
   DRAFT_SYSTEM_PROMPT,
   FEEDBACK_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
   CHAT_SYSTEM_PROMPT,
+  WORLD_STATE_SYSTEM_PROMPT,
+  BEAT_GEN_SYSTEM_PROMPT,
+  CAUSALITY_SYSTEM_PROMPT,
+  PLOT_SYNTH_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
-type Mode = "edit" | "draft" | "feedback" | "format" | "chat";
+type Mode =
+  | "edit" | "draft" | "feedback" | "format" | "chat"
+  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -20,13 +27,18 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   feedback: FEEDBACK_SYSTEM_PROMPT,
   format: FORMAT_SYSTEM_PROMPT,
   chat: CHAT_SYSTEM_PROMPT,
+  pipe_world_state: WORLD_STATE_SYSTEM_PROMPT,
+  pipe_beat_gen:    BEAT_GEN_SYSTEM_PROMPT,
+  pipe_causality:   CAUSALITY_SYSTEM_PROMPT,
+  pipe_plot_synth:  PLOT_SYNTH_SYSTEM_PROMPT,
 };
 
 async function getSystemPrompt(mode: Mode): Promise<string> {
-  // Try to load from DB (admin-editable)
   const row = await db.query.prompts.findFirst({
     where: eq(prompts.id, mode),
   });
+  const source = row?.content ? "db" : "fallback";
+  logTrace("ai.edit.prompt_resolved", { mode, source });
   return row?.content || FALLBACK_PROMPTS[mode];
 }
 

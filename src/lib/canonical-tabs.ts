@@ -1,9 +1,9 @@
-// The five fixed tabs every document carries. Seeded on doc create and
-// healed into place for legacy docs on first tab fetch. Protected: title
-// and type cannot be edited, row cannot be deleted, order is locked.
+// The nine fixed tabs every document carries. Seeded on doc create and
+// healed into place for legacy docs via the admin backfill route. Protected:
+// title and type cannot be edited, row cannot be deleted, order is locked.
 //
-// Writers can add custom tabs alongside these five; custom tabs are
-// unprotected and live at positions >= 5.
+// Writers can add custom tabs alongside these nine; custom tabs are
+// unprotected and live at positions >= 9.
 
 import { nanoid } from "nanoid";
 import type { InferInsertModel } from "drizzle-orm";
@@ -15,7 +15,10 @@ export type CanonicalTabType =
   | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
-  | "workbook";
+  | "workbook"
+  | "world_state"
+  | "beat_sequence"
+  | "story_logic";
 
 export interface CanonicalTabSpec {
   type: CanonicalTabType;
@@ -99,6 +102,30 @@ export const CANONICAL_TABS: readonly CanonicalTabSpec[] = [
     title: "Workbook",
     position: 5,
     content: null,
+  },
+  {
+    // Multi-Step Episode Pipeline — Step 1 output. Writer locks post-pilot
+    // character states + series-end destination here after Build World drafts.
+    type: "world_state",
+    title: "World State",
+    position: 6,
+    content: doc([h1("World State")]),
+  },
+  {
+    // Multi-Step Episode Pipeline — Step 2 output. Writer curates beats from
+    // Suggest Beats and locks the chosen set here.
+    type: "beat_sequence",
+    title: "Beats",
+    position: 7,
+    content: doc([h1("Beats")]),
+  },
+  {
+    // Multi-Step Episode Pipeline — Step 3 output. Writer locks the causal
+    // chain + dramatic role tags from Connect the Story here.
+    type: "story_logic",
+    title: "Story Logic",
+    position: 8,
+    content: doc([h1("Story Logic")]),
   },
 ];
 

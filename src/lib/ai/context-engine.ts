@@ -375,3 +375,118 @@ export function buildAIContext(args: BuildContextArgs): string {
 
   return sections.filter(Boolean).join("\n\n");
 }
+
+// ─── Pipeline Step Context Builder ───
+//
+// Produces a minimal, step-specific context string for the Multi-Step
+// Episode Pipeline. Each step has a fixed SENDS/EXCLUDES contract.
+// Never calls buildAIContext — the dilution guard is intentional.
+//
+// SENDS per step:
+//   pipe_world_state  → series_overview, characters, predefined_episodes (Ep1 only),
+//                       beat_sequence (prior locked batches), workbook (if non-empty)
+//   pipe_beat_gen     → world_state, workbook (if non-empty)
+//   pipe_causality    → beat_sequence, world_state, workbook (if non-empty)
+//   pipe_plot_synth   → story_logic, world_state, characters, workbook (if non-empty)
+
+type PipelineStepId =
+  | "pipe_world_state"
+  | "pipe_beat_gen"
+  | "pipe_causality"
+  | "pipe_plot_synth";
+
+export function buildPipelineStepContext(
+  stepId: PipelineStepId,
+  tabs: TabRow[],
+  workbookLiveContent: string | null
+): string {
+  const parts: string[] = [];
+
+  const render = (tab: TabRow | undefined, label: string): string => {
+    if (!tab) return "";
+    const tagged = tiptapJsonToTagged(tab.content);
+    if (!tagged.trim()) return "";
+    return `=== ${label} ===\n${tagged}`;
+  };
+
+  const tab = (type: string) => findTabByType(tabs, type);
+
+  // Workbook draft (included when non-empty, labeled so model knows it's a draft)
+  const workbookContent = workbookLiveContent ?? tab("workbook")?.content ?? null;
+  const workbookTagged = tiptapJsonToTagged(workbookContent);
+  const hasWorkbook = workbookTagged.trim().length > 0;
+
+  if (stepId === "pipe_world_state") {
+    const overview = render(tab("series_overview"), "Original Research");
+    if (overview) parts.push(overview);
+
+    const chars = render(tab("characters"), "Characters");
+    if (chars) parts.push(chars);
+
+    // Pilot = predefined Episode 1 only
+    const predefined = tab("predefined_episodes");
+    if (predefined) {
+      const allTagged = tiptapJsonToTagged(predefined.content);
+      const sections = splitTabByH3(allTagged);
+      const ep1 = sections.find(
+        (s) => extractEpisodeNumber(s.title) === 1
+      );
+      if (ep1) {
+        parts.push(
+          `=== Pilot (Predefined Episode 1) ===\n[H3] ${ep1.title}\n${ep1.content}`
+        );
+      }
+    }
+
+    // Prior locked beat batches
+    const beats = tab("beat_sequence");
+    if (beats) {
+      const beatsTagged = tiptapJsonToTagged(beats.content);
+      if (beatsTagged.trim()) {
+        parts.push(`=== Prior Locked Beats ===\n${beatsTagged}`);
+      }
+    }
+  }
+
+  if (stepId === "pipe_beat_gen") {
+    const ws = render(tab("world_state"), "World State");
+    if (ws) parts.push(ws);
+  }
+
+  if (stepId === "pipe_causality") {
+    const ws = render(tab("world_state"), "World State");
+    if (ws) parts.push(ws);
+    const beats = render(tab("beat_sequence"), "Beats");
+    if (beats) parts.push(beats);
+  }
+
+  if (stepId === "pipe_plot_synth") {
+    const ws = render(tab("world_state"), "World State");
+    if (ws) parts.push(ws);
+    const chars = render(tab("characters"), "Characters");
+    if (chars) parts.push(chars);
+    const sl = render(tab("story_logic"), "Story Logic");
+    if (sl) parts.push(sl);
+  }
+
+  // Workbook draft — included by all steps when non-empty
+  if (hasWorkbook) {
+    parts.push(`=== Current Working Draft (Workbook) ===\n${workbookTagged}`);
+  }
+
+  const out = parts.join("\n\n");
+
+  // Debug — surfaces exactly what each step SENDS. `sections` lists the
+  // "=== Label ===" header of every block included. This is the dilution gate
+  // made visible: for pipe_beat_gen it must show ONLY "World State".
+  if (typeof window !== "undefined") {
+    console.debug("[pipeline:context]", {
+      stepId,
+      sections: parts.map((p) => p.split("\n")[0]),
+      totalChars: out.length,
+      hasWorkbook,
+    });
+  }
+
+  return out;
+}
