@@ -113,6 +113,17 @@ Design was independently audited before shipping — caught and fixed two struct
 
 `loadNextEpisodePlotContext` in `actions.ts` updated to match — windows `predefinedEpisodes` to `.slice(-8)` instead of taking only the last section.
 
+### Multi-Step Episode Pipeline (PLAN AUDITED v1.1 — NOT CODED — EXECUTION STARTS 18 Jul 2026)
+
+New writer-driven flow to replace the broken Series Skeleton → Skeleton-to-Plots path (skeleton stays until this is proven, then decommissioned). Produces microdrama plots that feed the unchanged Plot → Predefined flow. **Nothing implemented yet** — executor-ready spec (v1.1, for a Claude 4.6 session) is in `D:\plotpix\FEATURES\feat-multi-step-episode-pipeline.md` (mirror: `C:\Users\vikas\.claude\plans\playful-hopping-barto.md`). Execute from build-step 1.
+
+Key architecture decisions (final): 4 steps on the **inline chat path** (`/api/ai/edit`), NOT durable jobs — Build World → Suggest Beats → Connect the Story → Write Plots. AI drafts into chat; writer transfers to Workbook, edits, then **manually moves** to each step's locked final tab; filling that tab gates the next step. 3 new tabs (`world_state`, `beat_sequence`, `story_logic`) + existing `microdrama_plots` for output — **no DB migration** (tabs.type is text, confirmed `schema.ts:87`). **Fixed minimal context per step** via a new `buildPipelineStepContext` (never `buildAIContext`) with a per-step SENDS/EXCLUDES contract to kill dilution. Build World targets the **series end** (post-pilot state + series-end destination). Plots match the existing 11-paragraph `NEXT_EPISODE_PLOT_SYSTEM_PROMPT` format; causality tab feeds the Plot Arc / Phase fields. 4 new prompts.
+
+**Audit corrections (v1.1, 17 Jul) — critical for the executor:**
+- Canonical tabs = `src/lib/canonical-tabs.ts` (NOT `src/lib/db/`). The 3 new tabs FOLD INTO `CANONICAL_TABS` + extend `CanonicalTabType` + extend `classify()` in `src/lib/tab-heal.ts` (unrecognized types get demoted to "custom" and reshuffled otherwise).
+- **Heal-on-load is OFF** (tabs GET route, perf). Do NOT backfill existing docs on load — existing-doc backfill is a **one-time admin route** (`POST /api/admin/backfill-pipeline-tabs`, mirror `prune-versions/route.ts`), run once manually.
+- `renderTab` is a non-reusable closure inside `buildAIContext` — call exported `tiptapJsonToTagged` directly. Plot spec is 11 `[P]` blocks (prompt's own "Ten" at `prompts.ts:2326` is a typo). Sidebar already has `tabs`+`activeTab`; `mode` is hardcoded `"chat"` (`:137`) — thread `activeStep` through. Add new types to `VALID_TYPES` in tabs POST route.
+
 ### Pending (NOT pushed)
 
 - **Comment race (#2/#3)** — reviewer poll/save race investigated, report-only. Fix-option decision pending. See `COMMENT-RACE-INVESTIGATION.md`.

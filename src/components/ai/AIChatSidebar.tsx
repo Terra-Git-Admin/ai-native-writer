@@ -3,24 +3,25 @@
 import { useState, useRef, useEffect, useCallback, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
-import { buildAIContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
-import WorkbookActions, {
-  WORKBOOK_ACTION_LABELS,
-} from "@/components/ai/WorkbookActions";
+import { buildAIContext, buildPipelineStepContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
 import type { ApplyToTabResult } from "@/app/doc/[id]/page";
 
 type AIJobController = ReturnType<typeof useJob>;
 
-// Apply mode for a finished job's output. Format Document replaces the tab
-// body wholesale; the workbook actions append their output to the workbook.
+const JOB_LABELS: Partial<Record<JobKind, string>> = {
+  next_reference_episode: "Create Pre-defined Episode",
+};
+
 function applyModeForKind(kind: JobKind): "replace" | "append" {
   return kind === "format_tab" ? "replace" : "append";
 }
 
 // ─── Types ───
 
-type Mode = "edit" | "draft" | "feedback" | "format" | "chat";
+type Mode =
+  | "edit" | "draft" | "feedback" | "format" | "chat"
+  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -37,41 +38,21 @@ const MODE_LABELS: Record<Mode, string> = {
   feedback: "Document Feedback",
   format: "Format Document",
   chat: "Chat",
+  pipe_world_state: "Build World",
+  pipe_beat_gen: "Suggest Beats",
+  pipe_causality: "Connect the Story",
+  pipe_plot_synth: "Write Plots",
 };
 
-// All legacy quick-action buttons have been removed (per writer feedback —
-// too many options were confusing). Workbook gets durable server-side
-// actions via WorkbookActions; other tabs get the free-form chat input.
-// Note: the previous "Generate Adaptation State" workbook quick-action has
-// been replaced by the WorkbookActions panel (durable, server-side jobs).
-
-function aiJobStatusLabel(s: string): string {
-  if (s === "starting") return "Starting…";
-  if (s === "running") return "Generating…";
-  if (s === "completed") return "Done";
-  if (s === "failed") return "Failed";
-  if (s === "cancelled") return "Cancelled";
-  return s;
-}
-
-// Clean up an AI message for chat display. Strips structural tags ([H1] [P]
-// [UL] [OL] [HR]) AND the [CHANGE N] / Location: / Original: / Suggested:
-// scaffolding the chat prompt sometimes emits — what the writer wants to
-// see is the new prose, not the diff machinery. Output is plain text the
-// writer can copy and paste straight into the document.
+// Strip structural tags ([H1] [P] [UL] etc.) and [CHANGE] scaffolding for
+// display. Writers see just the prose — they copy anything actionable by hand.
 function stripTagsForDisplay(text: string): string {
-  // First pull out [CHANGE] blocks, replacing each with just its Suggested
-  // content. If no blocks present, leave the text alone.
   const changeBlocks = text.split(/\[CHANGE \d+\]/i);
   let working = text;
   if (changeBlocks.length > 1) {
     working = changeBlocks
       .slice(1)
-      .map((block) => {
-        const suggested =
-          block.match(/Suggested:\s*([\s\S]*?)$/i)?.[1]?.trim() ?? "";
-        return suggested;
-      })
+      .map((block) => block.match(/Suggested:\s*([\s\S]*?)$/i)?.[1]?.trim() ?? "")
       .filter((s) => s.length > 0)
       .join("\n\n");
   }
@@ -93,52 +74,51 @@ interface AIChatSidebarProps {
   editorIsEmpty: boolean;
   modelId: string;
   thinking: boolean;
-  // Durable workbook-action job. Owned by the doc page so it survives
-  // sidebar open/close. The sidebar reads state, dispatches start/cancel/
-  // reset through the controller.
   aiJob: AIJobController;
-  // Routes tagged content to the origin tab. Same-tab uses the live editor;
-  // cross-tab uses the tab-content PUT endpoint. Falls back to workbook if
-  // the origin tab no longer exists.
-  onApplyToTab: (
-    originTabId: string,
-    content: string,
-    mode: "replace" | "append",
-    opts?: { label?: string }
-  ) => Promise<ApplyToTabResult>;
+  onApplyToTab: (originTabId: string, content: string, mode: "replace" | "append", opts?: { label?: string }) => Promise<ApplyToTabResult>;
   onFlushPendingSave: () => Promise<void>;
   onSetModel: (modelId: string) => void;
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
   onClose: () => void;
-  onOpenResearchAgent?: () => void;
 }
 
 export default function AIChatSidebar({
   documentId,
-  aiJob,
   tabs,
   activeTab,
   editorRef,
-  editorIsEmpty,
   modelId,
   thinking,
+  aiJob,
   onApplyToTab,
   onFlushPendingSave,
   onSetModel,
   onSetThinking,
-  onSetTitle,
   onClose,
-  onOpenResearchAgent,
 }: AIChatSidebarProps) {
-  // Selection-based "Edit with AI" was removed (Bug 4 fix, 29 Apr 2026).
-  // The sidebar now always operates in chat mode for free-form prompts;
-  // Format Document and the workbook actions handle their own job pipelines.
-  const mode: Mode = "chat";
+  type PipelineStepId =
+    | "pipe_world_state"
+    | "pipe_beat_gen"
+    | "pipe_causality"
+    | "pipe_plot_synth";
 
-  // messages = current AI conversation context (reset per mode change)
+  const PIPELINE_STEPS: {
+    id: PipelineStepId;
+    label: string;
+    enabledWhenTabType: string;
+    requiredTabLabel: string;
+  }[] = [
+    { id: "pipe_world_state", label: "Build World",       enabledWhenTabType: "series_overview", requiredTabLabel: "Series Overview" },
+    { id: "pipe_beat_gen",    label: "Suggest Beats",     enabledWhenTabType: "world_state",     requiredTabLabel: "World State" },
+    { id: "pipe_causality",   label: "Connect the Story", enabledWhenTabType: "beat_sequence",   requiredTabLabel: "Beats" },
+    { id: "pipe_plot_synth",  label: "Write Plots",       enabledWhenTabType: "story_logic",     requiredTabLabel: "Story Logic" },
+  ];
+
+  const [activeStep, setActiveStep] = useState<PipelineStepId | null>(null);
+  const mode: Mode = activeStep ?? "chat";
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // history = full display history (persisted to server, survives refresh)
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [input, setInput] = useState("");
@@ -151,162 +131,83 @@ export default function AIChatSidebar({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  // Persisted via ref to avoid stale closure in the mousemove handler
-  const inputPanelHeightRef = useRef(200);
-  const [inputPanelHeight, setInputPanelHeight] = useState(200);
+  const inputPanelHeightRef = useRef(160);
+  const [inputPanelHeight, setInputPanelHeight] = useState(160);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startY = e.clientY;
     const startH = inputPanelHeightRef.current;
-
     const onMove = (ev: MouseEvent) => {
-      const delta = startY - ev.clientY; // drag up → taller input
+      const delta = startY - ev.clientY;
       const containerH = containerRef.current?.getBoundingClientRect().height ?? 600;
-      const next = Math.min(containerH * 0.5, Math.max(140, startH + delta));
+      const next = Math.min(containerH * 0.5, Math.max(120, startH + delta));
       inputPanelHeightRef.current = next;
       setInputPanelHeight(next);
     };
-
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
   }, []);
 
-  // ─── Durable AI job — owned by the doc page (passed in as a prop)
-  // so it survives AI-sidebar open/close. The hook's EventSource keeps
-  // streaming tokens even when this component unmounts; reopening the
-  // sidebar shows whatever progress accumulated in the meantime.
-  const isAIBusy =
-    aiJob.state.status === "starting" || aiJob.state.status === "running";
+  const isAIBusy = aiJob.state.status === "starting" || aiJob.state.status === "running";
 
-  const handleStartJob = useCallback(
-    async (kind: JobKind, opts?: { userGuidance?: string }) => {
-      if (isAIBusy || isStreaming) return;
+  const persistedJobIdRef = useRef<string | null>(null);
+  const lastJobEntryIdsRef = useRef<{ jobId: string; userId: string | null; assistantId: string | null } | null>(null);
 
-      // Pilot Episode requires Original Research. If it's empty, open the
-      // Research Agent instead of starting a job that will immediately fail.
-      if (kind === "pilot_episode") {
-        const researchTab = tabs.find((t) => t.type === "series_overview");
-        const researchTagged = tiptapJsonToTagged(researchTab?.content ?? null);
-        if (researchTagged.replace(/\s/g, "").length < 200) {
-          onOpenResearchAgent?.();
-          return;
-        }
-      }
+  const handleStartJob = useCallback(async () => {
+    if (isAIBusy || isStreaming) return;
+    try { await onFlushPendingSave(); } catch { /* logged */ }
+    const r = await aiJob.start("next_reference_episode");
+    if (!r.ok) setError(r.error ?? "Could not start AI job.");
+  }, [aiJob, isAIBusy, isStreaming, onFlushPendingSave]);
 
-      // Format Document reads the tab fresh from DB at job-run time. Without
-      // a flush, recent typing that's still in the autosave debounce window
-      // is invisible to the LLM. Flush is a no-op for kinds that don't read
-      // the active tab (workbook actions read other tabs), so we always
-      // flush — costs a few ms, simplifies the code path.
-      try {
-        await onFlushPendingSave();
-      } catch {
-        /* logged via client-trace */
-      }
-      const r = await aiJob.start(kind, opts);
-      if (!r.ok) {
-        setError(r.error ?? "Could not start AI job.");
-      }
-    },
-    [aiJob, isAIBusy, isStreaming, onFlushPendingSave, tabs, onOpenResearchAgent]
-  );
-
-  // Apply the most recent completed job's output to its origin tab. Routing
-  // (same-tab vs cross-tab vs fallback) is handled by onApplyToTab on the
-  // doc page; this callback just dispatches with the right mode for the
-  // job kind. Result.fellBack === true means the origin tab was deleted
-  // mid-job and we landed on workbook instead — surface that to the writer.
   const handleApplyJob = useCallback(async () => {
     if (aiJob.state.status !== "completed" || !aiJob.state.output) return;
     if (!aiJob.state.kind || !aiJob.state.originTabId) return;
-
     const mode = applyModeForKind(aiJob.state.kind);
     const result = await onApplyToTab(
       aiJob.state.originTabId,
       aiJob.state.output,
       mode,
-      { label: WORKBOOK_ACTION_LABELS[aiJob.state.kind] }
+      { label: JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind }
     );
     if (!result.ok) {
-      if (result.reason === "target_tab_missing") {
-        setError(
-          "Couldn't apply — the original tab no longer exists and there's no workbook to fall back to. The output is still in chat; copy it manually."
-        );
-      } else {
-        setError(`Apply failed (${result.reason ?? "unknown"}). Try again.`);
-      }
+      setError(result.reason === "target_tab_missing"
+        ? "Couldn't apply — target tab missing. Copy from chat manually."
+        : `Apply failed (${result.reason ?? "unknown"}).`);
       return;
     }
-    if (result.fellBack) {
-      setError(
-        "Original tab no longer exists; output landed in the Workbook instead."
-      );
-    }
+    if (result.fellBack) setError("Original tab missing; output landed in Workbook instead.");
     aiJob.reset();
   }, [aiJob, onApplyToTab]);
 
-  const persistedJobIdRef = useRef<string | null>(null);
-  // Tracks the rows persisted for the most recent completed job — so Discard
-  // (which fires on the same jobId) can delete the same rows it just wrote.
-  // Reset to null whenever a new job starts, or after deletion.
-  const lastJobEntryIdsRef = useRef<{
-    jobId: string;
-    userId: string | null;
-    assistantId: string | null;
-  } | null>(null);
-
-  // Discard the active completed job AND remove its persisted entries from
-  // chat history. The persist effect captures both row IDs into
-  // lastJobEntryIdsRef so we can target them precisely. Filter local state
-  // first (instant UX), then fire DELETEs (best-effort).
   const handleDiscardJob = useCallback(() => {
     const tracked = lastJobEntryIdsRef.current;
     if (tracked && tracked.jobId === aiJob.state.jobId) {
       const { userId, assistantId } = tracked;
-      setHistory((prev) =>
-        prev.filter((e) => {
-          if (e.type !== "message" || !e.id) return true;
-          return e.id !== userId && e.id !== assistantId;
-        })
-      );
-      if (userId) {
-        fetch(`/api/ai/chat-history?id=${userId}`, { method: "DELETE" }).catch(
-          () => {}
-        );
-      }
-      if (assistantId) {
-        fetch(`/api/ai/chat-history?id=${assistantId}`, {
-          method: "DELETE",
-        }).catch(() => {});
-      }
+      setHistory((prev) => prev.filter((e) => {
+        if (e.type !== "message" || !e.id) return true;
+        return e.id !== userId && e.id !== assistantId;
+      }));
+      if (userId) fetch(`/api/ai/chat-history?id=${userId}`, { method: "DELETE" }).catch(() => {});
+      if (assistantId) fetch(`/api/ai/chat-history?id=${assistantId}`, { method: "DELETE" }).catch(() => {});
       lastJobEntryIdsRef.current = null;
     }
     aiJob.reset();
   }, [aiJob]);
 
-  // Clear the entire chat history for this document. Confirmation handled
-  // by the caller (window.confirm in the header button). Local state is
-  // cleared instantly; server DELETE is best-effort.
   const handleClearHistory = useCallback(() => {
     setHistory([]);
     setMessages([]);
     setStreamingText("");
     setError(null);
-    lastJobEntryIdsRef.current = null;
-    fetch(`/api/ai/chat-history?documentId=${documentId}`, {
-      method: "DELETE",
-    }).catch(() => {});
+    fetch(`/api/ai/chat-history?documentId=${documentId}`, { method: "DELETE" }).catch(() => {});
   }, [documentId]);
 
-  // Persist a history entry to the server. Returns the row id on success
-  // (so callers that need to delete the row later — e.g. Discard — can
-  // remember it). Failures resolve to null; they're non-fatal.
   const persistEntry = useCallback(
     async (entry: HistoryEntry): Promise<string | null> => {
       try {
@@ -331,33 +232,16 @@ export default function AIChatSidebar({
     [documentId]
   );
 
-  // Persist completed workbook-action results to chat history. Fires once per
-  // jobId on the running→completed transition. Both the user-trigger label and
-  // the assistant output are recorded as `mode: "chat"` entries so they land
-  // alongside regular chat messages and survive reload, Discard, or Append.
-  // (Decision 28 Apr: option (b) — all outputs persist; Discard then deletes.)
-  // Captures the persisted row IDs into lastJobEntryIdsRef so Discard can
-  // remove the same rows from chat history that this effect just wrote.
+  // Persist completed job output to chat history once per jobId
   useEffect(() => {
     if (aiJob.state.status !== "completed") return;
     if (!aiJob.state.jobId || !aiJob.state.kind || !aiJob.state.output) return;
     if (persistedJobIdRef.current === aiJob.state.jobId) return;
     persistedJobIdRef.current = aiJob.state.jobId;
-
     const jobId = aiJob.state.jobId;
-    const userEntry: HistoryEntry = {
-      type: "message",
-      role: "user",
-      content: WORKBOOK_ACTION_LABELS[aiJob.state.kind],
-      mode: "chat",
-    };
-    const assistantEntry: HistoryEntry = {
-      type: "message",
-      role: "assistant",
-      content: aiJob.state.output,
-      mode: "chat",
-    };
-
+    const label = JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind;
+    const userEntry: HistoryEntry = { type: "message", role: "user", content: label, mode: "chat" };
+    const assistantEntry: HistoryEntry = { type: "message", role: "assistant", content: aiJob.state.output, mode: "chat" };
     (async () => {
       const userId = await persistEntry(userEntry);
       const assistantId = await persistEntry(assistantEntry);
@@ -370,7 +254,7 @@ export default function AIChatSidebar({
     })();
   }, [aiJob.state.status, aiJob.state.jobId, aiJob.state.kind, aiJob.state.output, persistEntry]);
 
-  // Load history from server on mount
+  // Load history on mount
   useEffect(() => {
     fetch(`/api/ai/chat-history?documentId=${documentId}`)
       .then((r) => r.json())
@@ -387,36 +271,35 @@ export default function AIChatSidebar({
       .catch(() => setHistoryLoaded(true));
   }, [documentId]);
 
-  // Scroll to bottom after history loads
   useEffect(() => {
     if (historyLoaded && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [historyLoaded]);
 
-  // Initial mount: pick the default model. With selection-based edit mode
-  // removed, there are no mode flips to react to anymore — chat is the only
-  // mode the sidebar ever runs in.
   useEffect(() => {
     onSetModel("gemini-3.1-pro-preview");
     onSetThinking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll
+  // Auto-scroll on new messages / streaming
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isStreaming]);
-
+  }, [messages, isStreaming, streamingText]);
 
   const sendMessages = useCallback(
     async (
       msgs: ChatMessage[],
-      opts: { selectionAtSubmit: boolean; originTabId: string }
+      opts: { selectionAtSubmit: boolean; originTabId: string; modeOverride?: Mode }
     ) => {
-      const { selectionAtSubmit, originTabId } = opts;
+      const { modeOverride } = opts;
+      const effectiveMode: Mode = modeOverride ?? mode;
+
+      console.debug("[pipeline:send]", { effectiveMode, override: modeOverride ?? null });
+
       setIsStreaming(true);
       setStreamingText("");
       setError(null);
@@ -425,12 +308,7 @@ export default function AIChatSidebar({
         const res = await fetch("/api/ai/edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: msgs,
-            mode,
-            modelId,
-            thinking,
-          }),
+          body: JSON.stringify({ messages: msgs, mode: effectiveMode, modelId, thinking }),
         });
 
         if (!res.ok) {
@@ -448,15 +326,7 @@ export default function AIChatSidebar({
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
             accumulated += chunk;
-
-            // Strip the signal-prefix line ("0\n" / "1\n" / "2\n") from the
-            // displayed stream. The chat prompt sometimes leads with a
-            // signal byte for legacy auto-apply paths; the writer doesn't
-            // need to see it. AssistantMessage cleans residual structural
-            // tags + [CHANGE] scaffolding at render time.
             setStreamingText(accumulated.replace(/^[012]\n/, ""));
-
-            // Also keep messages in sync for the assistant-side context.
             setMessages((prev) => {
               const updated = [...prev];
               const lastIdx = updated.length - 1;
@@ -468,28 +338,17 @@ export default function AIChatSidebar({
           }
         }
 
-        // Final clean text — signal prefix dropped. No auto-apply, no card
-        // UI: chat output is conversation-only by user direction (29 Apr).
-        // The writer copies anything actionable into the document manually.
         const cleanAccumulated = accumulated.replace(/^[012]\n/, "");
-
-        // Persist the cleaned response to chat history.
         if (cleanAccumulated) {
           const assistantEntry: HistoryEntry = {
             type: "message",
             role: "assistant",
             content: cleanAccumulated,
-            mode,
+            mode: effectiveMode,
           };
           setHistory((prev) => [...prev, assistantEntry]);
           persistEntry(assistantEntry);
         }
-        // Reference unused parameters so the closure-deps array stays
-        // stable across renders. selectionAtSubmit + originTabId are kept
-        // in the call signature for the future re-introduction of
-        // selection-aware AI without churning the contract.
-        void selectionAtSubmit;
-        void originTabId;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
@@ -497,81 +356,30 @@ export default function AIChatSidebar({
         setStreamingText("");
       }
     },
-    [mode, modelId, thinking]
+    [mode, modelId, thinking, persistEntry]
   );
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() || isStreaming) return;
 
-    // On the series_skeleton tab, detect skeleton generation intent and route
-    // to the series_skeleton_auto job so the dedicated skeleton system prompt
-    // (with full quality rules + proper output format) is used instead of the
-    // general chat prompt. The writer's message becomes the userGuidance.
-    const isSkeletonTab = activeTab.type === "series_skeleton";
-    // Require both an action verb AND "skeleton" in the message to avoid
-    // triggering skeleton job on questions that merely mention the word.
-    const SKELETON_ACTION = /\b(create|generate|update|rewrite|rebuild|redo|make|build|write|draft)\b/i;
-    const SKELETON_NOUN = /\bskeleton\b/i;
-    const isSkeletonIntent =
-      isSkeletonTab &&
-      SKELETON_ACTION.test(input) &&
-      SKELETON_NOUN.test(input);
-    if (isSkeletonIntent && !isAIBusy) {
-      void handleStartJob("series_skeleton_auto", { userGuidance: input });
-      setInput("");
-      return;
-    }
-
-    // On the predefined_episodes tab, detect reference episode generation intent
-    // and route to the next_reference_episode job so the correct episode number
-    // is computed from existing ref episodes (not inferred from full context).
-    const isRefEpTab = activeTab.type === "predefined_episodes";
-    const REF_EP_ACTION_RE = /\b(create|generate|write|draft|make|build|add)\b/i;
-    const REF_EP_NOUN_RE = /\breference\s+episode\b/i;
-    const isRefEpIntent =
-      isRefEpTab &&
-      REF_EP_ACTION_RE.test(input) &&
-      REF_EP_NOUN_RE.test(input);
-    if (isRefEpIntent && !isAIBusy) {
-      void handleStartJob("next_reference_episode", { userGuidance: input });
-      setInput("");
-      return;
-    }
-
-    // Snapshot the apply context at SEND time. The active tab can shift
-    // while the LLM streams; the apply target is the tab the writer was
-    // looking at when they hit Send. selectionAtSubmit is preserved as a
-    // dormant guard — selection-based edit mode was removed (Bug 4 fix),
-    // so this is always false today; left in place so a future re-enable
-    // of selection-aware AI inherits the auto-apply suppression.
-    const selectionAtSubmit = false;
     const originTabId = activeTab.id;
-
     const userContent = buildUserMessage(input);
     const userMsg: ChatMessage = { role: "user", content: userContent };
-    // Empty placeholder — rendered as "Thinking..." in the UI but NOT sent to AI
     const assistantMsg: ChatMessage = { role: "assistant", content: "" };
-
     const newMessages = [...messages, userMsg, assistantMsg];
+
     setMessages(newMessages);
     setInput("");
 
-    // Add user message to display history and persist
-    const userEntry: HistoryEntry = {
-      type: "message",
-      role: "user",
-      content: input,
-      mode,
-    };
+    const userEntry: HistoryEntry = { type: "message", role: "user", content: input, mode };
     setHistory((prev) => [...prev, userEntry]);
     persistEntry(userEntry);
 
-    // Send all messages — filter out the empty placeholder so it's not sent to AI
     sendMessages(newMessages.filter((m) => m.content), {
-      selectionAtSubmit,
+      selectionAtSubmit: false,
       originTabId,
     });
-  }, [input, isStreaming, messages, sendMessages, mode, activeTab]);
+  }, [input, isStreaming, messages, sendMessages, mode, activeTab, persistEntry]);
 
   function buildUserMessage(userInput: string): string {
     const liveContent = editorRef.current?.getContentJSON() ?? null;
@@ -586,43 +394,95 @@ export default function AIChatSidebar({
     return `${contextBlock}\n\n## Message\n${userInput}`;
   }
 
-  // Format Document used to stream in-component via /api/ai/edit and write
-  // back through editorRef on completion — which silently targeted whatever
-  // tab the writer was viewing when the stream ended (Bug 1). Now it goes
-  // through the durable ai_jobs pipeline like the workbook actions: origin
-  // tab is captured server-side, the apply step routes via onApplyToTab.
-  const handleStartFormatTab = useCallback(() => {
-    void handleStartJob("format_tab");
-  }, [handleStartJob]);
+  // ─── Pipeline step helpers ───
 
-  // ─── Render helpers ───
+  const isTabNonEmpty = useCallback((tabType: string): boolean => {
+    const t = tabs.find((tab) => tab.type === tabType);
+    if (!t?.content) return false;
+    const tagged = tiptapJsonToTagged(t.content);
+    // Strip H1 stubs so an empty new tab (only "[H1] World State") reads as empty
+    const withoutH1 = tagged
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("[H1]"))
+      .join("\n");
+    return withoutH1.trim().length > 30;
+  }, [tabs]);
 
-  const modeLabel = "Chat";
+  const handleStepClick = useCallback(
+    async (stepId: PipelineStepId) => {
+      if (isStreaming) return;
 
-  const placeholder =
-    "What would you like to do? (e.g. 'add an episode', 'tighten dialogue in ep 3')";
+      // Always confirm before running a pipeline step — it clears chat history
+      // so the agent starts fresh with the right context.
+      const stepLabel = PIPELINE_STEPS.find((s) => s.id === stepId)?.label ?? stepId;
+      if (history.length > 0 || messages.length > 0) {
+        const confirmed = window.confirm(
+          `Run "${stepLabel}"?\n\nThis will clear the current chat history and start fresh.`
+        );
+        if (!confirmed) return;
+      }
+
+      // Clear history (local state + server)
+      setHistory([]);
+      setMessages([]);
+      setStreamingText("");
+      setError(null);
+      fetch(`/api/ai/chat-history?documentId=${documentId}`, { method: "DELETE" }).catch(() => {});
+
+      setActiveStep(stepId);
+
+      const liveWorkbookContent =
+        activeTab.type === "workbook"
+          ? (editorRef.current?.getContentJSON?.() ?? null)
+          : null;
+
+      const context = buildPipelineStepContext(stepId, tabs, liveWorkbookContent);
+
+      console.debug("[pipeline:step]", {
+        stepId,
+        activeTabType: activeTab.type,
+        usedLiveWorkbook: liveWorkbookContent !== null,
+        contextChars: context.length,
+      });
+
+      const initialMessage: ChatMessage = {
+        role: "user",
+        content: context || "(no context available for this step yet)",
+      };
+      setMessages([initialMessage, { role: "assistant", content: "" }]);
+
+      await sendMessages([initialMessage], {
+        selectionAtSubmit: false,
+        originTabId: activeTab.id,
+        modeOverride: stepId,
+      });
+    },
+    [isStreaming, history, messages, documentId, activeTab, editorRef, tabs, sendMessages]
+  );
+
+  const handleExitStep = useCallback(() => {
+    setActiveStep(null);
+    setMessages([]);
+  }, []);
+
+  // ─── Render ───
+
+  const isWorkbook = activeTab.type === "workbook" || activeTab.type === "custom";
 
   return (
     <div ref={containerRef} className="flex h-full flex-col">
+
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2.5">
         <div>
-          <h3 className="font-semibold text-indigo-700">AI Assistant</h3>
-          <p className="text-[10px] text-gray-400 uppercase tracking-wide">
-            {modeLabel}
-          </p>
+          <h3 className="font-semibold text-indigo-700 leading-tight">AI Assistant</h3>
+          {activeStep && (
+            <p className="text-[10px] text-indigo-500 leading-tight">
+              {MODE_LABELS[activeStep]}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1">
-          {!editorIsEmpty && activeTab.type !== "workbook" && (
-            <button
-              onClick={handleStartFormatTab}
-              disabled={isStreaming || isAIBusy}
-              title="Restructure this tab to its canonical format"
-              className="rounded px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-            >
-              Format
-            </button>
-          )}
           <button
             onClick={() => {
               if (history.length === 0) return;
@@ -630,63 +490,97 @@ export default function AIChatSidebar({
                 handleClearHistory();
               }
             }}
-            disabled={history.length === 0 || isAIBusy || isStreaming}
+            disabled={history.length === 0 || isStreaming}
             title="Clear chat history"
             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-              <path d="M10 11v6" />
-              <path d="M14 11v6" />
+              <path d="M10 11v6" /><path d="M14 11v6" />
               <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
             </svg>
           </button>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">
             &times;
           </button>
         </div>
       </div>
 
-      {/* Workbook action buttons — only visible when on workbook tab.
-          Job state lives in this parent component so the active-job UI
-          (rendered inline in the chat thread below) stays alive across
-          tab switches. */}
-      {(activeTab.type === "workbook" || activeTab.type === "custom") && (
-        <WorkbookActions isAIBusy={isAIBusy} onStart={handleStartJob} />
-      )}
+      {/* ─── Actions (pipeline steps) — compact 2×2 grid ─── */}
+      <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</span>
+          {activeStep && (
+            <button
+              type="button"
+              onClick={handleExitStep}
+              className="text-[10px] text-indigo-500 hover:text-indigo-700"
+            >
+              Exit
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-1">
+          {PIPELINE_STEPS.map((step) => {
+            const tabFilled = isTabNonEmpty(step.enabledWhenTabType);
+            const enabled = tabFilled && !isStreaming && !isAIBusy;
+            const isActive = activeStep === step.id;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => handleStepClick(step.id)}
+                disabled={!enabled}
+                title={!tabFilled ? `Fill ${step.requiredTabLabel} tab first` : undefined}
+                className={`rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors
+                  ${isActive
+                    ? "bg-indigo-600 text-white"
+                    : enabled
+                    ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  }`}
+              >
+                <span className="block">{step.label}</span>
+                {!tabFilled && (
+                  <span className="block text-[9px] font-normal text-gray-400 leading-tight mt-0.5">
+                    Fill {step.requiredTabLabel}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {/* Pre-defined episode creator — separate from the pipeline steps */}
+        <div className="mt-1.5 border-t border-gray-100 pt-1.5">
+          <button
+            type="button"
+            onClick={handleStartJob}
+            disabled={isStreaming || isAIBusy}
+            className="w-full rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+          >
+            {isAIBusy ? "Generating…" : "Create Pre-defined Episode"}
+          </button>
+        </div>
+      </div>
 
-      {/* Messages area — min-h-0 prevents flex children from overflowing */}
+      {/* ─── Messages / Streaming — takes all remaining space ─── */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
-          <div className="py-6 text-sm text-gray-500">
-            <p className="text-center text-gray-400">
-              {activeTab.type === "workbook" || activeTab.type === "custom"
-                ? "Use a workbook action above, or type your own prompt below."
-                : "Type your prompt below."}
-            </p>
+          <div className="py-8 text-center text-[13px] text-gray-400">
+            {isWorkbook
+              ? "Click an action above to start, or type a prompt below."
+              : "Click an action above to run the pipeline. Output appears here."}
           </div>
         )}
 
-        {/* Full history (persisted across mode changes) */}
+        {/* Full history */}
         {history.map((entry, i) => {
           if (entry.type === "mode-change") {
             return (
-              <div key={`mc-${i}`} className="flex items-center gap-2 py-2">
+              <div key={`mc-${i}`} className="flex items-center gap-2 py-1">
                 <div className="flex-1 h-px bg-orange-300" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-orange-500 whitespace-nowrap">
                   {MODE_LABELS[entry.mode]}
@@ -695,28 +589,20 @@ export default function AIChatSidebar({
               </div>
             );
           }
-          // Message entry
           return (
             <div
               key={`h-${i}`}
-              className={
-                entry.role === "user" ? "flex justify-end" : "flex justify-start"
-              }
+              className={entry.role === "user" ? "flex justify-end" : "flex justify-start"}
             >
               <div
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
                   entry.role === "user"
                     ? "bg-indigo-600 text-white"
                     : "bg-white border border-gray-200 text-gray-800"
                 }`}
               >
                 {entry.role === "assistant" ? (
-                  <AssistantMessage
-                    content={entry.content}
-                    mode={entry.mode}
-                    isLast={false}
-                    isStreaming={false}
-                  />
+                  <AssistantMessage content={entry.content} mode={entry.mode} isStreaming={false} />
                 ) : (
                   <div className="whitespace-pre-wrap">{entry.content}</div>
                 )}
@@ -725,121 +611,60 @@ export default function AIChatSidebar({
           );
         })}
 
-        {/* Active AI job (Plot Chunks / Next Episode Plot / Next Reference
-            Episode). Renders as a chat-style message pair so the visual
-            language matches the regular chat flow. Survives tab switches
-            because the hook lives at the parent (AIChatSidebar) level. */}
+        {/* Active aiJob (Create Pre-defined Episode) */}
         {aiJob.state.status !== "idle" && (
           <>
             {aiJob.state.kind && (
               <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-indigo-600 text-white">
-                  {WORKBOOK_ACTION_LABELS[aiJob.state.kind]}
+                <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-indigo-600 text-white">
+                  {JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind}
                 </div>
               </div>
             )}
             <div className="flex justify-start">
-              <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-white border border-indigo-200 text-gray-800 space-y-2">
+              <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-white border border-indigo-200 text-gray-800 space-y-2">
                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                  <span className="text-indigo-700">
-                    {aiJob.state.kind ? WORKBOOK_ACTION_LABELS[aiJob.state.kind] : "AI"}
-                  </span>
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 normal-case">
-                    {aiJobStatusLabel(aiJob.state.status)}
+                  <span className="text-indigo-700">{aiJob.state.kind ? (JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind) : "AI"}</span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 normal-case capitalize">
+                    {aiJob.state.status}
                   </span>
                 </div>
-
                 {aiJob.state.error && (
-                  <div className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 normal-case">
-                    {aiJob.state.error}
-                  </div>
+                  <div className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{aiJob.state.error}</div>
                 )}
-
                 {aiJob.state.output && (
                   <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-gray-800">
-                    {/* Strip structural tags ([H1] [P] [UL] etc.) for display
-                        only. The raw tagged text is preserved in
-                        aiJob.state.output for Append-to-workbook so the
-                        editor can re-parse the structure. */}
                     {stripTagsForDisplay(aiJob.state.output)}
                   </pre>
                 )}
-
-                {(aiJob.state.status === "starting" ||
-                  aiJob.state.status === "running") &&
-                  !aiJob.state.output && (
-                    <div className="flex items-center gap-2 text-xs text-indigo-600 normal-case">
-                      <span className="flex gap-1">
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
-                      </span>
-                      Generating
-                    </div>
-                  )}
-
-                {/* Inline action buttons — match the visual rhythm of the
-                    regular chat's Apply/Reject patterns */}
+                {(aiJob.state.status === "starting" || aiJob.state.status === "running") && !aiJob.state.output && (
+                  <div className="flex items-center gap-2 text-xs text-indigo-600">
+                    <span className="flex gap-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </span>
+                    Generating
+                  </div>
+                )}
                 <div className="flex gap-2 pt-1">
-                  {(aiJob.state.status === "starting" ||
-                    aiJob.state.status === "running") && (
-                    <button
-                      onClick={aiJob.cancel}
-                      className="flex-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                    >
+                  {(aiJob.state.status === "starting" || aiJob.state.status === "running") && (
+                    <button onClick={aiJob.cancel} className="flex-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
                       Cancel
                     </button>
                   )}
                   {aiJob.state.status === "completed" && aiJob.state.output && (
                     <>
-                      {/* Pilot episode outputs to chat only — no workbook append.
-                          The history persist effect already added it to chat
-                          history; this button just clears the active job UI. */}
-                      {aiJob.state.kind === "pilot_episode" ? (
-                        <button
-                          onClick={() => aiJob.reset()}
-                          className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                        >
-                          Done
-                        </button>
-                      ) : (
-                      <>
-                      <button
-                        onClick={handleDiscardJob}
-                        className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                      >
+                      <button onClick={handleDiscardJob} className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
                         Discard
                       </button>
-                      <button
-                        onClick={handleApplyJob}
-                        className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700"
-                      >
-                        {(() => {
-                          // Build a label that names the origin tab and the
-                          // mode: "Apply to Microdrama Plots" (replace) vs
-                          // "Append to Workbook" (workbook actions).
-                          const kind = aiJob.state.kind;
-                          const origin = aiJob.state.originTabId
-                            ? tabs.find((t) => t.id === aiJob.state.originTabId)
-                            : null;
-                          const tabLabel = origin?.title ?? "Workbook";
-                          const verb =
-                            kind && applyModeForKind(kind) === "replace"
-                              ? "Apply to"
-                              : "Append to";
-                          return `${verb} ${tabLabel}`;
-                        })()}
+                      <button onClick={handleApplyJob} className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700">
+                        Append to Workbook
                       </button>
                     </>
-                      )}
-                    </>
                   )}
-                  {(aiJob.state.status === "failed" ||
-                    aiJob.state.status === "cancelled") && (
-                    <button
-                      onClick={aiJob.reset}
-                      className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    >
+                  {(aiJob.state.status === "failed" || aiJob.state.status === "cancelled") && (
+                    <button onClick={aiJob.reset} className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
                       Dismiss
                     </button>
                   )}
@@ -849,23 +674,18 @@ export default function AIChatSidebar({
           </>
         )}
 
-        {/* Current streaming content */}
+        {/* Live streaming output */}
         {isStreaming && streamingText && (
           <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm bg-white border border-gray-200 text-gray-800">
-              <AssistantMessage
-                content={streamingText}
-                mode={mode}
-                isLast={true}
-                isStreaming={true}
-              />
+            <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-white border border-gray-200 text-gray-800">
+              <AssistantMessage content={streamingText} mode={mode} isStreaming={true} />
             </div>
           </div>
         )}
 
-        {/* Waiting indicator (no streaming content yet) */}
+        {/* Waiting indicator */}
         {isStreaming && !streamingText && (
-          <div className="flex items-center gap-2 text-sm text-indigo-600 py-2">
+          <div className="flex items-center gap-2 py-2 text-indigo-600">
             <span className="flex gap-1">
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -874,41 +694,39 @@ export default function AIChatSidebar({
           </div>
         )}
 
-        {/* Error display */}
+        {/* Error */}
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
-
       </div>
 
-      {/* Drag handle — drag up to expand input panel (max 50% of container) */}
-      <div
-        onMouseDown={handleResizeStart}
-        className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
-        title="Drag to resize"
-      >
-        <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
-      </div>
+      {/* ─── Drag handle (workbook only) ─── */}
+      {isWorkbook && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
+          title="Drag to resize"
+        >
+          <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
+        </div>
+      )}
 
-      {/* Input panel — height controlled by drag handle */}
-      <div
-        style={{ height: inputPanelHeight }}
-        className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
-      >
+      {/* ─── Input panel (workbook only) ─── */}
+      {isWorkbook ? (
+        <div
+          style={{ height: inputPanelHeight }}
+          className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
+        >
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              isAIBusy
-                ? "AI is generating — wait for the current job to finish or cancel it."
-                : placeholder
-            }
-            disabled={isStreaming || isAIBusy}
+            placeholder="What would you like to do?"
+            disabled={isStreaming}
             className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
-              isStreaming || isAIBusy
+              isStreaming
                 ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
                 : "border-gray-300 bg-white"
             }`}
@@ -926,36 +744,36 @@ export default function AIChatSidebar({
           />
           <button
             onClick={handleSubmit}
-            disabled={isStreaming || isAIBusy || !input.trim()}
+            disabled={isStreaming || !input.trim()}
             className="w-full flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
           >
-            {isStreaming ? "Generating..." : isAIBusy ? "AI busy" : "Send"}
+            {isStreaming ? "Generating..." : "Send"}
           </button>
           <div className="flex flex-shrink-0 justify-center">
             <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
               <button
                 onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
-                className={`px-3 py-1 transition-colors ${
-                  !sendOnEnter
-                    ? "bg-green-100 text-green-700 font-medium"
-                    : "bg-white text-gray-400 hover:text-gray-500"
-                }`}
+                className={`px-3 py-1 transition-colors ${!sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
               >
                 ⌘+Enter
               </button>
               <button
                 onClick={() => { setSendOnEnter(true); localStorage.setItem("ai-send-on-enter", "true"); }}
-                className={`px-3 py-1 transition-colors border-l border-gray-200 ${
-                  sendOnEnter
-                    ? "bg-green-100 text-green-700 font-medium"
-                    : "bg-white text-gray-400 hover:text-gray-500"
-                }`}
+                className={`px-3 py-1 transition-colors border-l border-gray-200 ${sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
               >
                 Enter
               </button>
             </div>
           </div>
         </div>
+      ) : (
+        <div className="flex-shrink-0 border-t border-gray-200 px-4 py-3">
+          <p className="text-[11px] text-gray-400 text-center">
+            Switch to <span className="font-medium text-gray-500">Workbook</span> to send prompts.
+            Pipeline output appears above.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -965,34 +783,20 @@ export default function AIChatSidebar({
 function AssistantMessage({
   content,
   mode,
-  isLast,
   isStreaming,
 }: {
   content: string;
   mode: Mode;
-  isLast: boolean;
   isStreaming: boolean;
 }) {
-  // Strip special prefixes for display
+  void mode;
   let displayContent = content;
-
   if (content.startsWith("[CLARIFY]")) {
     displayContent = content.replace(/^\[CLARIFY\]\s*/, "");
-  } else if (
-    /^\[(?:H\d|OL|UL|P)]/m.test(content) ||
-    content.includes("[CHANGE")
-  ) {
-    // Strip structural tags + [CHANGE] / Location: / Original: / Suggested:
-    // scaffolding so the writer sees just the prose. Same render path for
-    // current and history messages — no special-case "wait for cards", no
-    // "Suggested N changes" placeholder, since chat output is conversation
-    // only (29 Apr — Bugs 2 + 4). The writer copies anything actionable
-    // into the document by hand.
+  } else if (/^\[(?:H\d|OL|UL|P)]/m.test(content) || content.includes("[CHANGE")) {
     displayContent = stripTagsForDisplay(content);
   }
-
   if (!displayContent) return null;
-
   return (
     <div className="whitespace-pre-wrap">
       {displayContent}

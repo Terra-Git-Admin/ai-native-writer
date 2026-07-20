@@ -18,6 +18,9 @@ const VALID_TYPES: readonly string[] = [
   "microdrama_plots",
   "predefined_episodes",
   "workbook",
+  "world_state",
+  "beat_sequence",
+  "story_logic",
 ];
 
 // GET /api/documents/[id]/tabs

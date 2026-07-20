@@ -10,6 +10,10 @@ export type TabType =
   | "microdrama_plots"
   | "predefined_episodes"
   | "workbook"
+  // Multi-Step Episode Pipeline tabs (pipeline positions 6–8).
+  | "world_state"
+  | "beat_sequence"
+  | "story_logic"
   // Legacy values kept for docs that haven't been healed yet — a tab fetched
   // between migration and heal may still arrive with one of these. Badges
   // mirror the canonical replacement so the UI is already correct.
@@ -48,6 +52,9 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
     className: "bg-green-100 text-green-700",
   },
   workbook: { label: "Workbook", className: "bg-teal-100 text-teal-700" },
+  world_state: { label: "World State", className: "bg-violet-100 text-violet-700" },
+  beat_sequence: { label: "Beats", className: "bg-orange-100 text-orange-700" },
+  story_logic: { label: "Story Logic", className: "bg-cyan-100 text-cyan-700" },
   // Legacy aliases — render identically to their post-heal canonical.
   episode_plot: {
     label: "Microdrama Plots",

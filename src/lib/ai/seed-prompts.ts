@@ -44,6 +44,10 @@ import {
   RESEARCH_AGENT_SYSTEM_PROMPT,
   OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT,
   OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT,
+  WORLD_STATE_SYSTEM_PROMPT,
+  BEAT_GEN_SYSTEM_PROMPT,
+  CAUSALITY_SYSTEM_PROMPT,
+  PLOT_SYNTH_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -74,6 +78,10 @@ const DEFAULTS = [
   { id: "research_agent", label: "Research Agent", content: RESEARCH_AGENT_SYSTEM_PROMPT },
   { id: "outsiders_perspective", label: "Outsiders Perspective Agent", content: OUTSIDERS_PERSPECTIVE_SYSTEM_PROMPT },
   { id: "outsiders_perspective_brief", label: "Outsiders Perspective Agent (Brief)", content: OUTSIDERS_PERSPECTIVE_BRIEF_SYSTEM_PROMPT },
+  { id: "pipe_world_state", label: "Pipeline: Build World", content: WORLD_STATE_SYSTEM_PROMPT },
+  { id: "pipe_beat_gen",    label: "Pipeline: Suggest Beats", content: BEAT_GEN_SYSTEM_PROMPT },
+  { id: "pipe_causality",   label: "Pipeline: Connect the Story", content: CAUSALITY_SYSTEM_PROMPT },
+  { id: "pipe_plot_synth",  label: "Pipeline: Write Plots", content: PLOT_SYNTH_SYSTEM_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {

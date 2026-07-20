@@ -1,7 +1,8 @@
-// Legacy-doc heal: ensure every document has exactly the six canonical
+// Legacy-doc heal: ensure every document has exactly the nine canonical
 // protected tabs (Original Research, Characters, Series Skeleton,
-// Microdrama Plots, Predefined Episodes, Workbook) at positions 0–5, with
-// any archive tabs and custom writer tabs trailing at positions 6+.
+// Microdrama Plots, Predefined Episodes, Workbook, World State, Beats,
+// Story Logic) at positions 0–8, with any archive tabs and custom writer
+// tabs trailing at positions 9+.
 //
 // This runs on every GET /api/documents/[id]/tabs and is idempotent. Existing
 // typed tabs are upgraded in place (type renamed, title normalised,
@@ -55,6 +56,9 @@ function classify(row: TabRow): CanonicalTabType | "research_legacy" | "archive"
   if (t === "microdrama_plots" || t === "episode_plot") return "microdrama_plots";
   if (t === "predefined_episodes" || t === "reference_episode") return "predefined_episodes";
   if (t === "workbook") return "workbook";
+  if (t === "world_state") return "world_state";
+  if (t === "beat_sequence") return "beat_sequence";
+  if (t === "story_logic") return "story_logic";
   if (t === "research") return "research_legacy";
   if (/\(archive\)/i.test(title)) return "archive";
   return "custom";
