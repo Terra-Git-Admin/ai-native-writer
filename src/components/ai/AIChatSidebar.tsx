@@ -467,8 +467,6 @@ export default function AIChatSidebar({
 
   // ─── Render ───
 
-  const isWorkbook = activeTab.type === "workbook" || activeTab.type === "custom";
-
   return (
     <div ref={containerRef} className="flex h-full flex-col">
 
@@ -570,9 +568,7 @@ export default function AIChatSidebar({
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
           <div className="py-8 text-center text-[13px] text-gray-400">
-            {isWorkbook
-              ? "Click an action above to start, or type a prompt below."
-              : "Click an action above to run the pipeline. Output appears here."}
+            {"Click an action above to start, or type a prompt below."}
           </div>
         )}
 
@@ -702,78 +698,67 @@ export default function AIChatSidebar({
         )}
       </div>
 
-      {/* ─── Drag handle (workbook only) ─── */}
-      {isWorkbook && (
-        <div
-          onMouseDown={handleResizeStart}
-          className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
-          title="Drag to resize"
-        >
-          <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
-        </div>
-      )}
+      {/* ─── Drag handle ─── */}
+      <div
+        onMouseDown={handleResizeStart}
+        className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
+        title="Drag to resize"
+      >
+        <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
+      </div>
 
-      {/* ─── Input panel (workbook only) ─── */}
-      {isWorkbook ? (
-        <div
-          style={{ height: inputPanelHeight }}
-          className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
-        >
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="What would you like to do?"
-            disabled={isStreaming}
-            className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
-              isStreaming
-                ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-                : "border-gray-300 bg-white"
-            }`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (sendOnEnter && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                } else if (!sendOnEnter && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
+      {/* ─── Input panel ─── */}
+      <div
+        style={{ height: inputPanelHeight }}
+        className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
+      >
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="What would you like to do?"
+          disabled={isStreaming}
+          className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
+            isStreaming
+              ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+              : "border-gray-300 bg-white"
+          }`}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (sendOnEnter && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                e.preventDefault();
+                handleSubmit();
+              } else if (!sendOnEnter && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                handleSubmit();
               }
-            }}
-          />
-          <button
-            onClick={handleSubmit}
-            disabled={isStreaming || !input.trim()}
-            className="w-full flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
-          >
-            {isStreaming ? "Generating..." : "Send"}
-          </button>
-          <div className="flex flex-shrink-0 justify-center">
-            <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
-              <button
-                onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
-                className={`px-3 py-1 transition-colors ${!sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
-              >
-                ⌘+Enter
-              </button>
-              <button
-                onClick={() => { setSendOnEnter(true); localStorage.setItem("ai-send-on-enter", "true"); }}
-                className={`px-3 py-1 transition-colors border-l border-gray-200 ${sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
-              >
-                Enter
-              </button>
-            </div>
+            }
+          }}
+        />
+        <button
+          onClick={handleSubmit}
+          disabled={isStreaming || !input.trim()}
+          className="w-full flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+        >
+          {isStreaming ? "Generating..." : "Send"}
+        </button>
+        <div className="flex flex-shrink-0 justify-center">
+          <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
+            <button
+              onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
+              className={`px-3 py-1 transition-colors ${!sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
+            >
+              ⌘+Enter
+            </button>
+            <button
+              onClick={() => { setSendOnEnter(true); localStorage.setItem("ai-send-on-enter", "true"); }}
+              className={`px-3 py-1 transition-colors border-l border-gray-200 ${sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
+            >
+              Enter
+            </button>
           </div>
         </div>
-      ) : (
-        <div className="flex-shrink-0 border-t border-gray-200 px-4 py-3">
-          <p className="text-[11px] text-gray-400 text-center">
-            Switch to <span className="font-medium text-gray-500">Workbook</span> to send prompts.
-            Pipeline output appears above.
-          </p>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
