@@ -40,22 +40,4 @@ export async function register(): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     });
   }
-
-  // Backfill pipeline_playground tab into any existing doc that doesn't have
-  // it yet. healFixedTabs is idempotent — no-op on docs already healed.
-  try {
-    const { db } = await import("@/lib/db");
-    const { documents } = await import("@/lib/db/schema");
-    const { healFixedTabs } = await import("@/lib/tab-heal");
-    const allDocs = await db.select({ id: documents.id }).from(documents);
-    let changed = 0;
-    for (const doc of allDocs) {
-      if (await healFixedTabs(doc.id)) changed++;
-    }
-    logEvent("instrumentation.boot.tabs_backfilled", { total: allDocs.length, changed });
-  } catch (err) {
-    logEvent("instrumentation.boot.tabs_backfill_fail", {
-      err: err instanceof Error ? err.message : String(err),
-    });
-  }
 }
