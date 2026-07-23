@@ -98,3 +98,48 @@ body {
   border-top: 1px solid #e5e7eb;
   margin: 1em 0;
 }
+
+/* ── Playground block prose ── */
+.playground-prose .ProseMirror {
+  color: #374151;
+  line-height: 1.75;
+}
+
+.playground-prose .ProseMirror h1 {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: #ea580c;
+  margin-top: 0;
+  margin-bottom: 0.4em;
+}
+
+.playground-prose .ProseMirror h2 {
+  font-size: 1em;
+  font-weight: 700;
+  color: #1f2937;
+  margin-top: 0.8em;
+  margin-bottom: 0.25em;
+}
+
+.playground-prose .ProseMirror h3 {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 0.6em;
+  margin-bottom: 0.1em;
+}
+
+.playground-prose .ProseMirror p {
+  margin-bottom: 0.45em;
+}
+
+.playground-prose .ProseMirror p:last-child {
+  margin-bottom: 0;
+}
+
+/* BECAUSE OF THAT / BUT THEN emphasis in Story Logic */
+.causal-phrase {
+  font-weight: 700;
+  color: #4338ca;
+  letter-spacing: 0.01em;
+}

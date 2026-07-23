@@ -15,6 +15,7 @@ import OutsidersPerspectiveModal from "@/components/ai/OutsidersPerspectiveModal
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
+import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
@@ -718,20 +719,32 @@ export default function DocumentPage() {
           onTabsChange={handleTabsChange}
         />
 
-        <Editor
-          key={activeTabId}
-          ref={editorRef}
-          documentId={doc.id}
-          tabId={activeTabId}
-          tabType={activeTab?.type}
-          initialContent={activeTabContent}
-          isOwner={doc.isOwner}
-          activeCommentId={activeCommentId}
-          onAddComment={handleAddComment}
-          onCommentMarkClick={handleCommentMarkClick}
-          onHeadingsChange={setActiveTabHeadings}
-          onCommentMarkPositions={setCommentMarkPositions}
-        />
+        {activeTab?.type === "pipeline_playground" ? (
+          <PipelinePlayground
+            key={activeTabId}
+            tab={activeTab}
+            tabs={tabs}
+            documentId={doc.id}
+            modelId={selectedModelId}
+            thinking={thinkingEnabled}
+            onTabsChange={handleTabsChange}
+          />
+        ) : (
+          <Editor
+            key={activeTabId}
+            ref={editorRef}
+            documentId={doc.id}
+            tabId={activeTabId}
+            tabType={activeTab?.type}
+            initialContent={activeTabContent}
+            isOwner={doc.isOwner}
+            activeCommentId={activeCommentId}
+            onAddComment={handleAddComment}
+            onCommentMarkClick={handleCommentMarkClick}
+            onHeadingsChange={setActiveTabHeadings}
+            onCommentMarkPositions={setCommentMarkPositions}
+          />
+        )}
 
         {commentSidebarOpen && (
           <div className="w-80 border-l border-gray-200 bg-gray-50">

@@ -18,7 +18,8 @@ export type CanonicalTabType =
   | "workbook"
   | "world_state"
   | "beat_sequence"
-  | "story_logic";
+  | "story_logic"
+  | "pipeline_playground";
 
 export interface CanonicalTabSpec {
   type: CanonicalTabType;
@@ -126,6 +127,14 @@ export const CANONICAL_TABS: readonly CanonicalTabSpec[] = [
     title: "Story Logic",
     position: 8,
     content: doc([h1("Story Logic")]),
+  },
+  {
+    // Pipeline Playground — curation surface for World State + Beats blocks,
+    // plus Connect Story output. Content is PlaygroundData JSON, not Tiptap doc.
+    type: "pipeline_playground",
+    title: "Playground",
+    position: 9,
+    content: JSON.stringify({ blocks: { world_state: null, beat_sequence: null, story_logic: null } }),
   },
 ];
 

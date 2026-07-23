@@ -21,6 +21,7 @@ const VALID_TYPES: readonly string[] = [
   "world_state",
   "beat_sequence",
   "story_logic",
+  "pipeline_playground",
 ];
 
 // GET /api/documents/[id]/tabs

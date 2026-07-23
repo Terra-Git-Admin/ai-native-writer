@@ -46,7 +46,7 @@ const MODE_LABELS: Record<Mode, string> = {
 
 // Strip structural tags ([H1] [P] [UL] etc.) and [CHANGE] scaffolding for
 // display. Writers see just the prose — they copy anything actionable by hand.
-function stripTagsForDisplay(text: string): string {
+export function stripTagsForDisplay(text: string): string {
   const changeBlocks = text.split(/\[CHANGE \d+\]/i);
   let working = text;
   if (changeBlocks.length > 1) {

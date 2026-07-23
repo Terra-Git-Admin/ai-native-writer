@@ -229,6 +229,9 @@ export function buildAIContext(args: BuildContextArgs): string {
 
   const renderTab = (tab: TabRow | undefined): string => {
     if (!tab) return "";
+    // pipeline_playground stores PlaygroundData JSON, not Tiptap doc JSON.
+    // Feeding it to tiptapJsonToTagged emits garbage — skip it entirely.
+    if (tab.type === "pipeline_playground") return "";
     if (tab.id === activeTab.id && activeTabLiveContent !== null) {
       return tiptapJsonToTagged(activeTabLiveContent);
     }

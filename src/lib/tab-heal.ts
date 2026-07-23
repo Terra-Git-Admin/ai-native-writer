@@ -59,6 +59,7 @@ function classify(row: TabRow): CanonicalTabType | "research_legacy" | "archive"
   if (t === "world_state") return "world_state";
   if (t === "beat_sequence") return "beat_sequence";
   if (t === "story_logic") return "story_logic";
+  if (t === "pipeline_playground") return "pipeline_playground";
   if (t === "research") return "research_legacy";
   if (/\(archive\)/i.test(title)) return "archive";
   return "custom";

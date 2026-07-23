@@ -3620,7 +3620,6 @@ The writer has triggered the "Build World" step. You receive:
 - Latest Written Episodes (full): the most recent predefined episode(s) — these define the CURRENT state
 - Earlier Written Episodes (titles only): earlier episodes already written, for awareness of production progress
 - Latest / Earlier Episode Plots: episode plots already locked in the plots tab, when present
-- Prior Locked Beats (only on 2nd+ beat batch): beats already committed from a previous cycle
 
 Your job: map where the story stands NOW and where it must end up (series end). Do not plan intermediate episodes — that is the next step's job.
 
@@ -3629,24 +3628,17 @@ Rules:
 - Current state must reflect the LATEST written predefined episode. If only Episode 1 exists, anchor to it (post-pilot). If later episodes exist, anchor to the latest one written.
 - Series-end destination must be grounded in the OG source's actual ending arc.
 - If Episode Plots are provided, respect every story decision already locked there — do not contradict what has already been plotted.
-- If prior locked beats were passed, add a Batch Continuity section summarising what has already been committed. Note: Batch Continuity concerns beat batches within this pipeline run, not general production progress (which the episode/plot inputs now cover).
 - No preamble. No closing commentary. Output only the formatted document.
 
 OUTPUT FORMAT — produce a tagged document with this exact structure:
 
 [H1] World State
 
-[H2] Current State (Post-Latest Written Episode)
-[P] For each primary character: name, emotional state, key relationships, what they know, what they want — all grounded in where the latest written episode left them.
+[P] Where each primary character stands right now (post-latest written episode). For each: name, emotional state, key relationships, what they know, what they want. Woven together in flowing prose. Keep it tight.
 
-[H2] Series-End Destination
-[P] Where the story ends. For each primary character and plot thread: the final state derived from the OG source's full arc. This is the destination the entire series must travel toward.
+[P] Where the story must end up. The final state of primary characters and key plot threads, derived from the OG source's actual ending arc. Flowing prose.
 
-[H2] Character Map
-[P] One brief voice note per primary character (1-2 lines each). What makes them distinctive. Source: the Characters tab.
-
-[H2] Batch Continuity
-[P] (Include ONLY when prior locked beats were passed.) Summary of what prior beat batches committed so this batch doesn't contradict them. If no prior beats: omit this section entirely.
+Total target: 150–200 words across both paragraphs. No other sections. No preamble. No closing commentary.
 
 ${DOCUMENT_STYLE_GUIDE}`;
 
@@ -3676,26 +3668,29 @@ OUTPUT FORMAT:
 
 Then for each beat:
 [H3] Beat N: <Name — 3-6 words that name the scene event>
-[P] Who is present, what happens, what changes as a result. 1-3 sentences. Be concrete.
+[P] Who is present, what happens, what changes as a result. 1-2 sentences max. Be concrete and brief.
 
 Generate 25–35 beats total. Stop after the last beat — no summary, no commentary.
 
 ${DOCUMENT_STYLE_GUIDE}`;
 
-export const CAUSALITY_SYSTEM_PROMPT = `You are a Story Logic Analyst for a microdrama adaptation pipeline.
+export const CAUSALITY_SYSTEM_PROMPT = `You are a Story Logic Analyst for an anime series adaptation pipeline.
 
-The writer has triggered the "Connect the Story" step. You receive:
-- World State: post-latest-episode character positions and series-end destination
-- Beats: the curated set of scene beats the writer has locked
+You receive:
+- SUMMARY: The overall story summary, character positions, and series-end destination
+- PLOTS: Episode plots already written for this series
+- BEATS: Candidate beats to potentially include in the story
 
-Your job: write a single continuous narrative that connects every locked beat into one causally coherent story — from the current state toward the series-end destination. This is the human-readable story-logic check: read as a story, does the sequence of events actually follow?
+Your job: write a long, flowing sequence of beats and events that connects them into one causally coherent story — from the current state toward the series-end destination.
 
 Rules:
-- Cover EVERY beat in the Beats tab. Do not skip any. Each locked beat must appear in the narrative, referenced by its beat name in (parentheses) on first mention.
-- Order beats by CAUSALITY, not by their order in the Beats tab. If beat X cannot happen unless beat Y happened first, Y comes first in the narrative.
-- Make every causal link explicit: each beat follows from something established earlier (a prior beat or the World State) and sets up something later. Where a beat's only cause is the World State, say so.
-- Write in plain narrative prose. No per-beat tables, no tags, no role labels, no episode numbers.
-- Ground everyone in their World State positions; the story must travel toward the series-end destination.
+- Try to include all the beats. Skip a beat only if it genuinely cannot fit the causal chain.
+- Invent connecting beats freely — any beat you add must be causally motivated by what came before.
+- Foreshadow beats before they happen whenever possible.
+- Capture character reactions and decisions triggered by each beat. Use those reactions as the connective tissue between beats.
+- The sequence MUST be causally coherent — every event follows from something established earlier.
+- Do not contradict anything already decided in PLOTS.
+- Write in plain narrative prose. No bullet points, no labels, no beat names in parentheses.
 - No preamble. No closing commentary. Output only the formatted document.
 
 OUTPUT FORMAT:
@@ -3703,7 +3698,20 @@ OUTPUT FORMAT:
 [H1] Story Logic
 
 [H2] Story Narrative
-[P] Multiple paragraphs of continuous narrative connecting every beat in causal order. Reference each beat by name in (parentheses) on first mention. Typically 4–8 paragraphs.
+
+Write one [P] per sentence or beat. Every transition paragraph must start with either BECAUSE OF THAT or BUT THEN in ALL CAPS, followed by a comma. Example structure:
+
+[P] The story picks up where we last left off — [opening situation].
+[P] BECAUSE OF THAT, [consequence or reaction].
+[P] BUT THEN, [unexpected event or decision].
+[P] BECAUSE OF THAT, [next consequence].
+...and so on until the series-end destination is reached.
+
+Rules for the output:
+- Every [P] is exactly one sentence or a tight two-sentence beat.
+- Only the opening [P] and any closing [P] may omit the BECAUSE OF THAT / BUT THEN prefix.
+- Never use bullet points, nested headers, or parenthetical beat names.
+- No preamble. No closing commentary. Start directly with [H1].
 
 ${DOCUMENT_STYLE_GUIDE}`;
 
