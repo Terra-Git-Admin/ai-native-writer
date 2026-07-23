@@ -14,6 +14,8 @@ export type TabType =
   | "world_state"
   | "beat_sequence"
   | "story_logic"
+  // Pipeline Playground — curation surface (position 9).
+  | "pipeline_playground"
   // Legacy values kept for docs that haven't been healed yet — a tab fetched
   // between migration and heal may still arrive with one of these. Badges
   // mirror the canonical replacement so the UI is already correct.
@@ -55,6 +57,7 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
   world_state: { label: "World State", className: "bg-violet-100 text-violet-700" },
   beat_sequence: { label: "Beats", className: "bg-orange-100 text-orange-700" },
   story_logic: { label: "Story Logic", className: "bg-cyan-100 text-cyan-700" },
+  pipeline_playground: { label: "Playground", className: "bg-indigo-100 text-indigo-700" },
   // Legacy aliases — render identically to their post-heal canonical.
   episode_plot: {
     label: "Microdrama Plots",

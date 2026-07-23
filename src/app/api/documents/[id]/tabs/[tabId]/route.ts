@@ -17,6 +17,10 @@ const VALID_TYPES: readonly string[] = [
   "microdrama_plots",
   "predefined_episodes",
   "workbook",
+  "world_state",
+  "beat_sequence",
+  "story_logic",
+  "pipeline_playground",
 ];
 
 // PATCH /api/documents/[id]/tabs/[tabId] — rename / change type / reorder.
