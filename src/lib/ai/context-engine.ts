@@ -416,6 +416,28 @@ export function buildPipelineStepContext(
   const workbookTagged = tiptapJsonToTagged(workbookContent);
   const hasWorkbook = workbookTagged.trim().length > 0;
 
+  // Latest N sections in full + a titles-only list of the rest. Keeps context
+  // lean (dilution guard) while anchoring to the most recent material.
+  const windowed = (
+    type: string,
+    fullLabel: string,
+    listLabel: string,
+    n: number
+  ): void => {
+    const t = tab(type);
+    if (!t) return;
+    const sections = splitTabByH3(tiptapJsonToTagged(t.content));
+    if (sections.length === 0) return;
+    const latest = sections.slice(-n);
+    const earlier = sections.slice(0, -n);
+    if (earlier.length > 0) {
+      const list = earlier.map((s) => `[P] • ${s.title}`).join("\n");
+      parts.push(`=== ${listLabel} ===\n${list}`);
+    }
+    const full = latest.map((s) => `[H3] ${s.title}\n${s.content}`).join("\n\n");
+    parts.push(`=== ${fullLabel} ===\n${full}`);
+  };
+
   if (stepId === "pipe_world_state") {
     const overview = render(tab("series_overview"), "Original Research");
     if (overview) parts.push(overview);
@@ -423,22 +445,23 @@ export function buildPipelineStepContext(
     const chars = render(tab("characters"), "Characters");
     if (chars) parts.push(chars);
 
-    // Pilot = predefined Episode 1 only
-    const predefined = tab("predefined_episodes");
-    if (predefined) {
-      const allTagged = tiptapJsonToTagged(predefined.content);
-      const sections = splitTabByH3(allTagged);
-      const ep1 = sections.find(
-        (s) => extractEpisodeNumber(s.title) === 1
-      );
-      if (ep1) {
-        parts.push(
-          `=== Pilot (Predefined Episode 1) ===\n[H3] ${ep1.title}\n${ep1.content}`
-        );
-      }
-    }
+    // Latest 2 predefined episodes in full + titles of earlier ones
+    windowed(
+      "predefined_episodes",
+      "Latest Written Episodes (full)",
+      "Earlier Written Episodes (titles only)",
+      2
+    );
 
-    // Prior locked beat batches
+    // Latest 3 locked plots in full + titles of earlier ones
+    windowed(
+      "microdrama_plots",
+      "Latest Episode Plots (full)",
+      "Earlier Episode Plots (titles only)",
+      3
+    );
+
+    // Prior locked beat batches (beat-batch continuity within this pipeline run)
     const beats = tab("beat_sequence");
     if (beats) {
       const beatsTagged = tiptapJsonToTagged(beats.content);
@@ -451,6 +474,10 @@ export function buildPipelineStepContext(
   if (stepId === "pipe_beat_gen") {
     const ws = render(tab("world_state"), "World State");
     if (ws) parts.push(ws);
+
+    // Pass prior locked beats so the model can avoid repeating them
+    const beats = render(tab("beat_sequence"), "Prior Locked Beats");
+    if (beats) parts.push(beats);
   }
 
   if (stepId === "pipe_causality") {
@@ -467,6 +494,14 @@ export function buildPipelineStepContext(
     if (chars) parts.push(chars);
     const sl = render(tab("story_logic"), "Story Logic");
     if (sl) parts.push(sl);
+
+    // Existing plots — for correct episode numbering and non-contradiction
+    windowed(
+      "microdrama_plots",
+      "Written Episode Plots (latest, full)",
+      "Earlier Episode Plots (titles only)",
+      3
+    );
   }
 
   // Workbook draft — included by all steps when non-empty

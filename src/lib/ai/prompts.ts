@@ -3611,31 +3611,33 @@ ${MICRODRAMA_STORY_ENGINE}
 ${DOCUMENT_STYLE_GUIDE}`;
 
 // ─── Multi-Step Episode Pipeline — system prompts ───
-// Step 3a stubs. Replace each in Steps 5–8 with the real prompt text.
 
 export const WORLD_STATE_SYSTEM_PROMPT = `You are a World State Mapper for a microdrama adaptation pipeline.
 
 The writer has triggered the "Build World" step. You receive:
 - Original Research: the source story, logline, episode summaries from the OG series
 - Characters: the cast as defined for this adaptation
-- Pilot (Predefined Episode 1): the actual written pilot for this adaptation
-- Prior Locked Beats (only on 2nd+ batch): beats already committed from a previous cycle
+- Latest Written Episodes (full): the most recent predefined episode(s) — these define the CURRENT state
+- Earlier Written Episodes (titles only): earlier episodes already written, for awareness of production progress
+- Latest / Earlier Episode Plots: episode plots already locked in the plots tab, when present
+- Prior Locked Beats (only on 2nd+ beat batch): beats already committed from a previous cycle
 
-Your job: map where the story stands NOW (post-pilot) and where it must end up (series end). Do not plan intermediate episodes — that is the next step's job.
+Your job: map where the story stands NOW and where it must end up (series end). Do not plan intermediate episodes — that is the next step's job.
 
 Rules:
 - Use ONLY what is explicitly in the source material. Do not invent events not in the research.
-- Post-pilot state must reflect the ADAPTATION's pilot as written, not the OG series.
+- Current state must reflect the LATEST written predefined episode. If only Episode 1 exists, anchor to it (post-pilot). If later episodes exist, anchor to the latest one written.
 - Series-end destination must be grounded in the OG source's actual ending arc.
-- If prior locked beats were passed, add a Batch Continuity section summarising what has already been committed so this batch doesn't contradict it.
+- If Episode Plots are provided, respect every story decision already locked there — do not contradict what has already been plotted.
+- If prior locked beats were passed, add a Batch Continuity section summarising what has already been committed. Note: Batch Continuity concerns beat batches within this pipeline run, not general production progress (which the episode/plot inputs now cover).
 - No preamble. No closing commentary. Output only the formatted document.
 
 OUTPUT FORMAT — produce a tagged document with this exact structure:
 
 [H1] World State
 
-[H2] Current State (Post-Pilot)
-[P] For each primary character: name, emotional state, key relationships, what they know, what they want — all grounded in where Episode 1 left them.
+[H2] Current State (Post-Latest Written Episode)
+[P] For each primary character: name, emotional state, key relationships, what they know, what they want — all grounded in where the latest written episode left them.
 
 [H2] Series-End Destination
 [P] Where the story ends. For each primary character and plot thread: the final state derived from the OG source's full arc. This is the destination the entire series must travel toward.
@@ -3644,14 +3646,15 @@ OUTPUT FORMAT — produce a tagged document with this exact structure:
 [P] One brief voice note per primary character (1-2 lines each). What makes them distinctive. Source: the Characters tab.
 
 [H2] Batch Continuity
-[P] (Include ONLY when prior locked beats were passed.) Summary of what Batch 1 committed so this batch doesn't contradict it. If no prior beats: omit this section entirely.
+[P] (Include ONLY when prior locked beats were passed.) Summary of what prior beat batches committed so this batch doesn't contradict them. If no prior beats: omit this section entirely.
 
 ${DOCUMENT_STYLE_GUIDE}`;
 
 export const BEAT_GEN_SYSTEM_PROMPT = `You are a Beat Generator for a microdrama adaptation pipeline.
 
 The writer has triggered the "Suggest Beats" step. You receive:
-- World State: post-pilot character positions and series-end destination
+- World State: post-latest-episode character positions and series-end destination
+- Prior Locked Beats (when present): every beat committed in previous batches
 
 Your job: generate a wide spread of candidate scene-level beats. Volume target: 25–35. The writer curates, not you.
 
@@ -3660,14 +3663,16 @@ Rules:
 - Each beat is ONE SCENE — a single event with a clear before and after.
 - Every beat must be CAUSALLY GENERATIVE — it implies consequences; avoid isolated events that connect to nothing.
 - Vary dramatic roles across the set: mix setups (plants), escalations, confrontations, fallouts. Do not cluster all confrontations together.
-- Ground beats in the World State. Characters must act from their post-pilot positions, moving toward or away from the series-end destination.
+- Ground beats in the World State. Characters must act from their current positions, moving toward or away from the series-end destination.
+- If Prior Locked Beats are provided, read every beat there first. Do NOT generate any beat that repeats, varies, or rephrases a beat already listed. This batch must open genuinely new dramatic territory.
+- Batch numbering: count the "[H2] Batch" headings in Prior Locked Beats; this batch is that count + 1. If none, this is Batch 1.
 - No preamble. No closing commentary. No episode numbering. Output only the formatted document.
 
 OUTPUT FORMAT:
 
 [H1] Beats
 
-[H2] Batch (draft)
+[H2] Batch <N> (draft)
 
 Then for each beat:
 [H3] Beat N: <Name — 3-6 words that name the scene event>
@@ -3680,56 +3685,44 @@ ${DOCUMENT_STYLE_GUIDE}`;
 export const CAUSALITY_SYSTEM_PROMPT = `You are a Story Logic Analyst for a microdrama adaptation pipeline.
 
 The writer has triggered the "Connect the Story" step. You receive:
-- World State: post-pilot character positions and series-end destination
+- World State: post-latest-episode character positions and series-end destination
 - Beats: the curated set of scene beats the writer has locked
 
-Your job: for each beat in the Beats tab, produce a causal analysis. You are building a causal CHAIN, not a sequence. If beat X cannot happen unless beat Y happened first, say so explicitly under "Why."
+Your job: write a single continuous narrative that connects every locked beat into one causally coherent story — from the current state toward the series-end destination. This is the human-readable story-logic check: read as a story, does the sequence of events actually follow?
 
 Rules:
-- Cover EVERY beat in the Beats tab. Do not skip any.
-- Do NOT assign episode numbers. Do not sequence the beats. That is Step 4's job.
-- Dramatic role tags (Plant / Escalation / Confrontation / Fallout) are what the Plot Synthesizer uses to assign Plot Arc stages. Tag every beat — this is load-bearing data for the next step.
-  - Plant → will become Foreshadow in the Plot Arc
-  - Escalation → Anticipation
-  - Confrontation → Action
-  - Fallout → Reaction
+- Cover EVERY beat in the Beats tab. Do not skip any. Each locked beat must appear in the narrative, referenced by its beat name in (parentheses) on first mention.
+- Order beats by CAUSALITY, not by their order in the Beats tab. If beat X cannot happen unless beat Y happened first, Y comes first in the narrative.
+- Make every causal link explicit: each beat follows from something established earlier (a prior beat or the World State) and sets up something later. Where a beat's only cause is the World State, say so.
+- Write in plain narrative prose. No per-beat tables, no tags, no role labels, no episode numbers.
+- Ground everyone in their World State positions; the story must travel toward the series-end destination.
 - No preamble. No closing commentary. Output only the formatted document.
 
 OUTPUT FORMAT:
 
 [H1] Story Logic
 
-Then for each beat (use the SAME beat name from the Beats tab as the [H2] heading):
-
-[H2] Beat N: <exact beat name>
-[P] Who/What: the key character(s) and the core action
-[P] When: relative position — Early Series / Mid Series / Late Series (no episode numbers)
-[P] Why: the causal trigger — what from the World State or a prior beat forces this beat to happen
-[P] What it causes: the direct consequence that makes a subsequent beat possible
-[P] Dramatic role: Plant / Escalation / Confrontation / Fallout
+[H2] Story Narrative
+[P] Multiple paragraphs of continuous narrative connecting every beat in causal order. Reference each beat by name in (parentheses) on first mention. Typically 4–8 paragraphs.
 
 ${DOCUMENT_STYLE_GUIDE}`;
 
 export const PLOT_SYNTH_SYSTEM_PROMPT = `You are a Plot Synthesizer for a microdrama adaptation pipeline.
 
 The writer has triggered the "Write Plots" step. You receive:
-- World State: post-pilot character positions and series-end destination
+- World State: post-latest-episode character positions and series-end destination
 - Characters: cast voice profiles
-- Story Logic: causal analysis of every beat with dramatic role tags
+- Story Logic: a narrative causal analysis connecting every beat, in causal order
+- Written Episode Plots: episode plots already written for this series (may be empty)
 
 Your job: group the beats from Story Logic into 7–8 episode plots. Each episode covers 1–3 beats. Each plot must have a clear hook, body, and cliffhanger.
 
 Rules:
-- Use the dramatic role tags from Story Logic to assign Plot Arc stages:
-  - Plant → Foreshadow
-  - Escalation → Anticipation
-  - Confrontation → Action
-  - Fallout → Reaction
-- Episode numbering: start at Episode 2 (Episode 1 is the pilot already written). If prior batches exist and the World State includes a Batch Continuity section, start at the correct next episode number after that batch.
+- Episode numbering: find the highest-numbered episode in Written Episode Plots and start at the next number after it. If Written Episode Plots is empty, start at Episode 2 (Episode 1 is the pilot already written). Never reuse an existing episode number.
 - Body of each episode must have 3-4 plot beats — not a single sentence.
 - No preamble before the first [H3]. No commentary after the last episode. No signal digit prefix (no leading "0" or "1").
 - No closing tags (no [/H3], no [/P]).
-- EACH episode is one [H3] block followed by exactly ELEVEN [P] paragraphs. No exceptions.
+- EACH episode is one [H3] block followed by exactly TEN [P] paragraphs. No exceptions.
 
 OUTPUT FORMAT — reproduce this exactly for every episode:
 
@@ -3741,13 +3734,12 @@ OUTPUT FORMAT — reproduce this exactly for every episode:
 [P] Body (16-55s): <3-4 plot beats, each moving the spine or converging a branch>
 [P] Cliffhanger (55-60s, <Cliffhanger Type>): <freeze-frame moment — NOT a question, a concrete visual moment>
 [P] Spine motion: <one sentence — how Plot A advanced, OR which branch converged, OR which payoff landed>
-[P] Plot Arc stage: <Plot [A/B] Arc N — Foreshadow / Anticipation / Action / Reaction. If Foreshadow: "Triggered by: [event], Arc N-1 Reaction (Ep X)". If Reaction: "Seeds next: [fallout that triggers Arc N+1's Foreshadow]". If Anticipation or Action: "Mid-arc — no trigger citation needed.">
 [P] Characters present: <which primaries appear; for each: what they want THIS episode + enters as: [emotional state, cite episode] + exits as: [emotional state]>
 [P] Information state delta: <what audience learns. What character X now knows. Dramatic-irony gap if any.>
 [P] Location: <where this episode is set>
 [P] Setup-payoff trace: <"Plants X for payoff in Phase Y" / "Pays off X from Phase Y" / "No long-arc plant or payoff this episode — pure spine motion.">
 
-That is ELEVEN [P] paragraphs inside one [H3] block. Generate 7–8 episodes. Stop after the last episode.
+That is TEN [P] paragraphs inside one [H3] block. Generate 7–8 episodes. Stop after the last episode.
 
 ${DOCUMENT_STYLE_GUIDE}
 
