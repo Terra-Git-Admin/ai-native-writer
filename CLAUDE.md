@@ -113,6 +113,22 @@ Design was independently audited before shipping — caught and fixed two struct
 
 `loadNextEpisodePlotContext` in `actions.ts` updated to match — windows `predefinedEpisodes` to `.slice(-8)` instead of taking only the last section.
 
+### Pipeline Prompt Improvement Plan (NOT CODED as of 22 Jul — execute before staging push)
+
+**Plan file:** `D:\plotpix\ai-native-writer\PIPELINE-PROMPT-PLAN.md` — locked decisions, concrete before/after diffs for all 4 issues.
+
+Issues:
+1. World State + Step 4 blind to existing episodes/plots after pilot → windowed context in `buildPipelineStepContext`
+2. Beat batches overlap → pass `beat_sequence` to `pipe_beat_gen` + no-overlap rule in prompt
+3. Connector outputs per-beat tables → full rewrite to narrative-only (`CAUSALITY_SYSTEM_PROMPT`)
+4. Plot Synthesizer hardcodes "Episode 2" + has Plot Arc stage machinery → fix numbering + drop to 10 [P] blocks
+
+Files: `src/lib/ai/context-engine.ts` + `src/lib/ai/prompts.ts` only. No DB/schema/route changes.
+
+**Always read `PIPELINE-PROMPT-PLAN.md` at session start when working on pipeline prompts.**
+
+---
+
 ### Multi-Step Episode Pipeline (PLAN AUDITED v1.1 — NOT CODED — EXECUTION STARTS 18 Jul 2026)
 
 New writer-driven flow to replace the broken Series Skeleton → Skeleton-to-Plots path (skeleton stays until this is proven, then decommissioned). Produces microdrama plots that feed the unchanged Plot → Predefined flow. **Nothing implemented yet** — executor-ready spec (v1.1, for a Claude 4.6 session) is in `D:\plotpix\FEATURES\feat-multi-step-episode-pipeline.md` (mirror: `C:\Users\vikas\.claude\plans\playful-hopping-barto.md`). Execute from build-step 1.
