@@ -37,12 +37,12 @@ interface PlaygroundState {
   storyGeneratedAt: string | null;
   saveStatus: "saved" | "saving" | "unsaved";
   isStreaming: boolean;
-  streamingText: string;        // stripped for display
-  streamingAccumulated: string; // raw for parsing
-  // Confirm strips
+  streamingText: string;
+  streamingAccumulated: string;
   confirmRefreshWorld: boolean;
   confirmRefreshBeats: boolean;
   confirmConnectStory: boolean;
+  confirmUpdateSources: boolean;
 }
 
 type Action =
@@ -60,7 +60,9 @@ type Action =
   | { type: "SHOW_CONFIRM_CONNECT" }
   | { type: "HIDE_CONFIRM_CONNECT" }
   | { type: "REFRESH_WORLD"; content: string; at: string }
-  | { type: "REFRESH_BEATS"; content: string; at: string };
+  | { type: "REFRESH_BEATS"; content: string; at: string }
+  | { type: "SHOW_CONFIRM_UPDATE_SOURCES" }
+  | { type: "HIDE_CONFIRM_UPDATE_SOURCES" };
 
 function reducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
@@ -118,6 +120,10 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
       return { ...state, worldContent: action.content, worldPopulatedAt: action.at, confirmRefreshWorld: false };
     case "REFRESH_BEATS":
       return { ...state, beatsContent: action.content, beatsPopulatedAt: action.at, confirmRefreshBeats: false };
+    case "SHOW_CONFIRM_UPDATE_SOURCES":
+      return { ...state, confirmUpdateSources: true };
+    case "HIDE_CONFIRM_UPDATE_SOURCES":
+      return { ...state, confirmUpdateSources: false };
     default:
       return state;
   }
@@ -134,9 +140,8 @@ function parsePlaygroundData(raw: string | null): PlaygroundData {
   return { blocks: { world_state: null, beat_sequence: null, story_logic: null } };
 }
 
-function tabContentToTiptapJson(tab: TabRow | undefined): string | null {
+function tabContentToTiptapJson(tab: { content: string | null } | undefined): string | null {
   if (!tab?.content) return null;
-  // Skip if it's a stub ([H1] only)
   try {
     const doc = JSON.parse(tab.content) as { type: string; content?: unknown[] };
     const children = Array.isArray(doc.content) ? doc.content : [];
@@ -191,29 +196,14 @@ export default function PipelinePlayground({
     confirmRefreshWorld: false,
     confirmRefreshBeats: false,
     confirmConnectStory: false,
+    confirmUpdateSources: false,
   });
 
   // Canonical tab references
   const worldStateTab = tabs.find((t) => t.type === "world_state");
   const beatSeqTab = tabs.find((t) => t.type === "beat_sequence");
   const storyLogicTab = tabs.find((t) => t.type === "story_logic");
-
-  // Auto-populate from canonical tabs on first mount when blocks are null
-  useEffect(() => {
-    if (data.blocks.world_state === null || data.blocks.beat_sequence === null) {
-      const worldJson = tabContentToTiptapJson(worldStateTab);
-      const beatsJson = tabContentToTiptapJson(beatSeqTab);
-      const now = new Date().toISOString();
-      dispatch({
-        type: "POPULATE",
-        worldContent: worldJson ?? state.worldContent,
-        beatsContent: beatsJson ?? state.beatsContent,
-        worldAt: now,
-        beatsAt: now,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const plotsTab = tabs.find((t) => t.type === "microdrama_plots");
 
   // Autosave — serialize current state into PlaygroundData JSON
   const stateRef = useRef(state);
@@ -250,6 +240,45 @@ export default function PipelinePlayground({
     onStatusChange,
   });
 
+  // Stable ref so the populate effect can call scheduleFlush without re-running
+  const scheduleFlushRef = useRef(scheduleFlush);
+  scheduleFlushRef.current = scheduleFlush;
+
+  // Auto-populate from canonical tabs on first mount when blocks are null.
+  // Fetch fresh from the API rather than relying on the stale tabs prop —
+  // the user may have edited World State or Beats without navigating back through
+  // those tabs, so the prop content can lag behind the DB.
+  useEffect(() => {
+    if (data.blocks.world_state !== null && data.blocks.beat_sequence !== null) return;
+    const wsTab = tabs.find((t) => t.type === "world_state");
+    const bsTab = tabs.find((t) => t.type === "beat_sequence");
+    if (!wsTab && !bsTab) return;
+
+    Promise.all([
+      wsTab
+        ? fetch(`/api/documents/${documentId}/tabs/${wsTab.id}/content`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        : Promise.resolve(null),
+      bsTab
+        ? fetch(`/api/documents/${documentId}/tabs/${bsTab.id}/content`)
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]).then(([wsData, bsData]) => {
+      const now = new Date().toISOString();
+      const worldJson = tabContentToTiptapJson(
+        wsData?.content != null ? { content: wsData.content as string } : wsTab
+      );
+      const beatsJson = tabContentToTiptapJson(
+        bsData?.content != null ? { content: bsData.content as string } : bsTab
+      );
+      dispatch({ type: "POPULATE", worldContent: worldJson, beatsContent: beatsJson, worldAt: now, beatsAt: now });
+      scheduleFlushRef.current();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handlers for block content changes
   const handleWorldChange = useCallback(
     (json: string) => { dispatch({ type: "SET_WORLD_CONTENT", content: json }); scheduleFlush(); },
@@ -264,39 +293,42 @@ export default function PipelinePlayground({
     [scheduleFlush, state.storyGeneratedAt]
   );
 
-  // ─── Promote ───────────────────────────────────────────────────────────────
+  // ─── Promote (internal helper) ─────────────────────────────────────────────
 
-  const promote = useCallback(
-    async (blockKey: BlockKey, content: string | null, canonicalTab: TabRow | undefined) => {
+  const promoteToTab = useCallback(
+    async (content: string | null, canonicalTab: TabRow | undefined) => {
       if (!content || !canonicalTab) return;
       await fetch(`/api/documents/${documentId}/tabs/${canonicalTab.id}/content`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
       });
-      // Refresh tabs in parent
-      const res = await fetch(`/api/documents/${documentId}/tabs`);
-      if (res.ok) {
-        const updated = await res.json() as TabRow[];
-        onTabsChange(updated);
-      }
-      void flush();
     },
-    [documentId, onTabsChange, flush]
+    [documentId]
   );
 
-  const handlePromoteWorld = useCallback(
-    () => promote("world_state", state.worldContent, worldStateTab),
-    [promote, state.worldContent, worldStateTab]
-  );
-  const handlePromoteBeats = useCallback(
-    () => promote("beat_sequence", state.beatsContent, beatSeqTab),
-    [promote, state.beatsContent, beatSeqTab]
-  );
-  const handlePromoteStory = useCallback(
-    () => promote("story_logic", state.storyContent, storyLogicTab),
-    [promote, state.storyContent, storyLogicTab]
-  );
+  const refreshParentTabs = useCallback(async () => {
+    const res = await fetch(`/api/documents/${documentId}/tabs`);
+    if (res.ok) onTabsChange(await res.json() as TabRow[]);
+    void flush();
+  }, [documentId, onTabsChange, flush]);
+
+  // ─── Finalize Story Logic ──────────────────────────────────────────────────
+
+  const handleFinalize = useCallback(async () => {
+    await promoteToTab(state.storyContent, storyLogicTab);
+    await refreshParentTabs();
+    dispatch({ type: "SHOW_CONFIRM_UPDATE_SOURCES" });
+  }, [promoteToTab, state.storyContent, storyLogicTab, refreshParentTabs]);
+
+  const handleUpdateSources = useCallback(async () => {
+    await Promise.all([
+      promoteToTab(state.worldContent, worldStateTab),
+      promoteToTab(state.beatsContent, beatSeqTab),
+    ]);
+    dispatch({ type: "HIDE_CONFIRM_UPDATE_SOURCES" });
+    await refreshParentTabs();
+  }, [promoteToTab, state.worldContent, state.beatsContent, worldStateTab, beatSeqTab, refreshParentTabs]);
 
   // ─── Refresh ───────────────────────────────────────────────────────────────
 
@@ -305,7 +337,6 @@ export default function PipelinePlayground({
     const canonicalBeatsJson = tabContentToTiptapJson(beatSeqTab);
     const now = new Date().toISOString();
 
-    // Check if world block has been edited (differs from canonical)
     const worldEdited = state.worldContent && canonicalWorldJson && state.worldContent !== canonicalWorldJson;
     const beatsEdited = state.beatsContent && canonicalBeatsJson && state.beatsContent !== canonicalBeatsJson;
 
@@ -339,10 +370,15 @@ export default function PipelinePlayground({
     if (!state.worldContent || !state.beatsContent) return;
     dispatch({ type: "START_STREAMING" });
 
-    // Build context from playground blocks
     const worldTagged = tiptapJsonToTagged(state.worldContent);
     const beatsTagged = tiptapJsonToTagged(state.beatsContent);
-    const contextStr = `=== World State ===\n${worldTagged}\n\n=== Beats ===\n${beatsTagged}`;
+    const plotsTagged = plotsTab?.content ? tiptapJsonToTagged(plotsTab.content) : "";
+    const contextStr = [
+      `SUMMARY:\n${worldTagged}`,
+      `PLOTS:\n${plotsTagged || "(none yet)"}`,
+      `BEATS:\n${beatsTagged}`,
+    ].join("\n\n");
+
     const messages = [{ role: "user" as const, content: contextStr }];
 
     try {
@@ -370,7 +406,6 @@ export default function PipelinePlayground({
         }
       }
 
-      // On stream end: strip only the 0/1 prefix (keep structural tags for parsing)
       const clean = accumulated.replace(/^[012]\n/, "");
       const tiptapJson = taggedToTiptapJson(clean);
       dispatch({ type: "END_STREAMING", tiptapJson, generatedAt: new Date().toISOString() });
@@ -378,14 +413,13 @@ export default function PipelinePlayground({
     } catch {
       dispatch({ type: "ABORT_STREAMING" });
     }
-  }, [state.worldContent, state.beatsContent, modelId, thinking, scheduleFlush]);
+  }, [state.worldContent, state.beatsContent, plotsTab, modelId, thinking, scheduleFlush]);
 
   const worldEmpty = !state.worldContent;
   const beatsEmpty = !state.beatsContent;
+  const bothEmpty = worldEmpty && beatsEmpty;
 
   // ─── Render ────────────────────────────────────────────────────────────────
-
-  const bothEmpty = worldEmpty && beatsEmpty;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -394,10 +428,7 @@ export default function PipelinePlayground({
         <div className="flex items-center justify-between px-4 py-2 mb-4 border border-gray-200 rounded-lg bg-white">
           <span className="text-sm font-semibold text-gray-700">Playground</span>
           <div className="flex items-center gap-3">
-            <span
-              aria-live="polite"
-              className="text-xs text-gray-500"
-            >
+            <span aria-live="polite" className="text-xs text-gray-500">
               {state.saveStatus === "saving"
                 ? "Saving…"
                 : state.saveStatus === "unsaved"
@@ -420,7 +451,6 @@ export default function PipelinePlayground({
           </div>
         </div>
 
-        {/* Empty state when both source tabs are empty */}
         {bothEmpty ? (
           <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center">
             <p className="text-sm text-gray-600">
@@ -429,7 +459,7 @@ export default function PipelinePlayground({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* World State block */}
+            {/* World State block — view/edit only, no promote */}
             <div>
               {state.confirmRefreshWorld && (
                 <div
@@ -464,14 +494,11 @@ export default function PipelinePlayground({
                 label="World State"
                 content={state.worldContent}
                 placeholder="World State will auto-populate from the World State tab when you open Playground."
-                ariaLabel="Promote World State to its tab"
                 onContentChange={handleWorldChange}
-                onPromote={handlePromoteWorld}
-                promoteDisabled={!state.worldContent}
               />
             </div>
 
-            {/* Beats block */}
+            {/* Beats block — view/edit only, no promote */}
             <div>
               {state.confirmRefreshBeats && (
                 <div
@@ -506,10 +533,7 @@ export default function PipelinePlayground({
                 label="Beats"
                 content={state.beatsContent}
                 placeholder="Beats will auto-populate from the Beats tab when you open Playground."
-                ariaLabel="Promote Beats to its tab"
                 onContentChange={handleBeatsChange}
-                onPromote={handlePromoteBeats}
-                promoteDisabled={!state.beatsContent}
               />
             </div>
 
@@ -562,19 +586,45 @@ export default function PipelinePlayground({
               </button>
             </div>
 
-            {/* Story Logic block — only shown once Connect Story has run */}
+            {/* Story Logic block — Finalize saves to canonical tab and offers to update sources */}
             {(state.storyContent || state.isStreaming) && (
-              <PlaygroundBlock
-                label="Story Logic"
-                content={state.storyContent}
-                placeholder="Run Connect Story to generate the causal narrative from your World State and Beats."
-                ariaLabel="Promote Story Logic to its tab"
-                isStreaming={state.isStreaming}
-                streamingText={state.streamingText}
-                onContentChange={handleStoryChange}
-                onPromote={handlePromoteStory}
-                promoteDisabled={state.isStreaming || !state.storyContent}
-              />
+              <div>
+                {state.confirmUpdateSources && (
+                  <div
+                    role="alertdialog"
+                    aria-label="Update World State and Beats tabs"
+                    className="mb-2 flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
+                  >
+                    <p className="flex-1 text-sm text-indigo-800">
+                      Story Logic saved. Update the <b>World State</b> and <b>Beats</b> tabs with the curated content used here?
+                    </p>
+                    <button
+                      autoFocus
+                      onClick={() => void handleUpdateSources()}
+                      className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors duration-200"
+                    >
+                      Yes, update
+                    </button>
+                    <button
+                      onClick={() => dispatch({ type: "HIDE_CONFIRM_UPDATE_SOURCES" })}
+                      className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                    >
+                      No thanks
+                    </button>
+                  </div>
+                )}
+                <PlaygroundBlock
+                  label="Story Logic"
+                  content={state.storyContent}
+                  placeholder="Run Connect Story to generate the causal narrative from your World State and Beats."
+                  isStreaming={state.isStreaming}
+                  streamingText={state.streamingText}
+                  onContentChange={handleStoryChange}
+                  onAction={state.storyContent && !state.isStreaming ? handleFinalize : undefined}
+                  actionLabel="Finalize"
+                  actionDisabled={state.isStreaming || !state.storyContent}
+                />
+              </div>
             )}
           </div>
         )}
