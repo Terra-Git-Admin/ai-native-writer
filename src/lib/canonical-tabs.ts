@@ -6,6 +6,10 @@
 // unprotected and live at positions >= 9.
 
 import { nanoid } from "nanoid";
+
+// Bump when CANONICAL_TABS gains or changes tabs. Each doc tops up once on its
+// next open when its stored canonical_tabs_version is below this, then goes quiet.
+export const CURRENT_CANONICAL_TABS_VERSION = 1;
 import type { InferInsertModel } from "drizzle-orm";
 import { tabs } from "./db/schema";
 

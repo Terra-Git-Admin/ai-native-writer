@@ -70,6 +70,7 @@ export const documents = sqliteTable("documents", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
+  canonicalTabsVersion: integer("canonical_tabs_version").notNull().default(0),
 });
 
 export const tabs = sqliteTable(

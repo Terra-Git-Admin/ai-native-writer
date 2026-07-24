@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { documents, tabs, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { desc, eq, sql } from "drizzle-orm";
-import { buildCanonicalTabRows } from "@/lib/canonical-tabs";
+import { buildCanonicalTabRows, CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
 
 // GET /api/documents — list all documents with owner info + recent comment count
 export async function GET() {
@@ -62,6 +62,7 @@ export async function POST(req: Request) {
     activeTabId: firstTabId,
     createdAt: now,
     updatedAt: now,
+    canonicalTabsVersion: CURRENT_CANONICAL_TABS_VERSION,
   });
 
   await db.insert(tabs).values(rows);
