@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, getDb } from "@/lib/db";
 import { documents, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { and, eq, max } from "drizzle-orm";
 import { logEvent, logTrace } from "@/lib/saveTrace";
 import { inferTabType, type InferredTabType } from "@/lib/tab-type-inference";
+import { CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
+import { insertMissingCanonicalTabs } from "@/lib/backfill-canonical-tabs";
 
 const VALID_TYPES: readonly string[] = [
   "custom",
@@ -38,10 +40,32 @@ export async function GET(
   const { id } = await params;
   const doc = await db.query.documents.findFirst({
     where: eq(documents.id, id),
-    columns: { id: true },
+    columns: { id: true, canonicalTabsVersion: true },
   });
   if (!doc) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  let backfilledOnOpen = false;
+  let insertedCount = 0;
+  if ((doc.canonicalTabsVersion ?? 0) < CURRENT_CANONICAL_TABS_VERSION) {
+    const dbi = getDb();
+    dbi.transaction((tx) => {
+      // Re-read the stamp inside the txn — a concurrent open may have just bumped it.
+      const fresh = tx
+        .select({ v: documents.canonicalTabsVersion })
+        .from(documents)
+        .where(eq(documents.id, id))
+        .get();
+      if ((fresh?.v ?? 0) >= CURRENT_CANONICAL_TABS_VERSION) return;
+      const res = insertMissingCanonicalTabs(tx, id);
+      insertedCount = res.inserted.length;
+      backfilledOnOpen = true;
+      tx.update(documents)
+        .set({ canonicalTabsVersion: CURRENT_CANONICAL_TABS_VERSION })
+        .where(eq(documents.id, id))
+        .run();
+    });
   }
 
   const tReadStart = Date.now();
@@ -59,11 +83,13 @@ export async function GET(
   );
 
   logEvent("tabs.get.timing", {
-    phase: "heal-skip",
+    phase: backfilledOnOpen ? "backfill" : "heal-skip",
     docId: id,
     tabCount,
     totalContentBytes,
     healRan: false,
+    backfilledOnOpen,
+    insertedCount,
     msHeals: 0,
     msFinalRead,
     msTotal: Date.now() - t0,

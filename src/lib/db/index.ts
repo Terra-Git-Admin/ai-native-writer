@@ -154,6 +154,14 @@ export function getDb(): DB {
       logEvent("db.migration.defensive.user_guidance_added", {});
     }
 
+    const docCols = sqlite.pragma("table_info(documents)") as Array<{ name: string }>;
+    if (!docCols.some((c) => c.name === "canonical_tabs_version")) {
+      sqlite.exec(
+        "ALTER TABLE `documents` ADD `canonical_tabs_version` integer NOT NULL DEFAULT 0"
+      );
+      logEvent("db.migration.defensive.canonical_tabs_version_added", {});
+    }
+
     const db = fileStats(dbPath);
     const wal = fileStats(`${dbPath}-wal`);
     logEvent("db.open", {
