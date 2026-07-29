@@ -32,6 +32,7 @@ interface PlaygroundState {
   worldContent: string | null;
   beatsContent: string | null;
   storyContent: string | null;
+  instructions: string;
   worldPopulatedAt: string | null;
   beatsPopulatedAt: string | null;
   storyGeneratedAt: string | null;
@@ -62,7 +63,8 @@ type Action =
   | { type: "REFRESH_WORLD"; content: string; at: string }
   | { type: "REFRESH_BEATS"; content: string; at: string }
   | { type: "SHOW_CONFIRM_UPDATE_SOURCES" }
-  | { type: "HIDE_CONFIRM_UPDATE_SOURCES" };
+  | { type: "HIDE_CONFIRM_UPDATE_SOURCES" }
+  | { type: "SET_INSTRUCTIONS"; value: string };
 
 function reducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
@@ -124,6 +126,8 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
       return { ...state, confirmUpdateSources: true };
     case "HIDE_CONFIRM_UPDATE_SOURCES":
       return { ...state, confirmUpdateSources: false };
+    case "SET_INSTRUCTIONS":
+      return { ...state, instructions: action.value };
     default:
       return state;
   }
@@ -197,6 +201,7 @@ export default function PipelinePlayground({
     confirmRefreshBeats: false,
     confirmConnectStory: false,
     confirmUpdateSources: false,
+    instructions: "",
   });
 
   // Canonical tab references
@@ -357,15 +362,6 @@ export default function PipelinePlayground({
 
   // ─── Connect Story ─────────────────────────────────────────────────────────
 
-  const handleConnectStoryClick = useCallback(() => {
-    if (state.storyContent) {
-      dispatch({ type: "SHOW_CONFIRM_CONNECT" });
-    } else {
-      void runConnectStory();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.storyContent]);
-
   const runConnectStory = useCallback(async () => {
     if (!state.worldContent || !state.beatsContent) return;
     dispatch({ type: "START_STREAMING" });
@@ -373,11 +369,15 @@ export default function PipelinePlayground({
     const worldTagged = tiptapJsonToTagged(state.worldContent);
     const beatsTagged = tiptapJsonToTagged(state.beatsContent);
     const plotsTagged = plotsTab?.content ? tiptapJsonToTagged(plotsTab.content) : "";
-    const contextStr = [
-      `SUMMARY:\n${worldTagged}`,
-      `PLOTS:\n${plotsTagged || "(none yet)"}`,
-      `BEATS:\n${beatsTagged}`,
-    ].join("\n\n");
+    const instr = state.instructions.trim();
+    const instrBlock = instr ? `INSTRUCTIONS:\n${instr}\n\n` : "";
+    const contextStr =
+      instrBlock +
+      [
+        `SUMMARY:\n${worldTagged}`,
+        `PLOTS:\n${plotsTagged || "(none yet)"}`,
+        `BEATS:\n${beatsTagged}`,
+      ].join("\n\n");
 
     const messages = [{ role: "user" as const, content: contextStr }];
 
@@ -413,7 +413,15 @@ export default function PipelinePlayground({
     } catch {
       dispatch({ type: "ABORT_STREAMING" });
     }
-  }, [state.worldContent, state.beatsContent, plotsTab, modelId, thinking, scheduleFlush]);
+  }, [state.worldContent, state.beatsContent, state.instructions, plotsTab, modelId, thinking, scheduleFlush]);
+
+  const handleConnectStoryClick = useCallback(() => {
+    if (state.storyContent) {
+      dispatch({ type: "SHOW_CONFIRM_CONNECT" });
+    } else {
+      void runConnectStory();
+    }
+  }, [state.storyContent, runConnectStory]);
 
   const worldEmpty = !state.worldContent;
   const beatsEmpty = !state.beatsContent;
@@ -534,6 +542,28 @@ export default function PipelinePlayground({
                 content={state.beatsContent}
                 placeholder="Beats will auto-populate from the Beats tab when you open Playground."
                 onContentChange={handleBeatsChange}
+              />
+            </div>
+
+            {/* Instructions — ephemeral, steers Connect Story */}
+            <div>
+              <label
+                htmlFor="playground-instructions"
+                className="mb-1 block text-sm font-semibold text-gray-700"
+              >
+                Instructions <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <textarea
+                id="playground-instructions"
+                value={state.instructions}
+                onChange={(e) => dispatch({ type: "SET_INSTRUCTIONS", value: e.target.value })}
+                disabled={state.isStreaming}
+                rows={3}
+                placeholder="Specific guidance for Connect Story — e.g. keep the forgery unresolved, focus on Ha-eun's arc, aim for 3 episodes. Clears when you leave the tab."
+                className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm
+                  text-gray-800 placeholder:text-gray-400
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
+                  disabled:opacity-40 disabled:cursor-not-allowed"
               />
             </div>
 
