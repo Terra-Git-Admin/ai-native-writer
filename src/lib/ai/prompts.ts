@@ -3667,8 +3667,7 @@ OUTPUT FORMAT:
 [H2] Batch <N> (draft)
 
 Then for each beat:
-[H3] Beat N: <Name — 3-6 words that name the scene event>
-[P] Who is present, what happens, what changes as a result. 1-2 sentences max. Be concrete and brief.
+[P] Beat N: <Who is present, what happens, what changes. 1-2 sentences max. Lead with the action. Be specific — name the object, location, or line that makes the scene concrete.>
 
 Generate 25–35 beats total. Stop after the last beat — no summary, no commentary.
 

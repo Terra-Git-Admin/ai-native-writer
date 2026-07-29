@@ -93,9 +93,7 @@ function BeatRow({ beat, onTextChange, onToggleLock, disabled }: BeatRowProps) {
         onChange={handleInput}
         disabled={disabled}
         rows={1}
-        className={`flex-1 resize-none overflow-hidden bg-transparent text-sm leading-relaxed outline-none
-          placeholder:text-muted-foreground disabled:cursor-not-allowed
-          ${beat.locked ? "text-foreground" : "text-muted-foreground"}`}
+        className="flex-1 resize-none overflow-hidden bg-transparent text-sm leading-relaxed outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"
         style={{ minHeight: "1.5rem" }}
         aria-label={`Beat: ${beat.text.slice(0, 40)}`}
       />
