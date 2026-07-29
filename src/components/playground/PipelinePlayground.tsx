@@ -7,13 +7,22 @@ import { taggedToTiptapJson } from "@/lib/ai/tagged-tiptap";
 import { stripTagsForDisplay } from "@/components/ai/AIChatSidebar";
 import { usePlaygroundAutosave } from "@/lib/ai/usePlaygroundAutosave";
 import PlaygroundBlock from "./PlaygroundBlock";
+import PlaygroundBeatsBlock from "./PlaygroundBeatsBlock";
+import {
+  type PlaygroundBeat,
+  parseBeatsFromTiptap,
+  renderLockedBeatsTagged,
+  renderAllBeatsTagged,
+  preserveLockState,
+} from "@/lib/ai/playground-beats";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface PlaygroundBlockData {
-  content: string;        // Tiptap doc JSON string
-  populatedAt?: string;   // ISO timestamp (world_state + beat_sequence)
-  generatedAt?: string;   // ISO timestamp (story_logic)
+  content?: string;         // Tiptap doc JSON string (world_state, story_logic, legacy beat_sequence)
+  beats?: PlaygroundBeat[]; // beat_sequence new shape
+  populatedAt?: string;
+  generatedAt?: string;
 }
 
 interface PlaygroundData {
@@ -30,7 +39,7 @@ type BlockKey = "world_state" | "beat_sequence" | "story_logic";
 
 interface PlaygroundState {
   worldContent: string | null;
-  beatsContent: string | null;
+  beats: PlaygroundBeat[];
   storyContent: string | null;
   instructions: string;
   worldPopulatedAt: string | null;
@@ -48,9 +57,10 @@ interface PlaygroundState {
 
 type Action =
   | { type: "SET_WORLD_CONTENT"; content: string }
-  | { type: "SET_BEATS_CONTENT"; content: string }
+  | { type: "SET_BEAT_TEXT"; id: string; text: string }
+  | { type: "TOGGLE_BEAT_LOCK"; id: string }
   | { type: "SET_STORY_CONTENT"; content: string; generatedAt: string }
-  | { type: "POPULATE"; worldContent: string | null; beatsContent: string | null; worldAt: string; beatsAt: string }
+  | { type: "POPULATE"; worldContent: string | null; beats: PlaygroundBeat[]; worldAt: string; beatsAt: string }
   | { type: "SET_SAVE_STATUS"; status: "saved" | "saving" | "unsaved" }
   | { type: "START_STREAMING" }
   | { type: "APPEND_STREAM"; raw: string }
@@ -61,7 +71,7 @@ type Action =
   | { type: "SHOW_CONFIRM_CONNECT" }
   | { type: "HIDE_CONFIRM_CONNECT" }
   | { type: "REFRESH_WORLD"; content: string; at: string }
-  | { type: "REFRESH_BEATS"; content: string; at: string }
+  | { type: "REFRESH_BEATS"; beats: PlaygroundBeat[]; at: string }
   | { type: "SHOW_CONFIRM_UPDATE_SOURCES" }
   | { type: "HIDE_CONFIRM_UPDATE_SOURCES" }
   | { type: "SET_INSTRUCTIONS"; value: string };
@@ -70,15 +80,27 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
   switch (action.type) {
     case "SET_WORLD_CONTENT":
       return { ...state, worldContent: action.content };
-    case "SET_BEATS_CONTENT":
-      return { ...state, beatsContent: action.content };
+    case "SET_BEAT_TEXT":
+      return {
+        ...state,
+        beats: state.beats.map((b) =>
+          b.id === action.id ? { ...b, text: action.text } : b
+        ),
+      };
+    case "TOGGLE_BEAT_LOCK":
+      return {
+        ...state,
+        beats: state.beats.map((b) =>
+          b.id === action.id ? { ...b, locked: !b.locked } : b
+        ),
+      };
     case "SET_STORY_CONTENT":
       return { ...state, storyContent: action.content, storyGeneratedAt: action.generatedAt };
     case "POPULATE":
       return {
         ...state,
         worldContent: action.worldContent,
-        beatsContent: action.beatsContent,
+        beats: action.beats,
         worldPopulatedAt: action.worldAt,
         beatsPopulatedAt: action.beatsAt,
       };
@@ -121,7 +143,7 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
     case "REFRESH_WORLD":
       return { ...state, worldContent: action.content, worldPopulatedAt: action.at, confirmRefreshWorld: false };
     case "REFRESH_BEATS":
-      return { ...state, beatsContent: action.content, beatsPopulatedAt: action.at, confirmRefreshBeats: false };
+      return { ...state, beats: action.beats, beatsPopulatedAt: action.at, confirmRefreshBeats: false };
     case "SHOW_CONFIRM_UPDATE_SOURCES":
       return { ...state, confirmUpdateSources: true };
     case "HIDE_CONFIRM_UPDATE_SOURCES":
@@ -188,7 +210,10 @@ export default function PipelinePlayground({
 
   const [state, dispatch] = useReducer(reducer, {
     worldContent: data.blocks.world_state?.content ?? null,
-    beatsContent: data.blocks.beat_sequence?.content ?? null,
+    // Reducer initializer: prefer saved beats[], fall back to parsing legacy content string
+    beats:
+      data.blocks.beat_sequence?.beats ??
+      parseBeatsFromTiptap(data.blocks.beat_sequence?.content ?? null),
     storyContent: data.blocks.story_logic?.content ?? null,
     worldPopulatedAt: data.blocks.world_state?.populatedAt ?? null,
     beatsPopulatedAt: data.blocks.beat_sequence?.populatedAt ?? null,
@@ -222,8 +247,8 @@ export default function PipelinePlayground({
         world_state: s.worldContent
           ? { content: s.worldContent, populatedAt: s.worldPopulatedAt ?? now }
           : null,
-        beat_sequence: s.beatsContent
-          ? { content: s.beatsContent, populatedAt: s.beatsPopulatedAt ?? now }
+        beat_sequence: s.beats.length > 0
+          ? { beats: s.beats, populatedAt: s.beatsPopulatedAt ?? now }
           : null,
         story_logic: s.storyContent
           ? { content: s.storyContent, populatedAt: now, generatedAt: s.storyGeneratedAt ?? now }
@@ -245,14 +270,10 @@ export default function PipelinePlayground({
     onStatusChange,
   });
 
-  // Stable ref so the populate effect can call scheduleFlush without re-running
   const scheduleFlushRef = useRef(scheduleFlush);
   scheduleFlushRef.current = scheduleFlush;
 
   // Auto-populate from canonical tabs on first mount when blocks are null.
-  // Fetch fresh from the API rather than relying on the stale tabs prop —
-  // the user may have edited World State or Beats without navigating back through
-  // those tabs, so the prop content can lag behind the DB.
   useEffect(() => {
     if (data.blocks.world_state !== null && data.blocks.beat_sequence !== null) return;
     const wsTab = tabs.find((t) => t.type === "world_state");
@@ -278,21 +299,35 @@ export default function PipelinePlayground({
       const beatsJson = tabContentToTiptapJson(
         bsData?.content != null ? { content: bsData.content as string } : bsTab
       );
-      dispatch({ type: "POPULATE", worldContent: worldJson, beatsContent: beatsJson, worldAt: now, beatsAt: now });
+      dispatch({
+        type: "POPULATE",
+        worldContent: worldJson,
+        beats: parseBeatsFromTiptap(beatsJson),
+        worldAt: now,
+        beatsAt: now,
+      });
       scheduleFlushRef.current();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handlers for block content changes
+  // ─── Handlers ──────────────────────────────────────────────────────────────
+
   const handleWorldChange = useCallback(
     (json: string) => { dispatch({ type: "SET_WORLD_CONTENT", content: json }); scheduleFlush(); },
     [scheduleFlush]
   );
-  const handleBeatsChange = useCallback(
-    (json: string) => { dispatch({ type: "SET_BEATS_CONTENT", content: json }); scheduleFlush(); },
+
+  const handleBeatTextChange = useCallback(
+    (id: string, text: string) => { dispatch({ type: "SET_BEAT_TEXT", id, text }); scheduleFlush(); },
     [scheduleFlush]
   );
+
+  const handleToggleLock = useCallback(
+    (id: string) => { dispatch({ type: "TOGGLE_BEAT_LOCK", id }); scheduleFlush(); },
+    [scheduleFlush]
+  );
+
   const handleStoryChange = useCallback(
     (json: string) => { dispatch({ type: "SET_STORY_CONTENT", content: json, generatedAt: state.storyGeneratedAt ?? new Date().toISOString() }); scheduleFlush(); },
     [scheduleFlush, state.storyGeneratedAt]
@@ -326,14 +361,17 @@ export default function PipelinePlayground({
     dispatch({ type: "SHOW_CONFIRM_UPDATE_SOURCES" });
   }, [promoteToTab, state.storyContent, storyLogicTab, refreshParentTabs]);
 
+  // Update Sources — promotes all beats (locked + unlocked) back to canonical tab
   const handleUpdateSources = useCallback(async () => {
+    const beatsTagged = renderAllBeatsTagged(state.beats);
+    const beatsTiptap = beatsTagged ? taggedToTiptapJson(beatsTagged) : null;
     await Promise.all([
       promoteToTab(state.worldContent, worldStateTab),
-      promoteToTab(state.beatsContent, beatSeqTab),
+      promoteToTab(beatsTiptap, beatSeqTab),
     ]);
     dispatch({ type: "HIDE_CONFIRM_UPDATE_SOURCES" });
     await refreshParentTabs();
-  }, [promoteToTab, state.worldContent, state.beatsContent, worldStateTab, beatSeqTab, refreshParentTabs]);
+  }, [promoteToTab, state.worldContent, state.beats, worldStateTab, beatSeqTab, refreshParentTabs]);
 
   // ─── Refresh ───────────────────────────────────────────────────────────────
 
@@ -343,7 +381,13 @@ export default function PipelinePlayground({
     const now = new Date().toISOString();
 
     const worldEdited = state.worldContent && canonicalWorldJson && state.worldContent !== canonicalWorldJson;
-    const beatsEdited = state.beatsContent && canonicalBeatsJson && state.beatsContent !== canonicalBeatsJson;
+
+    // Compare beat texts only (lock state is playground-only and should survive refresh)
+    const canonicalBeats = parseBeatsFromTiptap(canonicalBeatsJson);
+    const beatsEdited =
+      state.beats.length > 0 &&
+      canonicalBeatsJson &&
+      state.beats.map((b) => b.text).join("\n") !== canonicalBeats.map((b) => b.text).join("\n");
 
     if (worldEdited) {
       dispatch({ type: "SHOW_CONFIRM_REFRESH", block: "world" });
@@ -355,19 +399,21 @@ export default function PipelinePlayground({
     if (beatsEdited) {
       dispatch({ type: "SHOW_CONFIRM_REFRESH", block: "beats" });
     } else if (canonicalBeatsJson) {
-      dispatch({ type: "REFRESH_BEATS", content: canonicalBeatsJson, at: now });
+      const merged = preserveLockState(canonicalBeats, state.beats);
+      dispatch({ type: "REFRESH_BEATS", beats: merged, at: now });
       scheduleFlush();
     }
-  }, [worldStateTab, beatSeqTab, state.worldContent, state.beatsContent, scheduleFlush]);
+  }, [worldStateTab, beatSeqTab, state.worldContent, state.beats, scheduleFlush]);
 
   // ─── Connect Story ─────────────────────────────────────────────────────────
 
   const runConnectStory = useCallback(async () => {
-    if (!state.worldContent || !state.beatsContent) return;
+    const locked = state.beats.filter((b) => b.locked);
+    if (!state.worldContent || locked.length === 0) return;
     dispatch({ type: "START_STREAMING" });
 
     const worldTagged = tiptapJsonToTagged(state.worldContent);
-    const beatsTagged = tiptapJsonToTagged(state.beatsContent);
+    const beatsTagged = renderLockedBeatsTagged(locked);
     const plotsTagged = plotsTab?.content ? tiptapJsonToTagged(plotsTab.content) : "";
     const instr = state.instructions.trim();
     const instrBlock = instr ? `INSTRUCTIONS:\n${instr}\n\n` : "";
@@ -413,7 +459,7 @@ export default function PipelinePlayground({
     } catch {
       dispatch({ type: "ABORT_STREAMING" });
     }
-  }, [state.worldContent, state.beatsContent, state.instructions, plotsTab, modelId, thinking, scheduleFlush]);
+  }, [state.worldContent, state.beats, state.instructions, plotsTab, modelId, thinking, scheduleFlush]);
 
   const handleConnectStoryClick = useCallback(() => {
     if (state.storyContent) {
@@ -423,9 +469,13 @@ export default function PipelinePlayground({
     }
   }, [state.storyContent, runConnectStory]);
 
+  // ─── Render gates ──────────────────────────────────────────────────────────
+
   const worldEmpty = !state.worldContent;
-  const beatsEmpty = !state.beatsContent;
+  const beatsEmpty = state.beats.length === 0;
   const bothEmpty = worldEmpty && beatsEmpty;
+  const lockedCount = state.beats.filter((b) => b.locked).length;
+  const zeroLocked = !beatsEmpty && lockedCount === 0;
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -467,7 +517,7 @@ export default function PipelinePlayground({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* World State block — view/edit only, no promote */}
+            {/* World State block */}
             <div>
               {state.confirmRefreshWorld && (
                 <div
@@ -506,7 +556,7 @@ export default function PipelinePlayground({
               />
             </div>
 
-            {/* Beats block — view/edit only, no promote */}
+            {/* Beats block — lockable row list */}
             <div>
               {state.confirmRefreshBeats && (
                 <div
@@ -521,8 +571,14 @@ export default function PipelinePlayground({
                     autoFocus
                     onClick={() => {
                       const json = tabContentToTiptapJson(beatSeqTab);
-                      if (json) { dispatch({ type: "REFRESH_BEATS", content: json, at: new Date().toISOString() }); scheduleFlush(); }
-                      else dispatch({ type: "HIDE_CONFIRM_REFRESH", block: "beats" });
+                      if (json) {
+                        const refreshed = parseBeatsFromTiptap(json);
+                        const merged = preserveLockState(refreshed, state.beats);
+                        dispatch({ type: "REFRESH_BEATS", beats: merged, at: new Date().toISOString() });
+                        scheduleFlush();
+                      } else {
+                        dispatch({ type: "HIDE_CONFIRM_REFRESH", block: "beats" });
+                      }
                     }}
                     onKeyDown={(e) => { if (e.key === "Escape") dispatch({ type: "HIDE_CONFIRM_REFRESH", block: "beats" }); }}
                     className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500 transition-colors duration-200"
@@ -537,15 +593,15 @@ export default function PipelinePlayground({
                   </button>
                 </div>
               )}
-              <PlaygroundBlock
-                label="Beats"
-                content={state.beatsContent}
-                placeholder="Beats will auto-populate from the Beats tab when you open Playground."
-                onContentChange={handleBeatsChange}
+              <PlaygroundBeatsBlock
+                beats={state.beats}
+                onTextChange={handleBeatTextChange}
+                onToggleLock={handleToggleLock}
+                isStreaming={state.isStreaming}
               />
             </div>
 
-            {/* Instructions — ephemeral, steers Connect Story */}
+            {/* Instructions */}
             <div>
               <label
                 htmlFor="playground-instructions"
@@ -569,6 +625,11 @@ export default function PipelinePlayground({
 
             {/* Connect Story button */}
             <div className="my-4">
+              {zeroLocked && (
+                <p className="mb-2 text-xs text-amber-600 dark:text-amber-400 text-center">
+                  Lock at least one beat to generate
+                </p>
+              )}
               {state.confirmConnectStory && (
                 <div
                   role="alertdialog"
@@ -595,7 +656,7 @@ export default function PipelinePlayground({
                 </div>
               )}
               <button
-                disabled={worldEmpty || beatsEmpty || state.isStreaming}
+                disabled={worldEmpty || lockedCount === 0 || state.isStreaming}
                 onClick={handleConnectStoryClick}
                 className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white
                   hover:bg-indigo-700 transition-colors duration-200 min-h-[44px]
@@ -616,7 +677,7 @@ export default function PipelinePlayground({
               </button>
             </div>
 
-            {/* Story Logic block — Finalize saves to canonical tab and offers to update sources */}
+            {/* Story Logic block */}
             {(state.storyContent || state.isStreaming) && (
               <div>
                 {state.confirmUpdateSources && (
