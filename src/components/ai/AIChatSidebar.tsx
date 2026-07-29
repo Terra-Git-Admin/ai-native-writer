@@ -471,7 +471,7 @@ export default function AIChatSidebar({
     <div ref={containerRef} className="flex h-full flex-col">
 
       {/* Header */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2.5">
+      <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
         <div>
           <h3 className="font-semibold text-indigo-700 leading-tight">AI Assistant</h3>
           {activeStep && (
@@ -490,7 +490,7 @@ export default function AIChatSidebar({
             }}
             disabled={history.length === 0 || isStreaming}
             title="Clear chat history"
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" />
@@ -499,16 +499,16 @@ export default function AIChatSidebar({
               <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
             </svg>
           </button>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">
             &times;
           </button>
         </div>
       </div>
 
       {/* ─── Actions (pipeline steps) — compact 2×2 grid ─── */}
-      <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2">
+      <div className="flex-shrink-0 border-b border-border px-3 py-2">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Actions</span>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</span>
           {activeStep && (
             <button
               type="button"
@@ -535,13 +535,13 @@ export default function AIChatSidebar({
                   ${isActive
                     ? "bg-indigo-600 text-white"
                     : enabled
-                    ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
                   }`}
               >
                 <span className="block">{step.label}</span>
                 {!tabFilled && (
-                  <span className="block text-[9px] font-normal text-gray-400 leading-tight mt-0.5">
+                  <span className="block text-[9px] font-normal text-muted-foreground leading-tight mt-0.5">
                     Fill {step.requiredTabLabel}
                   </span>
                 )}
@@ -550,12 +550,12 @@ export default function AIChatSidebar({
           })}
         </div>
         {/* Pre-defined episode creator — separate from the pipeline steps */}
-        <div className="mt-1.5 border-t border-gray-100 pt-1.5">
+        <div className="mt-1.5 border-t border-border pt-1.5">
           <button
             type="button"
             onClick={handleStartJob}
             disabled={isStreaming || isAIBusy}
-            className="w-full rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+            className="w-full rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
           >
             {isAIBusy ? "Generating…" : "Create Pre-defined Episode"}
           </button>
@@ -567,7 +567,7 @@ export default function AIChatSidebar({
 
         {/* Empty state */}
         {history.length === 0 && messages.length === 0 && !isStreaming && (
-          <div className="py-8 text-center text-[13px] text-gray-400">
+          <div className="py-8 text-center text-[13px] text-muted-foreground">
             {"Click an action above to start, or type a prompt below."}
           </div>
         )}
@@ -594,7 +594,7 @@ export default function AIChatSidebar({
                 className={`max-w-[90%] rounded-lg px-3 py-2 text-sm ${
                   entry.role === "user"
                     ? "bg-indigo-600 text-white"
-                    : "bg-white border border-gray-200 text-gray-800"
+                    : "bg-card border border-border text-foreground"
                 }`}
               >
                 {entry.role === "assistant" ? (
@@ -618,10 +618,10 @@ export default function AIChatSidebar({
               </div>
             )}
             <div className="flex justify-start">
-              <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-white border border-indigo-200 text-gray-800 space-y-2">
+              <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-card border border-indigo-200 dark:border-indigo-800 text-foreground space-y-2">
                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
                   <span className="text-indigo-700">{aiJob.state.kind ? (JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind) : "AI"}</span>
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 normal-case capitalize">
+                  <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 text-indigo-700 dark:text-indigo-300 normal-case capitalize">
                     {aiJob.state.status}
                   </span>
                 </div>
@@ -629,7 +629,7 @@ export default function AIChatSidebar({
                   <div className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">{aiJob.state.error}</div>
                 )}
                 {aiJob.state.output && (
-                  <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-gray-800">
+                  <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-foreground">
                     {stripTagsForDisplay(aiJob.state.output)}
                   </pre>
                 )}
@@ -645,13 +645,13 @@ export default function AIChatSidebar({
                 )}
                 <div className="flex gap-2 pt-1">
                   {(aiJob.state.status === "starting" || aiJob.state.status === "running") && (
-                    <button onClick={aiJob.cancel} className="flex-1 rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50">
+                    <button onClick={aiJob.cancel} className="flex-1 rounded-md border border-red-200 dark:border-red-800 bg-card px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">
                       Cancel
                     </button>
                   )}
                   {aiJob.state.status === "completed" && aiJob.state.output && (
                     <>
-                      <button onClick={handleDiscardJob} className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                      <button onClick={handleDiscardJob} className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:bg-muted">
                         Discard
                       </button>
                       <button onClick={handleApplyJob} className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700">
@@ -660,7 +660,7 @@ export default function AIChatSidebar({
                     </>
                   )}
                   {(aiJob.state.status === "failed" || aiJob.state.status === "cancelled") && (
-                    <button onClick={aiJob.reset} className="flex-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    <button onClick={aiJob.reset} className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:bg-muted">
                       Dismiss
                     </button>
                   )}
@@ -673,7 +673,7 @@ export default function AIChatSidebar({
         {/* Live streaming output */}
         {isStreaming && streamingText && (
           <div className="flex justify-start">
-            <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-white border border-gray-200 text-gray-800">
+            <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-card border border-border text-foreground">
               <AssistantMessage content={streamingText} mode={mode} isStreaming={true} />
             </div>
           </div>
@@ -701,16 +701,16 @@ export default function AIChatSidebar({
       {/* ─── Drag handle ─── */}
       <div
         onMouseDown={handleResizeStart}
-        className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-gray-100 hover:bg-indigo-100 transition-colors select-none"
+        className="group flex h-2.5 flex-shrink-0 cursor-ns-resize items-center justify-center bg-muted hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors select-none"
         title="Drag to resize"
       >
-        <div className="h-0.5 w-8 rounded-full bg-gray-300 group-hover:bg-indigo-400 transition-colors" />
+        <div className="h-0.5 w-8 rounded-full bg-border group-hover:bg-indigo-400 transition-colors" />
       </div>
 
       {/* ─── Input panel ─── */}
       <div
         style={{ height: inputPanelHeight }}
-        className="flex flex-shrink-0 flex-col border-t border-gray-200 px-3 pt-2 pb-2 gap-2 overflow-hidden"
+        className="flex flex-shrink-0 flex-col border-t border-border px-3 pt-2 pb-2 gap-2 overflow-hidden"
       >
         <textarea
           ref={inputRef}
@@ -720,8 +720,8 @@ export default function AIChatSidebar({
           disabled={isStreaming}
           className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
             isStreaming
-              ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
-              : "border-gray-300 bg-white"
+              ? "border-border bg-muted text-muted-foreground cursor-not-allowed"
+              : "border-border bg-card"
           }`}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -743,16 +743,16 @@ export default function AIChatSidebar({
           {isStreaming ? "Generating..." : "Send"}
         </button>
         <div className="flex flex-shrink-0 justify-center">
-          <div className="flex rounded-full border border-gray-200 overflow-hidden text-xs">
+          <div className="flex rounded-full border border-border overflow-hidden text-xs">
             <button
               onClick={() => { setSendOnEnter(false); localStorage.setItem("ai-send-on-enter", "false"); }}
-              className={`px-3 py-1 transition-colors ${!sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
+              className={`px-3 py-1 transition-colors ${!sendOnEnter ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-medium" : "bg-card text-muted-foreground hover:text-muted-foreground"}`}
             >
               ⌘+Enter
             </button>
             <button
               onClick={() => { setSendOnEnter(true); localStorage.setItem("ai-send-on-enter", "true"); }}
-              className={`px-3 py-1 transition-colors border-l border-gray-200 ${sendOnEnter ? "bg-green-100 text-green-700 font-medium" : "bg-white text-gray-400 hover:text-gray-500"}`}
+              className={`px-3 py-1 transition-colors border-l border-border ${sendOnEnter ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-medium" : "bg-card text-muted-foreground hover:text-muted-foreground"}`}
             >
               Enter
             </button>

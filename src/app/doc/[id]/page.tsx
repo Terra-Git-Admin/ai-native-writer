@@ -18,6 +18,7 @@ import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 
 export type ApplyToTabResult = {
@@ -512,7 +513,7 @@ export default function DocumentPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
@@ -524,11 +525,11 @@ export default function DocumentPage() {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2">
+      <header className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push("/")}
-            className="text-sm text-gray-500 hover:text-gray-900"
+            className="text-sm text-muted-foreground hover:text-foreground"
           >
             &larr; Back
           </button>
@@ -550,7 +551,7 @@ export default function DocumentPage() {
               <select
                 value={selectedModelId}
                 onChange={(e) => setSelectedModelId(e.target.value)}
-                className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs text-gray-700 focus:border-indigo-300 focus:outline-none"
+                className="rounded-lg border border-border bg-muted px-2 py-1.5 text-xs text-foreground focus:border-indigo-300 focus:outline-none"
               >
                 {aiModels
                   .filter((m) => !m.thinking)
@@ -560,18 +561,19 @@ export default function DocumentPage() {
                     </option>
                   ))}
               </select>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={thinkingEnabled}
                   onChange={(e) => setThinkingEnabled(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="h-3.5 w-3.5 rounded border-border text-indigo-600 focus:ring-indigo-500"
                 />
                 Thinking
               </label>
-              <div className="mx-1 h-5 w-px bg-gray-200" />
+              <div className="mx-1 h-5 w-px bg-border" />
             </>
           )}
+          <ThemeToggle />
 
           <button
             onClick={() => {
@@ -584,8 +586,8 @@ export default function DocumentPage() {
             }}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               commentSidebarOpen
-                ? "bg-yellow-100 text-yellow-700"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300"
+                : "text-muted-foreground hover:bg-muted"
             }`}
           >
             Comments
@@ -608,8 +610,8 @@ export default function DocumentPage() {
                 }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   versionHistoryOpen
-                    ? "bg-gray-200 text-gray-900"
-                    : "text-gray-600 hover:bg-gray-100"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 History
@@ -625,8 +627,8 @@ export default function DocumentPage() {
                 }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   aiSidebarOpen
-                    ? "bg-indigo-100 text-indigo-700"
-                    : "text-gray-600 hover:bg-gray-100"
+                    ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                    : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 AI Assistant
@@ -638,7 +640,7 @@ export default function DocumentPage() {
               onClick={() => setResearchAgentOpen((o) => !o)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 researchAgentOpen
-                  ? "bg-emerald-100 text-emerald-700"
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                   : "bg-emerald-600 text-white hover:bg-emerald-700"
               }`}
             >
@@ -666,7 +668,7 @@ export default function DocumentPage() {
                   onClick={() => setStoryboardOpen((o) => !o)}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                     storyboardOpen
-                      ? "bg-fuchsia-100 text-fuchsia-700"
+                      ? "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300"
                       : "bg-fuchsia-600 text-white hover:bg-fuchsia-700"
                   }`}
                 >
@@ -685,8 +687,8 @@ export default function DocumentPage() {
             }}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               promptsOpen
-                ? "bg-gray-200 text-gray-900"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted"
             }`}
           >
             Prompts
@@ -700,7 +702,7 @@ export default function DocumentPage() {
                   className="h-7 w-7 rounded-full"
                 />
               )}
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {session.user.name}
               </span>
             </div>
@@ -747,7 +749,7 @@ export default function DocumentPage() {
         )}
 
         {commentSidebarOpen && (
-          <div className="w-80 border-l border-gray-200 bg-gray-50">
+          <div className="w-80 border-l border-border bg-muted">
             <CommentSidebar
               documentId={doc.id}
               tabId={activeTabId}
@@ -779,7 +781,7 @@ export default function DocumentPage() {
         )}
         {aiSidebarOpen && activeTab && (
           <div
-            className="relative shrink-0 border-l border-gray-200 bg-gray-50"
+            className="relative shrink-0 border-l border-border bg-muted"
             style={{ width: aiSidebarWidth }}
           >
             <div
@@ -817,7 +819,7 @@ export default function DocumentPage() {
           </div>
         )}
         {versionHistoryOpen && (
-          <div className="w-80 border-l border-gray-200 bg-gray-50">
+          <div className="w-80 border-l border-border bg-muted">
             <VersionHistory
               documentId={doc.id}
               tabId={activeTabId}
@@ -831,12 +833,12 @@ export default function DocumentPage() {
           </div>
         )}
         {promptsOpen && (
-          <div className="w-96 border-l border-gray-200 bg-gray-50">
+          <div className="w-96 border-l border-border bg-muted">
             <PromptEditor onClose={() => setPromptsOpen(false)} />
           </div>
         )}
         {researchAgentOpen && (
-          <div className="w-96 border-l border-gray-200 bg-gray-50">
+          <div className="w-96 border-l border-border bg-muted">
             <ResearchAgentPanel
               documentId={doc.id}
               tabs={tabs}
@@ -856,7 +858,7 @@ export default function DocumentPage() {
           </div>
         )}
         {outsidersPanelRequest && (
-          <div className="w-96 border-l border-gray-200 bg-gray-50">
+          <div className="w-96 border-l border-border bg-muted">
             <OutsidersPerspectivePanel
               documentId={doc.id}
               episodeTabId={outsidersPanelRequest.episodeTabId}
@@ -867,7 +869,7 @@ export default function DocumentPage() {
           </div>
         )}
         {qualityPanelRequest && (
-          <div className="w-96 border-l border-gray-200 bg-gray-50">
+          <div className="w-96 border-l border-border bg-muted">
             <QualityAgentPanel
               documentId={doc.id}
               episodeTabId={qualityPanelRequest.episodeTabId}
@@ -878,7 +880,7 @@ export default function DocumentPage() {
           </div>
         )}
         {storyboardOpen && (
-          <div className="w-[520px] border-l border-gray-200 bg-white">
+          <div className="w-[520px] border-l border-border bg-card">
             <StoryboardPanel
               documentId={doc.id}
               onClose={() => setStoryboardOpen(false)}

@@ -35,39 +35,39 @@ export interface TabRow {
 }
 
 const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
-  custom: { label: "Page", className: "bg-teal-50 text-teal-600" },
+  custom: { label: "Page", className: "bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-300" },
   series_overview: {
     label: "Original Research",
-    className: "bg-purple-100 text-purple-700",
+    className: "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
   },
-  characters: { label: "Characters", className: "bg-blue-100 text-blue-700" },
+  characters: { label: "Characters", className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
   series_skeleton: {
     label: "Series Skeleton",
-    className: "bg-rose-100 text-rose-700",
+    className: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300",
   },
   microdrama_plots: {
     label: "Microdrama Plots",
-    className: "bg-amber-100 text-amber-700",
+    className: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
   },
   predefined_episodes: {
     label: "Predefined Episodes",
-    className: "bg-green-100 text-green-700",
+    className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
   },
-  workbook: { label: "Workbook", className: "bg-teal-100 text-teal-700" },
-  world_state: { label: "World State", className: "bg-violet-100 text-violet-700" },
-  beat_sequence: { label: "Beats", className: "bg-orange-100 text-orange-700" },
-  story_logic: { label: "Story Logic", className: "bg-cyan-100 text-cyan-700" },
-  pipeline_playground: { label: "Playground", className: "bg-indigo-100 text-indigo-700" },
+  workbook: { label: "Workbook", className: "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300" },
+  world_state: { label: "World State", className: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" },
+  beat_sequence: { label: "Beats", className: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300" },
+  story_logic: { label: "Story Logic", className: "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300" },
+  pipeline_playground: { label: "Playground", className: "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300" },
   // Legacy aliases — render identically to their post-heal canonical.
   episode_plot: {
     label: "Microdrama Plots",
-    className: "bg-amber-100 text-amber-700",
+    className: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
   },
   reference_episode: {
     label: "Predefined Episodes",
-    className: "bg-green-100 text-green-700",
+    className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
   },
-  research: { label: "Research", className: "bg-gray-100 text-gray-600" },
+  research: { label: "Research", className: "bg-muted text-muted-foreground" },
 };
 
 const isArchive = (title: string) => /\(archive\)/i.test(title);
@@ -375,22 +375,22 @@ export default function TabRail({
     3: "pl-9",
   };
   const LEVEL_TEXT: Record<1 | 2 | 3, string> = {
-    1: "text-[12px] font-medium text-gray-700",
-    2: "text-[12px] text-gray-600",
-    3: "text-[11px] text-gray-500",
+    1: "text-[12px] font-medium text-foreground",
+    2: "text-[12px] text-muted-foreground",
+    3: "text-[11px] text-muted-foreground",
   };
 
   const renderSubItems = (tab: TabRow) => {
     const headings = headingsForTab(tab);
     if (headings.length === 0) return null;
     return (
-      <ul className="ml-5 border-l border-gray-200">
+      <ul className="ml-5 border-l border-border">
         {headings.map((h) => (
           <li key={`${tab.id}::${h.order}::${h.level}`}>
             <button
               type="button"
               onClick={() => onSwitch(tab.id, h.text)}
-              className={`block w-full text-left py-1 pr-2 hover:bg-gray-100 hover:text-gray-900 truncate ${LEVEL_INDENT[h.level]} ${LEVEL_TEXT[h.level]}`}
+              className={`block w-full text-left py-1 pr-2 hover:bg-muted hover:text-foreground truncate ${LEVEL_INDENT[h.level]} ${LEVEL_TEXT[h.level]}`}
               title={h.text}
             >
               {h.text}
@@ -405,7 +405,7 @@ export default function TabRail({
   const renderPageTabs = () => {
     if (pageTabs.length === 0) return null;
     return (
-      <ul className="ml-5 border-l border-gray-200">
+      <ul className="ml-5 border-l border-border">
         {pageTabs.map((pageTab) => {
           const pageActive = pageTab.id === activeTabId;
           if (renamingId === pageTab.id) {
@@ -433,7 +433,7 @@ export default function TabRail({
             <li
               key={pageTab.id}
               className={`group flex items-center gap-1 pl-2 pr-1 transition-colors ${
-                pageActive ? "bg-indigo-100" : "hover:bg-gray-100"
+                pageActive ? "bg-indigo-100 dark:bg-indigo-900/40" : "hover:bg-muted"
               }`}
             >
               <button
@@ -445,7 +445,7 @@ export default function TabRail({
                   setRenamingId(pageTab.id);
                 }}
                 className={`flex-1 min-w-0 truncate py-1.5 text-left text-[12px] ${
-                  pageActive ? "text-indigo-800 font-medium" : "text-gray-600"
+                  pageActive ? "text-indigo-800 dark:text-indigo-200 font-medium" : "text-muted-foreground"
                 }`}
                 title={`${pageTab.title} (double-click to rename)`}
               >
@@ -458,7 +458,7 @@ export default function TabRail({
                     e.stopPropagation();
                     handleDelete(pageTab.id, pageTab.title);
                   }}
-                  className="hidden group-hover:block p-0.5 text-gray-400 hover:text-red-600 rounded"
+                  className="hidden group-hover:block p-0.5 text-muted-foreground hover:text-red-600 rounded"
                   title="Delete page"
                   aria-label="Delete page"
                 >
@@ -478,9 +478,9 @@ export default function TabRail({
   };
 
   return (
-    <div className="w-60 flex-shrink-0 border-r border-gray-200 bg-gray-50 overflow-y-auto flex flex-col">
-      <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-between">
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+    <div className="w-60 flex-shrink-0 border-r border-border bg-muted overflow-y-auto flex flex-col">
+      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           Tabs
         </span>
       </div>
@@ -554,10 +554,10 @@ export default function TabRail({
                   setDropTargetId(null);
                 }}
                 className={`group flex items-center transition-colors ${
-                  active ? "bg-indigo-100" : "hover:bg-gray-100"
+                  active ? "bg-indigo-100 dark:bg-indigo-900/40" : "hover:bg-muted"
                 } ${isDropTarget ? "border-t-2 border-indigo-500" : ""} ${
                   dragId === tab.id ? "opacity-50" : ""
-                } ${archive ? "border-b border-dashed border-gray-300" : ""}`}
+                } ${archive ? "border-b border-dashed border-border" : ""}`}
               >
                 {hasNested && subItemCount > 0 ? (
                   <button
@@ -566,7 +566,7 @@ export default function TabRail({
                       e.stopPropagation();
                       toggleCollapse(tab.id);
                     }}
-                    className="p-1 text-gray-400 hover:text-gray-700"
+                    className="p-1 text-muted-foreground hover:text-foreground"
                     aria-label={collapsed ? "Expand" : "Collapse"}
                     title={collapsed ? "Expand" : "Collapse"}
                   >
@@ -600,8 +600,8 @@ export default function TabRail({
                     setRenamingId(tab.id);
                   }}
                   className={`flex-1 min-w-0 text-left truncate py-2 pr-1 text-sm ${
-                    active ? "text-indigo-800 font-medium" : "text-gray-700"
-                  } ${archive ? "italic text-gray-500" : ""}`}
+                    active ? "text-indigo-800 dark:text-indigo-200 font-medium" : "text-foreground"
+                  } ${archive ? "italic text-muted-foreground" : ""}`}
                   title={
                     protectedTab
                       ? tab.title
@@ -633,7 +633,7 @@ export default function TabRail({
                       e.stopPropagation();
                       handleDelete(tab.id, tab.title);
                     }}
-                    className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                    className="p-1.5 text-muted-foreground hover:text-red-600 rounded"
                     title="Delete"
                     aria-label="Delete tab"
                   >
@@ -667,7 +667,7 @@ export default function TabRail({
       </nav>
 
       {isOwner && (
-        <div className="border-t border-gray-200 p-2">
+        <div className="border-t border-border p-2">
           {showCreate ? (
             <div className="space-y-2">
               <input
@@ -676,7 +676,7 @@ export default function TabRail({
                 value={createTitle}
                 onChange={(e) => setCreateTitle(e.target.value)}
                 placeholder="New tab name"
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
+                className="w-full rounded border border-border px-2 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleCreate();
                   if (e.key === "Escape") {
@@ -697,7 +697,7 @@ export default function TabRail({
                     setCreateTitle("");
                     setCreateError(null);
                   }}
-                  className="flex-1 rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-300"
+                  className="flex-1 rounded bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted"
                 >
                   Cancel
                 </button>
@@ -716,7 +716,7 @@ export default function TabRail({
               type="button"
               onClick={isWorkbookContext ? handleCreatePage : () => setShowCreate(true)}
               disabled={creating}
-              className="w-full rounded border border-dashed border-gray-300 px-2 py-2 text-sm text-gray-600 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 transition-colors disabled:opacity-50"
+              className="w-full rounded border border-dashed border-border px-2 py-2 text-sm text-muted-foreground hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors disabled:opacity-50"
             >
               {creating && isWorkbookContext ? "Creating..." : isWorkbookContext ? "+ New page" : "+ New tab"}
             </button>

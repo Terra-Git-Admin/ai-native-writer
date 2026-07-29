@@ -433,10 +433,10 @@ export default function PipelinePlayground({
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 py-4">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2 mb-4 border border-gray-200 rounded-lg bg-white">
-          <span className="text-sm font-semibold text-gray-700">Playground</span>
+        <div className="flex items-center justify-between px-4 py-2 mb-4 border border-border rounded-lg bg-card">
+          <span className="text-sm font-semibold text-foreground">Playground</span>
           <div className="flex items-center gap-3">
-            <span aria-live="polite" className="text-xs text-gray-500">
+            <span aria-live="polite" className="text-xs text-muted-foreground">
               {state.saveStatus === "saving"
                 ? "Saving…"
                 : state.saveStatus === "unsaved"
@@ -448,7 +448,7 @@ export default function PipelinePlayground({
               onClick={handleRefreshClick}
               disabled={state.isStreaming}
               className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded
-                text-gray-400 hover:bg-gray-100 hover:text-gray-600 cursor-pointer
+                text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
                 disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-200"
             >
@@ -460,8 +460,8 @@ export default function PipelinePlayground({
         </div>
 
         {bothEmpty ? (
-          <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center">
-            <p className="text-sm text-gray-600">
+          <div className="rounded-lg border border-dashed border-border bg-muted px-4 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
               Run <b>Build World</b> and <b>Suggest Beats</b> from the sidebar first, then return here to curate and connect the story.
             </p>
           </div>
@@ -473,9 +473,9 @@ export default function PipelinePlayground({
                 <div
                   role="alertdialog"
                   aria-label="Confirm refresh World State"
-                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 px-4 py-3"
                 >
-                  <p className="flex-1 text-sm text-amber-800">
+                  <p className="flex-1 text-sm text-amber-800 dark:text-amber-200">
                     World State has unsaved edits. Refresh will overwrite them. Continue?
                   </p>
                   <button
@@ -492,7 +492,7 @@ export default function PipelinePlayground({
                   </button>
                   <button
                     onClick={() => dispatch({ type: "HIDE_CONFIRM_REFRESH", block: "world" })}
-                    className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                    className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -512,9 +512,9 @@ export default function PipelinePlayground({
                 <div
                   role="alertdialog"
                   aria-label="Confirm refresh Beats"
-                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 px-4 py-3"
                 >
-                  <p className="flex-1 text-sm text-amber-800">
+                  <p className="flex-1 text-sm text-amber-800 dark:text-amber-200">
                     Beats has unsaved edits. Refresh will overwrite them. Continue?
                   </p>
                   <button
@@ -531,7 +531,7 @@ export default function PipelinePlayground({
                   </button>
                   <button
                     onClick={() => dispatch({ type: "HIDE_CONFIRM_REFRESH", block: "beats" })}
-                    className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                    className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -549,9 +549,9 @@ export default function PipelinePlayground({
             <div>
               <label
                 htmlFor="playground-instructions"
-                className="mb-1 block text-sm font-semibold text-gray-700"
+                className="mb-1 block text-sm font-semibold text-foreground"
               >
-                Instructions <span className="font-normal text-gray-400">(optional)</span>
+                Instructions <span className="font-normal text-muted-foreground">(optional)</span>
               </label>
               <textarea
                 id="playground-instructions"
@@ -560,8 +560,8 @@ export default function PipelinePlayground({
                 disabled={state.isStreaming}
                 rows={3}
                 placeholder="Specific guidance for Connect Story — e.g. keep the forgery unresolved, focus on Ha-eun's arc, aim for 3 episodes. Clears when you leave the tab."
-                className="w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm
-                  text-gray-800 placeholder:text-gray-400
+                className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm
+                  text-foreground placeholder:text-muted-foreground
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
                   disabled:opacity-40 disabled:cursor-not-allowed"
               />
@@ -573,9 +573,9 @@ export default function PipelinePlayground({
                 <div
                   role="alertdialog"
                   aria-label="Confirm re-run Connect Story"
-                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                  className="mb-2 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 px-4 py-3"
                 >
-                  <p className="flex-1 text-sm text-amber-800">
+                  <p className="flex-1 text-sm text-amber-800 dark:text-amber-200">
                     Running Connect Story will replace the existing Story Logic. Continue?
                   </p>
                   <button
@@ -588,7 +588,7 @@ export default function PipelinePlayground({
                   </button>
                   <button
                     onClick={() => dispatch({ type: "HIDE_CONFIRM_CONNECT" })}
-                    className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                    className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -623,9 +623,9 @@ export default function PipelinePlayground({
                   <div
                     role="alertdialog"
                     aria-label="Update World State and Beats tabs"
-                    className="mb-2 flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3"
+                    className="mb-2 flex items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/40 px-4 py-3"
                   >
-                    <p className="flex-1 text-sm text-indigo-800">
+                    <p className="flex-1 text-sm text-indigo-800 dark:text-indigo-200">
                       Story Logic saved. Update the <b>World State</b> and <b>Beats</b> tabs with the curated content used here?
                     </p>
                     <button
@@ -637,7 +637,7 @@ export default function PipelinePlayground({
                     </button>
                     <button
                       onClick={() => dispatch({ type: "HIDE_CONFIRM_UPDATE_SOURCES" })}
-                      className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer"
+                      className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       No thanks
                     </button>

@@ -76,17 +76,17 @@ export default function OutsidersPerspectiveModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-1 text-base font-semibold text-gray-900">
+      <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-xl">
+        <h2 className="mb-1 text-base font-semibold text-foreground">
           Outsiders Perspective
         </h2>
-        <p className="mb-4 text-sm text-gray-500">
+        <p className="mb-4 text-sm text-muted-foreground">
           Select the episode to analyze. The previous 3 episodes and this episode&apos;s
           plot outline will be loaded as context.
         </p>
 
         {episodeTabs.length === 0 ? (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-muted-foreground">
             No predefined episode tabs found in this document.
           </p>
         ) : (
@@ -95,7 +95,7 @@ export default function OutsidersPerspectiveModal({
               <select
                 value={selectedTabId}
                 onChange={(e) => setSelectedTabId(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
               >
                 {episodeTabs.map((t) => (
                   <option key={t.id} value={t.id}>
@@ -109,7 +109,7 @@ export default function OutsidersPerspectiveModal({
               <select
                 value={selectedEpisodeIndex}
                 onChange={(e) => setSelectedEpisodeIndex(Number(e.target.value))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
               >
                 {episodes.map((ep) => (
                   <option key={ep.index} value={ep.index}>
@@ -118,7 +118,7 @@ export default function OutsidersPerspectiveModal({
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 No episode headings found in this tab.
               </p>
             )}
@@ -128,7 +128,7 @@ export default function OutsidersPerspectiveModal({
         <div className="mt-5 flex justify-end gap-2">
           <button
             onClick={onCancel}
-            className="rounded-lg px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
             Cancel
           </button>

@@ -113,18 +113,18 @@ export default function OutsidersPerspectivePanel({
   ];
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-muted">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-amber-600">
             Outsiders Perspective
           </p>
-          <p className="truncate text-sm font-medium text-gray-800">{episodeLabel}</p>
+          <p className="truncate text-sm font-medium text-foreground">{episodeLabel}</p>
         </div>
         <button
           onClick={onClose}
-          className="ml-2 shrink-0 rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          className="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           title="Close"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -141,14 +141,14 @@ export default function OutsidersPerspectivePanel({
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
         {messages.length === 0 && !isStreaming && (
           <div className="space-y-2">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Loaded: previous 3 episodes + plot outline for this episode. Choose a focus.
             </p>
             {quickActions.map((action) => (
               <button
                 key={action}
                 onClick={() => send(action)}
-                className="block w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-sm text-amber-800 transition-colors hover:bg-amber-100"
+                className="block w-full rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-left text-sm text-amber-800 dark:text-amber-200 transition-colors hover:bg-amber-100 dark:hover:bg-amber-900/40"
               >
                 {action}
               </button>
@@ -169,14 +169,14 @@ export default function OutsidersPerspectivePanel({
                   className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                     msg.role === "user"
                       ? "bg-amber-600 text-white"
-                      : "whitespace-pre-wrap border border-gray-200 bg-white text-gray-800"
+                      : "whitespace-pre-wrap border border-border bg-card text-foreground"
                   }`}
                 >
                   {msg.content}
                 </div>
               </div>
               {cutOff && (
-                <p className="mt-1 pl-1 text-xs text-gray-400">
+                <p className="mt-1 pl-1 text-xs text-muted-foreground">
                   Response may be cut off — type &quot;continue&quot; to get the rest
                 </p>
               )}
@@ -186,7 +186,7 @@ export default function OutsidersPerspectivePanel({
 
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">
+            <div className="max-w-[85%] rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
               {streamingContent ? (
                 <>
                   <span className="whitespace-pre-wrap">{streamingContent}</span>
@@ -204,14 +204,14 @@ export default function OutsidersPerspectivePanel({
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-200 px-3 py-3">
+      <div className="border-t border-border px-3 py-3">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -220,7 +220,7 @@ export default function OutsidersPerspectivePanel({
             onKeyDown={handleKeyDown}
             placeholder="Ask about a character, scene, or plot decision…"
             rows={2}
-            className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
+            className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 disabled:opacity-50"
             disabled={isStreaming}
           />
           <button
@@ -231,7 +231,7 @@ export default function OutsidersPerspectivePanel({
             Send
           </button>
         </div>
-        <p className="mt-1.5 text-xs text-gray-400">Enter to send · Shift+Enter for newline</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">Enter to send · Shift+Enter for newline</p>
       </div>
     </div>
   );

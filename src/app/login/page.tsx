@@ -8,13 +8,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-6 text-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">AI Writer</h1>
-          <p className="mt-2 text-gray-500">
+          <p className="mt-2 text-muted-foreground">
             AI-native scriptwriting tool
           </p>
         </div>
         <button
           onClick={() => signIn("google", { callbackUrl: "/" })}
-          className="inline-flex w-full items-center justify-center gap-3 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+          className="inline-flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path

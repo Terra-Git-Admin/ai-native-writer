@@ -113,9 +113,9 @@ function PlaygroundBlock({
   }, [onAction]);
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white">
-      <header className="flex items-center justify-between border-b border-gray-100 px-4 py-2.5">
-        <h3 className="text-sm font-semibold text-gray-800">{label}</h3>
+    <section className="rounded-lg border border-border bg-card">
+      <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         {onAction && (
           <button
             onClick={handleAction}
@@ -125,8 +125,8 @@ function PlaygroundBlock({
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
               disabled:opacity-30 disabled:cursor-not-allowed
               ${actionDone
-                ? "bg-green-50 text-green-700"
-                : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                ? "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300"
+                : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100"
               }`}
           >
             {actionDone ? `${actionLabel} ✓` : actionLabel}
@@ -137,9 +137,9 @@ function PlaygroundBlock({
       {isStreaming ? (
         <div
           aria-busy="true"
-          className="px-4 py-3 min-h-[120px] rounded-b-lg opacity-90 text-sm text-gray-700 whitespace-pre-wrap"
+          className="px-4 py-3 min-h-[120px] rounded-b-lg opacity-90 text-sm text-foreground whitespace-pre-wrap"
         >
-          {streamingText || <span className="text-gray-400 italic">Connecting…</span>}
+          {streamingText || <span className="text-muted-foreground italic">Connecting…</span>}
         </div>
       ) : (
         <div

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PromptEditor from "@/components/settings/PromptEditor";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface Document {
   id: string;
@@ -133,20 +134,21 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b border-gray-200 bg-white">
+      <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <h1 className="text-xl font-bold">AI Writer</h1>
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <button
               onClick={() => setPromptsOpen(!promptsOpen)}
-              className={`text-sm ${promptsOpen ? "text-gray-900 font-medium" : "text-gray-500 hover:text-gray-900"}`}
+              className={`text-sm ${promptsOpen ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
             >
               Prompts
             </button>
             {session?.user?.role === "admin" && (
               <Link
                 href="/admin"
-                className="text-sm text-gray-500 hover:text-gray-900"
+                className="text-sm text-muted-foreground hover:text-foreground"
               >
                 Admin
               </Link>
@@ -159,13 +161,13 @@ export default function Home() {
                   className="h-7 w-7 rounded-full"
                 />
               )}
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-foreground">
                 {session?.user?.name}
               </span>
             </div>
             <button
               onClick={() => signOut()}
-              className="text-sm text-gray-500 hover:text-gray-900"
+              className="text-sm text-muted-foreground hover:text-foreground"
             >
               Sign out
             </button>
@@ -193,7 +195,7 @@ export default function Home() {
             className="absolute inset-0 bg-black/20"
             onClick={() => setPromptsOpen(false)}
           />
-          <div className="relative w-[480px] bg-gray-50 shadow-xl h-full">
+          <div className="relative w-[480px] bg-muted shadow-xl h-full">
             <PromptEditor onClose={() => setPromptsOpen(false)} />
           </div>
         </div>
@@ -202,7 +204,7 @@ export default function Home() {
       {/* Content */}
       <main className="mx-auto max-w-5xl px-6 py-8">
         {loading ? (
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-muted-foreground">Loading...</p>
         ) : (
           <>
             {/* Your Documents */}
@@ -212,21 +214,21 @@ export default function Home() {
                 <button
                   onClick={createDocument}
                   disabled={creating}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {creating ? "Creating..." : "+ New Document"}
                 </button>
               </div>
 
               {createError && (
-                <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                <div className="mb-4 flex items-start gap-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
                   <span className="flex-1">
                     <strong>New document failed.</strong> {createError}
                   </span>
                   <button
                     type="button"
                     onClick={() => setCreateError(null)}
-                    className="rounded bg-white border border-red-200 px-2 py-1 font-medium hover:bg-red-100 transition-colors"
+                    className="rounded bg-card border border-red-200 dark:border-red-800 px-2 py-1 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                   >
                     Dismiss
                   </button>
@@ -234,8 +236,8 @@ export default function Home() {
               )}
 
               {myDocs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-300 py-10 text-center">
-                  <p className="text-gray-500">No documents yet</p>
+                <div className="rounded-lg border border-dashed border-border py-10 text-center">
+                  <p className="text-muted-foreground">No documents yet</p>
                   <button
                     onClick={createDocument}
                     disabled={creating}
@@ -264,8 +266,8 @@ export default function Home() {
               <h2 className="mb-4 text-lg font-semibold">Other Documents</h2>
 
               {otherDocs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gray-300 py-10 text-center">
-                  <p className="text-gray-500">No shared documents yet</p>
+                <div className="rounded-lg border border-dashed border-border py-10 text-center">
+                  <p className="text-muted-foreground">No shared documents yet</p>
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -301,7 +303,7 @@ function DocRow({
   onDelete?: (docId: string) => void;
 }) {
   return (
-    <div className="flex items-center rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors group">
+    <div className="flex items-center rounded-lg px-4 py-3 hover:bg-muted transition-colors group">
       <Link
         href={`/doc/${doc.id}`}
         className="flex flex-1 items-center justify-between min-w-0"
@@ -316,7 +318,7 @@ function DocRow({
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Updated {formatDate(doc.updatedAt)}
             </p>
           </div>
@@ -331,7 +333,7 @@ function DocRow({
                 className="h-5 w-5 rounded-full"
               />
             )}
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-muted-foreground">
               {doc.ownerName || "Unknown"}
             </span>
           </div>
@@ -345,7 +347,7 @@ function DocRow({
             e.stopPropagation();
             onDelete(doc.id);
           }}
-          className="ml-2 shrink-0 rounded p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all"
+          className="ml-2 shrink-0 rounded p-1.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all"
           title="Delete document"
         >
           <svg
@@ -380,15 +382,15 @@ function DeleteConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onCancel} />
-      <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-semibold text-gray-900">Delete document?</h3>
-        <p className="mt-2 text-sm text-gray-600">
+      <div className="relative w-full max-w-sm rounded-xl bg-card p-6 shadow-xl">
+        <h3 className="text-lg font-semibold text-foreground">Delete document?</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
           Are you sure you want to delete{" "}
           <span className="font-medium">&ldquo;{docTitle}&rdquo;</span>?
           This cannot be undone.
         </p>
         {stats && (
-          <div className="mt-3 flex gap-4 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
+          <div className="mt-3 flex gap-4 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
             <span>{stats.words.toLocaleString()} words</span>
             <span>{stats.lines.toLocaleString()} lines</span>
           </div>
@@ -396,7 +398,7 @@ function DeleteConfirmDialog({
         <div className="mt-5 flex gap-3 justify-end">
           <button
             onClick={onCancel}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
           >
             Cancel
           </button>

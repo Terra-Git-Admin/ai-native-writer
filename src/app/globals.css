@@ -1,13 +1,41 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #6366f1;
+}
+
+.dark {
+  --background: #0f1117;
+  --foreground: #f3f4f6;
+  --card: #1a1d27;
+  --card-foreground: #f3f4f6;
+  --muted: #1f2333;
+  --muted-foreground: #9ca3af;
+  --border: #2d3148;
+  --input: #2d3148;
+  --ring: #818cf8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -31,12 +59,21 @@ body {
   height: 0;
 }
 
+.dark .tiptap p.is-editor-empty:first-child::before {
+  color: #4b5563;
+}
+
 /* Comment highlight — persistent yellow background on commented text */
 .comment-highlight {
   background-color: rgba(255, 212, 0, 0.25);
   border-bottom: 2px solid rgba(255, 180, 0, 0.4);
   cursor: pointer;
   transition: background-color 0.2s ease, border-bottom-color 0.2s ease;
+}
+
+.dark .comment-highlight {
+  background-color: rgba(255, 212, 0, 0.12);
+  border-bottom: 2px solid rgba(255, 180, 0, 0.25);
 }
 
 /* Active comment override: Editor.tsx injects a dynamic <style> tag that brightens
@@ -48,33 +85,50 @@ body {
   border-bottom: 2px dashed #6366f1;
 }
 
+.dark .ai-highlight-pending {
+  background-color: rgba(129, 140, 248, 0.12);
+  border-bottom: 2px dashed #818cf8;
+}
+
 /* Prose styles for editor — document style guide */
 .prose h1 {
   font-size: 2em;
   font-weight: 700;
-  color: #ea580c; /* orange-600 */
+  color: #ea580c; /* orange-600 — brand color, fine on dark */
   margin-top: 0.5em;
   margin-bottom: 0.25em;
 }
 
 .prose h2 {
   font-size: 1.5em;
-  font-weight: 700; /* bold */
-  color: #1f2937; /* gray-800 */
+  font-weight: 700;
+  color: #1f2937; /* gray-800 — near-black, needs dark override */
   margin-top: 0.5em;
   margin-bottom: 0.25em;
+}
+
+.dark .prose h2 {
+  color: #e5e7eb;
 }
 
 .prose h3 {
   font-size: 1.25em;
-  font-weight: 600; /* semibold */
-  color: #374151; /* gray-700 */
+  font-weight: 600;
+  color: #374151; /* gray-700 — near-black, needs dark override */
   margin-top: 0.5em;
   margin-bottom: 0.25em;
 }
 
+.dark .prose h3 {
+  color: #d1d5db;
+}
+
 .tiptap {
   color: #374151; /* dark gray body text */
+}
+
+.dark .tiptap {
+  color: #d1d5db;
 }
 
 .prose blockquote {
@@ -82,6 +136,11 @@ body {
   padding-left: 1em;
   color: #6b7280;
   margin: 0.5em 0;
+}
+
+.dark .prose blockquote {
+  border-left-color: #4b5563;
+  color: #9ca3af;
 }
 
 .prose ul {
@@ -99,10 +158,18 @@ body {
   margin: 1em 0;
 }
 
+.dark .prose hr {
+  border-top-color: #2d3148;
+}
+
 /* ── Playground block prose ── */
 .playground-prose .ProseMirror {
   color: #374151;
   line-height: 1.75;
+}
+
+.dark .playground-prose .ProseMirror {
+  color: #d1d5db;
 }
 
 .playground-prose .ProseMirror h1 {
@@ -121,12 +188,20 @@ body {
   margin-bottom: 0.25em;
 }
 
+.dark .playground-prose .ProseMirror h2 {
+  color: #e5e7eb;
+}
+
 .playground-prose .ProseMirror h3 {
   font-size: 0.95em;
   font-weight: 600;
   color: #374151;
   margin-top: 0.6em;
   margin-bottom: 0.1em;
+}
+
+.dark .playground-prose .ProseMirror h3 {
+  color: #d1d5db;
 }
 
 .playground-prose .ProseMirror p {
@@ -142,4 +217,8 @@ body {
   font-weight: 700;
   color: #4338ca;
   letter-spacing: 0.01em;
+}
+
+.dark .causal-phrase {
+  color: #a5b4fc;
 }

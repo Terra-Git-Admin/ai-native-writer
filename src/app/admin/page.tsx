@@ -119,10 +119,10 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-gray-200 bg-white">
+      <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-sm text-gray-500 hover:text-gray-900">
+            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
               &larr; Back
             </Link>
             <h1 className="text-xl font-bold">Admin Panel</h1>
@@ -132,15 +132,15 @@ export default function AdminPage() {
 
       <main className="mx-auto max-w-5xl px-6 py-6">
         {/* Tabs */}
-        <div className="mb-6 flex gap-1 border-b border-gray-200">
+        <div className="mb-6 flex gap-1 border-b border-border">
           {(["users", "docs", "ai"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 tab === t
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               {t === "users" ? "Users" : t === "docs" ? "Documents" : "AI Settings"}
@@ -155,7 +155,7 @@ export default function AdminPage() {
               <div
                 key={user.id}
                 className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
-                  user.active ? "border-gray-200" : "border-red-200 bg-red-50"
+                  user.active ? "border-border" : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -175,15 +175,15 @@ export default function AdminPage() {
                         </span>
                       )}
                     </p>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
                       user.role === "admin"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-gray-100 text-gray-600"
+                        ? "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {user.role}
@@ -214,7 +214,7 @@ export default function AdminPage() {
               </div>
             ))}
             {users.length === 0 && (
-              <p className="py-8 text-center text-gray-500">No users yet</p>
+              <p className="py-8 text-center text-muted-foreground">No users yet</p>
             )}
           </div>
         )}
@@ -225,11 +225,11 @@ export default function AdminPage() {
             {docs.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+                className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
               >
                 <div>
                   <p className="font-medium">{doc.title || "Untitled"}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     Owner: {ownerName(doc.ownerId)}
                   </p>
                 </div>
@@ -239,7 +239,7 @@ export default function AdminPage() {
                       <select
                         value={transferUserId}
                         onChange={(e) => setTransferUserId(e.target.value)}
-                        className="rounded border border-gray-300 px-2 py-1 text-sm"
+                        className="rounded border border-border px-2 py-1 text-sm"
                       >
                         <option value="">Select user...</option>
                         {users
@@ -258,7 +258,7 @@ export default function AdminPage() {
                       </button>
                       <button
                         onClick={() => setTransferDocId(null)}
-                        className="text-xs text-gray-500"
+                        className="text-xs text-muted-foreground"
                       >
                         Cancel
                       </button>
@@ -275,7 +275,7 @@ export default function AdminPage() {
               </div>
             ))}
             {docs.length === 0 && (
-              <p className="py-8 text-center text-gray-500">
+              <p className="py-8 text-center text-muted-foreground">
                 No documents yet
               </p>
             )}
@@ -285,18 +285,18 @@ export default function AdminPage() {
         {/* AI Settings Tab */}
         {tab === "ai" && (
           <div className="max-w-lg space-y-6">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-muted-foreground">
               Add API keys for one or both providers. Writers choose which model to use in the editor.
             </p>
 
             {/* Anthropic */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <div className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium">Anthropic (Claude)</h4>
                 {aiConfig?.anthropic ? (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Configured</span>
+                  <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">Configured</span>
                 ) : (
-                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Not set</span>
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Not set</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -305,12 +305,12 @@ export default function AdminPage() {
                   value={anthropicKey}
                   onChange={(e) => setAnthropicKey(e.target.value)}
                   placeholder={aiConfig?.anthropic ? "Enter new key to replace..." : "sk-ant-..."}
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
                 />
                 <button
                   onClick={() => saveAIKey("anthropic", anthropicKey)}
                   disabled={aiSaving !== null || !anthropicKey}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
                 >
                   {aiSaving === "anthropic" ? "Saving..." : "Save"}
                 </button>
@@ -318,13 +318,13 @@ export default function AdminPage() {
             </div>
 
             {/* Google */}
-            <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+            <div className="rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium">Google (Gemini)</h4>
                 {aiConfig?.google ? (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Configured</span>
+                  <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">Configured</span>
                 ) : (
-                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Not set</span>
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Not set</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -333,12 +333,12 @@ export default function AdminPage() {
                   value={googleKey}
                   onChange={(e) => setGoogleKey(e.target.value)}
                   placeholder={aiConfig?.google ? "Enter new key to replace..." : "AIza..."}
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
                 />
                 <button
                   onClick={() => saveAIKey("google", googleKey)}
                   disabled={aiSaving !== null || !googleKey}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
                 >
                   {aiSaving === "google" ? "Saving..." : "Save"}
                 </button>
