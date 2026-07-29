@@ -65,24 +65,24 @@ export default function StoryboardPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 shrink-0">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 shrink-0">
         <div>
           <h3 className="font-semibold text-indigo-700">Storyboard</h3>
           {data?.episodeTitle && (
-            <p className="text-[10px] text-gray-400 uppercase tracking-wide mt-0.5">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">
               {data.episodeTitle}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2">
           {status === "done" && (
-            <span className="text-[10px] text-gray-400">
+            <span className="text-[10px] text-muted-foreground">
               {successCount}/{totalCount} beats
             </span>
           )}
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+            className="text-muted-foreground hover:text-foreground text-lg leading-none"
           >
             &times;
           </button>
@@ -102,10 +102,10 @@ export default function StoryboardPanel({
                 />
               ))}
             </div>
-            <p className="text-sm text-gray-500 text-center">
+            <p className="text-sm text-muted-foreground text-center">
               Generating storyboard…
               <br />
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-muted-foreground">
                 This takes 20–40 seconds for a full episode.
               </span>
             </p>
@@ -113,21 +113,21 @@ export default function StoryboardPanel({
         )}
 
         {status === "error" && (
-          <div className="m-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="m-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-4 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
 
         {status === "done" && data && (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-border">
             {data.storyboard.map((frame) => (
               <div key={frame.beatIndex} className="p-4 space-y-2">
                 {/* Beat label + text */}
                 <div className="flex items-start gap-2">
-                  <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  <span className="shrink-0 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300">
                     Beat {frame.beatIndex + 1}
                   </span>
-                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
                     {frame.beatText}
                   </p>
                 </div>
@@ -141,14 +141,14 @@ export default function StoryboardPanel({
                     className="w-full rounded-md"
                   />
                 ) : (
-                  <div className="flex items-center justify-center rounded-md bg-gray-100 py-6 text-xs text-gray-400">
+                  <div className="flex items-center justify-center rounded-md bg-muted py-6 text-xs text-muted-foreground">
                     {frame.error ?? "Image generation failed"}
                   </div>
                 )}
 
                 {/* Synthesized prompt */}
                 {frame.prompt && (
-                  <p className="text-[10px] text-gray-400 italic leading-relaxed">
+                  <p className="text-[10px] text-muted-foreground italic leading-relaxed">
                     {frame.prompt}
                   </p>
                 )}

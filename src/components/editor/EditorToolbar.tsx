@@ -107,10 +107,10 @@ function ToolbarButton({
       disabled={disabled}
       className={`rounded px-2 py-1 text-sm font-medium transition-colors ${
         disabled
-          ? "cursor-not-allowed opacity-35 text-gray-400"
+          ? "cursor-not-allowed opacity-35 text-muted-foreground"
           : isActive
-          ? "bg-gray-200 text-gray-900"
-          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          ? "bg-muted text-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       {children}
@@ -119,7 +119,7 @@ function ToolbarButton({
 }
 
 function Separator() {
-  return <div className="mx-1 h-6 w-px bg-gray-200" />;
+  return <div className="mx-1 h-6 w-px bg-border" />;
 }
 
 export default function EditorToolbar({ editor }: EditorToolbarProps) {
@@ -152,7 +152,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
   const color      = editor.getAttributes("textStyle").color      || "";
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-muted px-3 py-2">
 
       {/* Font Family */}
       <select
@@ -166,7 +166,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
           }
         }}
         title="Font family"
-        className="rounded border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-600 hover:border-gray-300 focus:outline-none"
+        className="rounded border border-border bg-card px-1.5 py-1 text-xs text-muted-foreground hover:border-border focus:outline-none"
       >
         {FONT_FAMILIES.map((f) => (
           <option key={f.value} value={f.value}>{f.label}</option>
@@ -185,7 +185,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
           }
         }}
         title="Font size"
-        className="rounded border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-600 hover:border-gray-300 focus:outline-none w-14"
+        className="rounded border border-border bg-card px-1.5 py-1 text-xs text-muted-foreground hover:border-border focus:outline-none w-14"
       >
         <option value="">Size</option>
         {FONT_SIZES.map((s) => (
@@ -206,7 +206,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
             }
           }}
           title="Font color"
-          className="rounded border border-gray-200 bg-white pl-5 pr-1.5 py-1 text-xs text-gray-600 hover:border-gray-300 focus:outline-none w-20"
+          className="rounded border border-border bg-card pl-5 pr-1.5 py-1 text-xs text-muted-foreground hover:border-border focus:outline-none w-20"
         >
           {FONT_COLORS.map((c) => (
             <option key={c.value} value={c.value}>{c.label}</option>
@@ -214,7 +214,7 @@ export default function EditorToolbar({ editor }: EditorToolbarProps) {
         </select>
         {/* Color swatch overlay */}
         <span
-          className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 rounded-sm border border-gray-300"
+          className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 h-3 w-3 rounded-sm border border-border"
           style={{ backgroundColor: color || "#000000" }}
         />
       </div>

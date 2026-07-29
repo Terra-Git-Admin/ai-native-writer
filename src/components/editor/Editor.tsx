@@ -22,6 +22,7 @@ import {
   forwardRef,
 } from "react";
 import EditorToolbar from "./EditorToolbar";
+import { useTheme } from "next-themes";
 // Used by the poll to decide whether to auto-apply server content (comment-mark
 // sync from a reviewer is safe) or surface a conflict banner (structural edit
 // from another tab). Implementation lives in src/lib/commentMarks.ts so the
@@ -118,6 +119,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   },
   ref
 ) {
+  const { resolvedTheme } = useTheme();
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved">(
     "saved"
   );
@@ -650,7 +652,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     // This tag only handles the active-comment override (bright orange).
     // Non-active comments are NOT dimmed — they stay at the globals.css yellow.
     if (activeCommentId) {
-      styleEl.textContent = `.comment-highlight[data-comment-id="${activeCommentId}"] { background-color: rgba(251,146,60,0.45) !important; border-bottom: 2px solid rgba(234,88,12,0.8) !important; }`;
+      const isDark = resolvedTheme === "dark";
+      const bg = isDark ? "rgba(251,146,60,0.30)" : "rgba(251,146,60,0.45)";
+      const border = isDark ? "rgba(234,88,12,0.6)" : "rgba(234,88,12,0.8)";
+      styleEl.textContent = `.comment-highlight[data-comment-id="${activeCommentId}"] { background-color: ${bg} !important; border-bottom: 2px solid ${border} !important; }`;
     } else {
       styleEl.textContent = "";
     }
@@ -658,7 +663,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     return () => {
       if (styleEl) styleEl.textContent = "";
     };
-  }, [activeCommentId]);
+  }, [activeCommentId, resolvedTheme]);
 
   // Extract headings and notify parent (rAF-batched for performance)
   useEffect(() => {
@@ -1029,14 +1034,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       {isOwner && <EditorToolbar editor={editor} />}
 
       {/* Status bar */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-1.5 text-xs text-gray-500">
+      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-1.5 text-xs text-muted-foreground">
         <div className="flex items-center gap-3">
           {isOwner ? (
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-green-700">
+            <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-green-700 dark:text-green-300">
               Owner
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-blue-700">
+            <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-blue-700 dark:text-blue-300">
               Reviewer
             </span>
           )}
@@ -1059,7 +1064,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       {/* Save error banner — shown when a PUT failed (HTTP error or network).
           Previously these were silently swallowed and saveStatus still said "Saved". */}
       {saveError && (
-        <div className="flex items-center gap-3 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+        <div className="flex items-center gap-3 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-2 text-sm text-red-800 dark:text-red-200">
           <span className="flex-1">{saveError}</span>
           <button
             type="button"
@@ -1072,14 +1077,14 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 saveDocument(editor.getJSON());
               }
             }}
-            className="rounded bg-red-100 px-2 py-1 font-medium hover:bg-red-200 transition-colors"
+            className="rounded bg-red-100 dark:bg-red-900/40 px-2 py-1 font-medium hover:bg-red-200 transition-colors"
           >
             Retry
           </button>
           <button
             type="button"
             onClick={() => setSaveError(null)}
-            className="rounded bg-white border border-red-200 px-2 py-1 font-medium hover:bg-red-50 transition-colors"
+            className="rounded bg-card border border-red-200 dark:border-red-800 px-2 py-1 font-medium hover:bg-red-50 transition-colors"
           >
             Dismiss
           </button>
@@ -1101,7 +1106,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             : 0;
         const willLoseContent = wouldShrinkPct >= 10;
         return (
-          <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <div className="flex items-center gap-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-sm text-amber-900 dark:text-amber-100">
             <span className="flex-1">
               <strong>Content mismatch.</strong> This window has{" "}
               {(localBytes / 1024).toFixed(1)} kb, the saved version has{" "}
@@ -1157,7 +1162,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 setConflictDetected(false);
                 setPendingServerContent(null);
               }}
-              className="rounded border border-amber-300 bg-white px-3 py-1 font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+              className="rounded border border-amber-300 dark:border-amber-700 bg-card px-3 py-1 font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-100 transition-colors"
             >
               Load saved version
             </button>
@@ -1182,7 +1187,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                 const { from, to } = state.selection;
                 return from !== to;
               }}
-              className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 shadow-lg"
+              className="flex items-center gap-1 rounded-lg border border-border bg-card px-2 py-1 shadow-lg"
             >
               {isOwner && (
                 <>
@@ -1193,8 +1198,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                     }
                     className={`rounded px-1.5 py-0.5 text-sm ${
                       editor.isActive("bold")
-                        ? "bg-gray-200 font-bold"
-                        : "hover:bg-gray-100"
+                        ? "bg-muted font-bold"
+                        : "hover:bg-muted"
                     }`}
                   >
                     B
@@ -1206,8 +1211,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
                     }
                     className={`rounded px-1.5 py-0.5 text-sm italic ${
                       editor.isActive("italic")
-                        ? "bg-gray-200"
-                        : "hover:bg-gray-100"
+                        ? "bg-muted"
+                        : "hover:bg-muted"
                     }`}
                   >
                     I
@@ -1217,11 +1222,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
               {/* Comment button — available to everyone */}
               {onAddComment && (
                 <>
-                  {isOwner && <div className="mx-1 h-4 w-px bg-gray-200" />}
+                  {isOwner && <div className="mx-1 h-4 w-px bg-border" />}
                   <button
                     type="button"
                     onClick={handleAddComment}
-                    className="rounded bg-yellow-50 px-2 py-0.5 text-sm font-medium text-yellow-700 hover:bg-yellow-100"
+                    className="rounded bg-yellow-50 dark:bg-yellow-950/40 px-2 py-0.5 text-sm font-medium text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100"
                   >
                     Comment
                   </button>
@@ -1231,7 +1236,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           )}
           <EditorContent
             editor={editor}
-            className="prose prose-lg max-w-none focus:outline-none [&_.tiptap]:min-h-[60vh] [&_.tiptap]:outline-none [&_.tiptap_p.is-editor-empty:first-child::before]:text-gray-400 [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:h-0 [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none"
+            className="prose prose-lg max-w-none focus:outline-none [&_.tiptap]:min-h-[60vh] [&_.tiptap]:outline-none [&_.tiptap_p.is-editor-empty:first-child::before]:text-muted-foreground [&_.tiptap_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.tiptap_p.is-editor-empty:first-child::before]:float-left [&_.tiptap_p.is-editor-empty:first-child::before]:h-0 [&_.tiptap_p.is-editor-empty:first-child::before]:pointer-events-none"
           />
         </div>
       </div>

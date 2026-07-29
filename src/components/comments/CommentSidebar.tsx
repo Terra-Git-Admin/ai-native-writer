@@ -286,13 +286,13 @@ export default function CommentSidebar({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 px-4 py-3 space-y-2">
+      <div className="border-b border-border px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">Comments</h3>
           {resolvedCount > 0 && (
             <button
               onClick={() => setHideResolved((v) => !v)}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              className="text-xs text-muted-foreground hover:text-foreground"
             >
               {hideResolved ? `Show resolved (${resolvedCount})` : "Hide resolved"}
             </button>
@@ -302,7 +302,7 @@ export default function CommentSidebar({
           <select
             value={selectedSection ?? ""}
             onChange={(e) => setSelectedSection(e.target.value || null)}
-            className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             <option value="">All episodes</option>
             {h3Headings.map((h) => (
@@ -316,7 +316,7 @@ export default function CommentSidebar({
 
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
         {visibleThreads.length === 0 && !pendingComment && (
-          <p className="text-sm text-gray-500 text-center py-8">
+          <p className="text-sm text-muted-foreground text-center py-8">
             {hideResolved && resolvedCount > 0
               ? "No open comments."
               : "No comments yet. Select text in the document to add a comment."}
@@ -330,7 +330,7 @@ export default function CommentSidebar({
             onClick={() => onActiveCommentChange(isActive(markId) ? null : markId)}
             className={`cursor-pointer rounded-lg border p-3 space-y-2 transition-colors ${
               resolved
-                ? "border-gray-200 bg-gray-50 opacity-60"
+                ? "border-border bg-muted opacity-60"
                 : isActive(markId)
                   ? "border-yellow-400 bg-yellow-100 ring-1 ring-yellow-400"
                   : "border-yellow-200 bg-yellow-50 hover:border-yellow-300"
@@ -338,7 +338,7 @@ export default function CommentSidebar({
           >
             {/* Quoted text */}
             {quotedText && (
-              <p className="text-xs italic text-gray-500 border-l-2 border-yellow-400 pl-2 line-clamp-2">
+              <p className="text-xs italic text-muted-foreground border-l-2 border-yellow-400 pl-2 line-clamp-2">
                 &ldquo;{quotedText}&rdquo;
               </p>
             )}
@@ -362,10 +362,10 @@ export default function CommentSidebar({
                     {comment.authorImage && (
                       <img src={comment.authorImage} alt="" className="h-5 w-5 rounded-full" />
                     )}
-                    <span className="text-xs font-medium text-gray-700">
+                    <span className="text-xs font-medium text-foreground">
                       {comment.authorName || "Anonymous"}
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-muted-foreground">
                       {formatTimestamp(comment.createdAt)}
                     </span>
                   </div>
@@ -374,7 +374,7 @@ export default function CommentSidebar({
                       (comment.authorId === session?.user?.id || isAdmin) && (
                         <button
                           onClick={() => resolveComment(comment.id, false)}
-                          className="text-xs text-gray-500 hover:text-gray-700"
+                          className="text-xs text-muted-foreground hover:text-foreground"
                           title="Reopen"
                         >
                           Reopen
@@ -400,22 +400,22 @@ export default function CommentSidebar({
                     )}
                   </div>
                 </div>
-                <p className="mt-1 text-sm text-gray-800">{comment.content}</p>
+                <p className="mt-1 text-sm text-foreground">{comment.content}</p>
               </div>
             ))}
 
             {/* Replies */}
             {replies.map((reply) => (
-              <div key={reply.id} className="ml-4 border-l-2 border-gray-200 pl-3">
+              <div key={reply.id} className="ml-4 border-l-2 border-border pl-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {reply.authorImage && (
                       <img src={reply.authorImage} alt="" className="h-4 w-4 rounded-full" />
                     )}
-                    <span className="text-xs font-medium text-gray-600">
+                    <span className="text-xs font-medium text-muted-foreground">
                       {reply.authorName || "Anonymous"}
                     </span>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-[10px] text-muted-foreground">
                       {formatTimestamp(reply.createdAt)}
                     </span>
                   </div>
@@ -429,7 +429,7 @@ export default function CommentSidebar({
                     </button>
                   )}
                 </div>
-                <p className="mt-0.5 text-sm text-gray-700">{reply.content}</p>
+                <p className="mt-0.5 text-sm text-foreground">{reply.content}</p>
               </div>
             ))}
 
@@ -443,7 +443,7 @@ export default function CommentSidebar({
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Reply..."
-                      className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
+                      className="flex-1 rounded border border-border px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
                       autoFocus
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleReplySubmit(markId, root[0]?.id);
@@ -460,7 +460,7 @@ export default function CommentSidebar({
                 ) : (
                   <button
                     onClick={() => setReplyingTo(markId)}
-                    className="text-xs text-gray-500 hover:text-gray-700"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     Reply
                   </button>
@@ -477,7 +477,7 @@ export default function CommentSidebar({
             className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 space-y-2"
           >
             <p className="text-xs font-medium text-yellow-700">New comment on:</p>
-            <p className="text-xs italic text-gray-600 border-l-2 border-yellow-400 pl-2 line-clamp-2">
+            <p className="text-xs italic text-muted-foreground border-l-2 border-yellow-400 pl-2 line-clamp-2">
               &ldquo;{pendingComment.quotedText}&rdquo;
             </p>
             <div className="flex gap-2">
@@ -487,7 +487,7 @@ export default function CommentSidebar({
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="Write your comment..."
-                className="flex-1 rounded border border-gray-300 px-2 py-1.5 text-sm focus:border-yellow-500 focus:outline-none"
+                className="flex-1 rounded border border-border px-2 py-1.5 text-sm focus:border-yellow-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handlePendingSubmit();
                   if (e.key === "Escape") onPendingCommentDone();

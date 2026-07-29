@@ -73,18 +73,18 @@ export default function QualityAgentPanel({
   }, [documentId, episodeTabId, episodeIndex]);
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-muted">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">
             Quality Agent
           </p>
-          <p className="truncate text-sm font-medium text-gray-800">{episodeLabel}</p>
+          <p className="truncate text-sm font-medium text-foreground">{episodeLabel}</p>
         </div>
         <button
           onClick={onClose}
-          className="ml-2 shrink-0 rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          className="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           title="Close"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -107,7 +107,7 @@ export default function QualityAgentPanel({
         )}
 
         {output && (
-          <div className="whitespace-pre-wrap text-sm text-gray-800">{output}</div>
+          <div className="whitespace-pre-wrap text-sm text-foreground">{output}</div>
         )}
 
         {isStreaming && output && (
@@ -115,7 +115,7 @@ export default function QualityAgentPanel({
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}

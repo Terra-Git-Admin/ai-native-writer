@@ -213,15 +213,15 @@ export default function ResearchAgentPanel({
   };
 
   return (
-    <div className="flex h-full flex-col bg-gray-50">
+    <div className="flex h-full flex-col bg-muted">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">
           Research Agent
         </p>
         <button
           onClick={onClose}
-          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           title="Close"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -237,7 +237,7 @@ export default function ResearchAgentPanel({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
         {messages.length === 0 && !isStreaming && (
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="rounded-lg border border-emerald-100 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
             Enter the series name that needs to be researched
           </div>
         )}
@@ -259,14 +259,14 @@ export default function ResearchAgentPanel({
                   className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
                     msg.role === "user"
                       ? "bg-emerald-600 text-white"
-                      : "whitespace-pre-wrap border border-gray-200 bg-white text-gray-800"
+                      : "whitespace-pre-wrap border border-border bg-card text-foreground"
                   }`}
                 >
                   {msg.content}
                 </div>
               </div>
               {cutOff && (
-                <p className="mt-1 pl-1 text-xs text-gray-400">
+                <p className="mt-1 pl-1 text-xs text-muted-foreground">
                   Response may be cut off — type &quot;continue&quot; to get the rest
                 </p>
               )}
@@ -276,7 +276,7 @@ export default function ResearchAgentPanel({
 
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">
+            <div className="max-w-[85%] rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
               {streamingContent ? (
                 <>
                   <span className="whitespace-pre-wrap">{streamingContent}</span>
@@ -303,30 +303,30 @@ export default function ResearchAgentPanel({
         )}
 
         {applyStatus === "applying" && (
-          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          <div className="rounded-lg border border-emerald-100 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-300">
             Saving to Original Research tab…
           </div>
         )}
         {applyStatus === "done" && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+          <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-200">
             ✓ Saved to Original Research tab
           </div>
         )}
         {applyStatus === "error" && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-700 dark:text-red-300">
             Could not save to Original Research tab — copy manually if needed.
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
             {error}
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-200 px-3 py-3">
+      <div className="border-t border-border px-3 py-3">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -335,7 +335,7 @@ export default function ResearchAgentPanel({
             onKeyDown={handleKeyDown}
             placeholder={messages.length === 0 ? "Enter series name…" : "Ask a follow-up…"}
             rows={2}
-            className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
+            className="flex-1 resize-none rounded-lg border border-border px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-50"
             disabled={isStreaming}
           />
           <button
@@ -346,7 +346,7 @@ export default function ResearchAgentPanel({
             Send
           </button>
         </div>
-        <p className="mt-1.5 text-xs text-gray-400">Enter to send · Shift+Enter for newline</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">Enter to send · Shift+Enter for newline</p>
       </div>
     </div>
   );
