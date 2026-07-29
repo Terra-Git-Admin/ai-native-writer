@@ -97,7 +97,11 @@ export function parseBeatsFromTiptap(content: string | null): PlaygroundBeat[] {
           skipNextParagraph = false;
           continue; // Skip description P that follows an H3 title
         }
-        beats.push({ id: nanoid(8), text, locked: false, batch: currentBatch });
+        // Only create a beat for paragraphs that look like "Beat N: ..."
+        // This skips preamble paragraphs and description-only paragraphs.
+        if (BEAT_LINE_RE.test(text)) {
+          beats.push({ id: nanoid(8), text, locked: false, batch: currentBatch });
+        }
       }
     } else if (node.type === "bulletList" || node.type === "orderedList") {
       skipNextParagraph = false;
