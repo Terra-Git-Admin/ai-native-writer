@@ -341,7 +341,10 @@ export default function TabRail({
       const count: number = data.added?.length ?? 0;
       const msg = count > 0 ? `Added ${count}` : "No new entries";
       setSyncResults((prev) => ({ ...prev, [tab.id]: msg }));
-      if (count > 0) onTabsChange();
+      if (count > 0) {
+        onTabsChange();
+        onSwitch(tab.id);
+      }
     } catch {
       setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
     } finally {
