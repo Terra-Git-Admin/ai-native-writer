@@ -658,7 +658,7 @@ export default function TabRail({
                   </div>
                 </button>
 
-                {isOwner && tab.type === "locations" && (
+                {isOwner && (tab.type === "characters" || tab.type === "locations") && (
                   <button
                     type="button"
                     onClick={(e) => handleSync(e, tab)}
