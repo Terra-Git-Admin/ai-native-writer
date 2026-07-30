@@ -42,7 +42,7 @@ function splitAtHardBreaks(node: TiptapNode): string[] {
   return lines;
 }
 
-const BEAT_LINE_RE = /^Beat\s+\d+:/i;
+export const BEAT_LINE_RE = /^Beat\s+\d+:/i;
 
 // ─── Parse ────────────────────────────────────────────────────────────────────
 
@@ -57,54 +57,66 @@ export function parseBeatsFromTiptap(content: string | null): PlaygroundBeat[] {
 
   const beats: PlaygroundBeat[] = [];
   let currentBatch: string | undefined;
-  // Old format: [H3] Beat N: Title followed by [P] description.
-  // We use the H3 text as the beat (concise title), then skip the following P.
-  let skipNextParagraph = false;
+  // pendingBeat: a "Beat N: Title" paragraph we've seen but not yet finalized.
+  // The next non-Beat paragraph is its description and gets appended before we push.
+  let pendingBeat: PlaygroundBeat | null = null;
+
+  function flushPending() {
+    if (pendingBeat) { beats.push(pendingBeat); pendingBeat = null; }
+  }
 
   for (const node of doc.content ?? []) {
     if (node.type === "heading") {
-      if (node.attrs?.level === 1) continue; // Skip [H1] Beats title
+      if (node.attrs?.level === 1) continue; // Skip [H1] section title
       if (node.attrs?.level === 2) {
+        flushPending();
         currentBatch = textOf(node).trim() || undefined;
-        skipNextParagraph = false;
       }
       if (node.attrs?.level === 3) {
-        // Old H3 format: use title text as the beat, skip the following description paragraph
+        // Old H3 format: title is the H3 text; following P is the description.
+        flushPending();
         const text = textOf(node).trim();
-        if (text) {
-          beats.push({ id: nanoid(8), text, locked: false, batch: currentBatch });
-          skipNextParagraph = true;
-        }
+        if (text) pendingBeat = { id: nanoid(8), text, locked: false, batch: currentBatch };
       }
     } else if (node.type === "paragraph") {
       const lines = splitAtHardBreaks(node);
       const hasHardBreaks = lines.length > 1;
 
       if (hasHardBreaks) {
-        // Beats pasted/typed as Shift+Enter lines inside one paragraph.
-        // Extract only lines that look like "Beat N: ..." — skip preamble/descriptions.
-        skipNextParagraph = false;
+        // Beats stored as Shift+Enter lines in one paragraph. Apply the same pending-beat
+        // pattern as separate-paragraph beats so descriptions are captured.
+        flushPending();
         for (const line of lines) {
           const text = line.trim();
-          if (text && BEAT_LINE_RE.test(text)) {
-            beats.push({ id: nanoid(8), text, locked: false, batch: currentBatch });
+          if (!text) continue; // empty separator line — keep pending beat alive
+          if (BEAT_LINE_RE.test(text)) {
+            flushPending();
+            pendingBeat = { id: nanoid(8), text, locked: false, batch: currentBatch };
+          } else if (pendingBeat) {
+            // Description line — append to the pending beat.
+            const pb: PlaygroundBeat = pendingBeat;
+            pendingBeat = { ...pb, text: `${pb.text}\n${text}` };
           }
+          // else: preamble line before any beat → skip
         }
       } else {
         const text = (lines[0] ?? "").trim();
-        if (!text) continue; // Skip empty without clearing skipNextParagraph
-        if (skipNextParagraph) {
-          skipNextParagraph = false;
-          continue; // Skip description P that follows an H3 title
-        }
-        // Only create a beat for paragraphs that look like "Beat N: ..."
-        // This skips preamble paragraphs and description-only paragraphs.
+        if (!text) continue;
+
         if (BEAT_LINE_RE.test(text)) {
-          beats.push({ id: nanoid(8), text, locked: false, batch: currentBatch });
+          // Start a new pending beat, flushing any previous one (beat without description).
+          flushPending();
+          pendingBeat = { id: nanoid(8), text, locked: false, batch: currentBatch };
+        } else if (pendingBeat) {
+          // Description paragraph — append to the pending beat and finalize.
+          const pb: PlaygroundBeat = pendingBeat;
+          pendingBeat = { ...pb, text: `${pb.text}\n${text}` };
+          flushPending();
         }
+        // else: non-Beat P with no pending beat (preamble, stray text) → skip
       }
     } else if (node.type === "bulletList" || node.type === "orderedList") {
-      skipNextParagraph = false;
+      flushPending();
       for (const item of node.content ?? []) {
         if (item.type === "listItem") {
           const text = textOf(item).trim();
@@ -112,14 +124,20 @@ export function parseBeatsFromTiptap(content: string | null): PlaygroundBeat[] {
         }
       }
     } else {
-      skipNextParagraph = false;
+      flushPending();
     }
   }
 
+  flushPending();
   return beats;
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
+
+function beatToTaggedLines(beat: PlaygroundBeat): string[] {
+  // beat.text may be "Beat N: Title\nDescription" — emit each part as its own [P] tag.
+  return beat.text.split("\n").map((l) => `[P] ${l.trim()}`).filter((l) => l !== "[P] ");
+}
 
 export function renderLockedBeatsTagged(beats: PlaygroundBeat[]): string {
   const locked = beats.filter((b) => b.locked);
@@ -131,7 +149,7 @@ export function renderLockedBeatsTagged(beats: PlaygroundBeat[]): string {
       if (beat.batch) lines.push(`[H2] ${beat.batch}`);
       lastBatch = beat.batch;
     }
-    lines.push(`[P] ${beat.text}`);
+    lines.push(...beatToTaggedLines(beat));
   }
 
   return lines.join("\n");
@@ -146,7 +164,7 @@ export function renderAllBeatsTagged(beats: PlaygroundBeat[]): string {
       if (beat.batch) lines.push(`[H2] ${beat.batch}`);
       lastBatch = beat.batch;
     }
-    lines.push(`[P] ${beat.text}`);
+    lines.push(...beatToTaggedLines(beat));
   }
 
   return lines.join("\n");

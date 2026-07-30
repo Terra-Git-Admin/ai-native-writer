@@ -14,6 +14,7 @@ import {
   renderLockedBeatsTagged,
   renderAllBeatsTagged,
   preserveLockState,
+  BEAT_LINE_RE,
 } from "@/lib/ai/playground-beats";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
       return {
         ...state,
         beats: state.beats.map((b) =>
-          b.id === action.id ? { ...b, text: action.text } : b
+          b.id === action.id ? { ...b, text: action.text, locked: false } : b
         ),
       };
     case "TOGGLE_BEAT_LOCK":
@@ -99,9 +100,10 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
     case "POPULATE":
       return {
         ...state,
-        worldContent: action.worldContent,
-        beats: action.beats,
-        worldPopulatedAt: action.worldAt,
+        worldContent: state.worldContent ?? action.worldContent,
+        // Preserve lock state from any beats already in state (e.g. saved from prior session).
+        beats: preserveLockState(action.beats, state.beats),
+        worldPopulatedAt: state.worldPopulatedAt ?? action.worldAt,
         beatsPopulatedAt: action.beatsAt,
       };
     case "SET_SAVE_STATUS":
@@ -125,6 +127,7 @@ function reducer(state: PlaygroundState, action: Action): PlaygroundState {
         streamingAccumulated: "",
         storyContent: action.tiptapJson,
         storyGeneratedAt: action.generatedAt,
+        beats: state.beats.filter((b) => b.locked),
       };
     case "ABORT_STREAMING":
       return { ...state, isStreaming: false, streamingText: "", streamingAccumulated: "" };
@@ -210,10 +213,17 @@ export default function PipelinePlayground({
 
   const [state, dispatch] = useReducer(reducer, {
     worldContent: data.blocks.world_state?.content ?? null,
-    // Reducer initializer: prefer saved beats[], fall back to parsing legacy content string
-    beats:
-      data.blocks.beat_sequence?.beats ??
-      parseBeatsFromTiptap(data.blocks.beat_sequence?.content ?? null),
+    // Reducer initializer: use saved beats[] only if they look valid (at least one "Beat N:" line).
+    // A corrupt prior session could have saved non-beat text (e.g. a preamble paragraph) as beats.
+    // In that case fall through to parseBeatsFromTiptap — if no legacy .content, returns [] and
+    // auto-populate (below) will re-fetch from canonical on the next render.
+    beats: (() => {
+      const saved = data.blocks.beat_sequence?.beats;
+      if (Array.isArray(saved) && saved.length > 0 && saved.some((b) => BEAT_LINE_RE.test(b.text))) {
+        return saved;
+      }
+      return parseBeatsFromTiptap(data.blocks.beat_sequence?.content ?? null);
+    })(),
     storyContent: data.blocks.story_logic?.content ?? null,
     worldPopulatedAt: data.blocks.world_state?.populatedAt ?? null,
     beatsPopulatedAt: data.blocks.beat_sequence?.populatedAt ?? null,
@@ -273,9 +283,9 @@ export default function PipelinePlayground({
   const scheduleFlushRef = useRef(scheduleFlush);
   scheduleFlushRef.current = scheduleFlush;
 
-  // Auto-populate from canonical tabs on first mount when blocks are null.
+  // Always re-populate beats from canonical on mount so descriptions are never stale.
+  // Saved beats are used only for lock-state preservation (applied in POPULATE reducer).
   useEffect(() => {
-    if (data.blocks.world_state !== null && data.blocks.beat_sequence !== null) return;
     const wsTab = tabs.find((t) => t.type === "world_state");
     const bsTab = tabs.find((t) => t.type === "beat_sequence");
     if (!wsTab && !bsTab) return;

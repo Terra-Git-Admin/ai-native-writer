@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import type { PlaygroundBeat } from "@/lib/ai/playground-beats";
 
 // ─── Lock icons ───────────────────────────────────────────────────────────────
@@ -54,6 +54,14 @@ interface BeatRowProps {
 
 function BeatRow({ beat, onTextChange, onToggleLock, disabled }: BeatRowProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-size on mount so multiline beats render at full height immediately.
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
 
   const handleInput = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
