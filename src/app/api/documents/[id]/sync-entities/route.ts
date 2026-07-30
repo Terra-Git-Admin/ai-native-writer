@@ -101,7 +101,7 @@ export async function POST(
 
   const body = await req.json();
   const type: string = body.type;
-  if (type !== "characters" && type !== "locations") {
+  if (type !== "locations") {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
 
@@ -123,7 +123,7 @@ export async function POST(
   }
 
   const entityLabel = type === "characters" ? "characters" : "locations";
-  const model = await getAIModel("gemini-2.5-pro");
+  const model = await getAIModel("gemini-2.5-flash");
   const { text } = await generateText({
     model,
     system: ENTITY_EXTRACTION_SYSTEM_PROMPT,

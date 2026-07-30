@@ -658,18 +658,26 @@ export default function TabRail({
                   </div>
                 </button>
 
-                {isOwner && (tab.type === "characters" || tab.type === "locations") && (
+                {isOwner && tab.type === "locations" && (
                   <button
                     type="button"
                     onClick={(e) => handleSync(e, tab)}
                     disabled={syncingTabId === tab.id}
-                    className="px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
-                    title="Sync from Predefined Episodes"
-                    aria-label="Sync entities"
+                    className="p-1 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
+                    title={syncResults[tab.id] || "Sync from Predefined Episodes"}
+                    aria-label="Sync locations"
                   >
-                    {syncingTabId === tab.id
-                      ? "Syncing…"
-                      : syncResults[tab.id] || "Sync"}
+                    {syncingTabId === tab.id ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <polyline points="1 20 1 14 7 14" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                      </svg>
+                    )}
                   </button>
                 )}
                 {isOwner && !protectedTab && (
