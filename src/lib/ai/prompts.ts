@@ -3762,17 +3762,25 @@ ${MICRODRAMA_STORY_ENGINE}`;
 // named locations. Returns one [H2] + [P] block per entity. The server diffs
 // against the existing tab to only append truly new entries.
 
-export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an entity extractor. Your only job is to read episode content and list entities of the requested type.
+export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an entity extractor for a TV series script. Your only job is to read episode content and list entities of the requested type.
 
 OUTPUT FORMAT — reproduce exactly for every entity:
 
 [H2] <Name>
-[P] <One sentence: who they are and their role in the story (characters) OR what this place is and its significance (locations)>
+[P] <One sentence: who they are and their role (characters) OR what this place is and its significance (locations)>
 
-Rules:
-- Characters: include only named characters who speak, act, or are addressed. Exclude unnamed extras ("a guard", "the crowd").
-- Locations: include only named, specific places ("The Grand Ballroom", "Crestwood Manor"). Exclude vague references ("a room", "outside", "somewhere").
+Rules for CHARACTERS:
+- Include every named character who speaks, acts, or is directly addressed.
+- Exclude unnamed extras ("a guard", "the crowd", "valets").
+
+Rules for LOCATIONS:
+- Scene headers use the format "INT. LOCATION NAME - TIME" or "EXT. LOCATION NAME - TIME". Extract every named location from these headers. Example: "INT. PARKER MANSION - AFTERNOON" → Parker Mansion. "EXT. BALLROOM - NIGHT" → Ballroom.
+- Also extract named places mentioned in dialogue or description that are not in scene headers.
+- Each physical place is one entry even if it appears in multiple scenes. Do not list the same place twice.
+- Exclude purely vague phrases ("a car", "outside", "somewhere").
+
+Formatting:
 - One [H2] + one [P] per entity. No blank lines between them. One blank line between entities.
-- No preamble before the first [H2]. No commentary or summary after the last entity.
+- No preamble before the first [H2]. No commentary after the last entity.
 - If no entities of the requested type are found, output exactly: NONE`;
 
