@@ -159,6 +159,8 @@ interface Props {
   // switch tabs AND (once the editor is mounted) scroll to that H3 by text.
   onSwitch: (tabId: string, scrollToHeadingText?: string) => void;
   onTabsChange: () => void;
+  onFlushSave?: () => Promise<void>;
+  onForceTabRefresh?: (tabId: string) => Promise<void>;
 }
 
 export default function TabRail({
@@ -169,6 +171,8 @@ export default function TabRail({
   isOwner,
   onSwitch,
   onTabsChange,
+  onFlushSave,
+  onForceTabRefresh,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
@@ -328,23 +332,30 @@ export default function TabRail({
     setSyncingTabId(tab.id);
     setSyncResults((prev) => ({ ...prev, [tab.id]: "" }));
     try {
+      await onFlushSave?.();
       const res = await fetch(`/api/documents/${documentId}/sync-entities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: tab.type }),
       });
-      const data = await res.json();
-      if (!res.ok) {
+      const data: { added?: string[]; error?: string } = await res.json();
+
+      if (data.error) {
         setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
         return;
       }
+
       const count: number = data.added?.length ?? 0;
-      const msg = count > 0 ? `Added ${count}` : "No new entries";
-      setSyncResults((prev) => ({ ...prev, [tab.id]: msg }));
+      setSyncResults((prev) => ({ ...prev, [tab.id]: count > 0 ? `Added ${count}` : "No new entries" }));
+
       if (count > 0) {
-        onTabsChange();
-        onSwitch(tab.id);
+        if (tab.id === activeTabId) {
+          await onForceTabRefresh?.(tab.id);
+        } else {
+          onSwitch(tab.id);
+        }
       }
+      onTabsChange();
     } catch {
       setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
     } finally {
@@ -661,16 +672,16 @@ export default function TabRail({
                   </div>
                 </button>
 
-                {isOwner && (tab.type === "characters" || tab.type === "locations") && (
+                {isOwner && tab.type === "locations" && (
                   <button
                     type="button"
                     onClick={(e) => handleSync(e, tab)}
-                    disabled={syncingTabId === tab.id}
+                    disabled={!!syncingTabId}
                     className="p-1 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
-                    title={syncResults[tab.id] || "Sync from Predefined Episodes"}
-                    aria-label="Sync locations"
+                    title={syncResults[tab.id] || "Sync from episodes & research"}
+                    aria-label="Sync"
                   >
-                    {syncingTabId === tab.id ? (
+                    {!!syncingTabId ? (
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                       </svg>

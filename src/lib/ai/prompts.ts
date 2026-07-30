@@ -3731,24 +3731,15 @@ Rules:
 - Body of each episode must have 3-4 plot beats — not a single sentence.
 - No preamble before the first [H3]. No commentary after the last episode. No signal digit prefix (no leading "0" or "1").
 - No closing tags (no [/H3], no [/P]).
-- EACH episode is one [H3] block followed by exactly TEN [P] paragraphs. No exceptions.
+- EACH episode is one [H3] (the number + period) followed by exactly ONE [P] (the flowing narrative). No labeled fields. No extra paragraphs.
 
 OUTPUT FORMAT — reproduce this exactly for every episode:
 
-[H3] Episode N: <Title — 3-7 words, never generic>
+[H3] N.
 
-[P] Phase context: Phase <N> (<Phase Title>). Spine state at start: <one phrase>. Spine state at end: <one phrase>.
-[P] Hook (0-3s, <Hook Type>): <single concrete opening shot or line — the actual first 3 seconds, not a description>
-[P] Setup-in-motion (4-15s): <the mini-climax beat — what info reveals or what shifts in this 12-second window>
-[P] Body (16-55s): <3-4 plot beats, each moving the spine or converging a branch>
-[P] Cliffhanger (55-60s, <Cliffhanger Type>): <freeze-frame moment — NOT a question, a concrete visual moment>
-[P] Spine motion: <one sentence — how Plot A advanced, OR which branch converged, OR which payoff landed>
-[P] Characters present: <which primaries appear; for each: what they want THIS episode + enters as: [emotional state, cite episode] + exits as: [emotional state]>
-[P] Information state delta: <what audience learns. What character X now knows. Dramatic-irony gap if any.>
-[P] Location: <where this episode is set>
-[P] Setup-payoff trace: <"Plants X for payoff in Phase Y" / "Pays off X from Phase Y" / "No long-arc plant or payoff this episode — pure spine motion.">
+[P] <Flowing narrative paragraph. Write as a story summary, not labeled fields. Cover: the situation at the start of the episode and who is driving it; the key escalating beats in order (what happens, what shifts, what is revealed); which characters are present and what each wants; where the episode is set. End every episode with an explicit "Cliffhanger:" sentence — a concrete visual freeze-frame moment, NOT a question. No labels, no bullet points, no field headers inside the paragraph.>
 
-That is TEN [P] paragraphs inside one [H3] block. Generate 7–8 episodes. Stop after the last episode.
+That is exactly ONE [H3] and ONE [P] per episode. The episode heading is just the number followed by a period — no title. Generate 7–8 episodes. No preamble before the first [H3]. No commentary after the last episode.
 
 ${DOCUMENT_STYLE_GUIDE}
 
@@ -3767,17 +3758,30 @@ export const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are an entity extractor for 
 OUTPUT FORMAT — reproduce exactly for every entity:
 
 [H2] <Name>
-[P] <One sentence: who they are and their role (characters) OR what this place is and its significance (locations)>
+[P] <Description — see rules below for what to include per type>
 
 Rules for CHARACTERS:
 - Include every named character who speaks, acts, or is directly addressed.
 - Exclude unnamed extras ("a guard", "the crowd", "valets").
+- Description: one sentence covering who they are, their role in the story, and their defining personality trait or wound.
+- If the same character appears under slightly different names or aliases across sources, use the fullest/most specific name and list them once.
 
 Rules for LOCATIONS:
 - Scene headers use the format "INT. LOCATION NAME - TIME" or "EXT. LOCATION NAME - TIME". Extract every named location from these headers. Example: "INT. PARKER MANSION - AFTERNOON" → Parker Mansion. "EXT. BALLROOM - NIGHT" → Ballroom.
 - Also extract named places mentioned in dialogue or description that are not in scene headers.
 - Each physical place is one entry even if it appears in multiple scenes. Do not list the same place twice.
 - Exclude purely vague phrases ("a car", "outside", "somewhere").
+- Description: write 2–4 sentences that paint a complete visual and atmospheric picture of the location. Cover ALL of the following that are knowable from context:
+  - What it looks like and its overall vibe (grand/intimate/cold/warm/chaotic/pristine etc.)
+  - Architectural style and era (modern glass tower, colonial mansion, industrial warehouse, intimate café etc.)
+  - Interior details: what is on the walls, how the space is laid out, key furniture or objects, quality of light
+  - Exterior or surrounding environment if relevant (what you see through windows, the street outside, the grounds)
+  - For homes and personal spaces: design that reflects the owner's personality, wealth, taste, or emotional state
+  - Any recurring objects or background elements that define the space across scenes
+  - If it is a sub-space of a larger location (e.g. "Boardroom" inside a larger office building), note the relationship AND ensure its design language is consistent with the parent location — a character's bedroom and their living room must share the same architectural style, wealth level, and design sensibility
+  - Intra-location consistency: if multiple sub-spaces of the same home, building, or estate are extracted (e.g. "Vikas House - Bedroom" and "Vikas House - Hall"), they must describe the SAME overall design world — same materials, same era, same taste level. Do not describe one room as minimalist-modern and another as rustic-vintage if they belong to the same owner
+  - City and geography consistency: if the series is set in a specific city (e.g. Denver, Mumbai, Lagos, Seoul), all locations must reflect that city's architecture, street environment, building style, vehicles, and climate. A Mumbai apartment block looks and feels different from a Denver one — exterior facades, building materials, road width, ambient light, and parked cars must all match the city. Never describe a generic Western setting if the story is set in South Asia or Africa, and vice versa
+- Write from the perspective of a production designer briefing a cinematographer: be specific enough that someone reading it can immediately picture the exact space and know where the action is taking place.
 
 Formatting:
 - One [H2] + one [P] per entity. No blank lines between them. One blank line between entities.

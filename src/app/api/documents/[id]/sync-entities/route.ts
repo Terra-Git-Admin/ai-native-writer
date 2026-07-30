@@ -43,13 +43,21 @@ function parseExtractionOutput(
   let current: { name: string; description: string } | null = null;
   for (const raw of output.split("\n")) {
     const line = raw.trim();
-    const h2 = line.match(/^\[H2\]\s*(.+)$/);
-    const p = line.match(/^\[P\]\s*(.+)$/);
+    // Accept both [H2] tagged format and <h2> / ## markdown/HTML formats
+    const h2 =
+      line.match(/^\[H2\]\s*(.+)$/) ||
+      line.match(/^<h2>(.+?)<\/h2>$/i) ||
+      line.match(/^##\s+(.+)$/);
+    const p = line.match(/^\[P\]\s*(.+)$/) || line.match(/^<p>(.+?)<\/p>$/i);
     if (h2) {
       if (current) entries.push(current);
       current = { name: h2[1].trim(), description: "" };
-    } else if (p && current && !current.description) {
-      current.description = p[1].trim();
+    } else if (current && !current.description) {
+      if (p) {
+        current.description = p[1].trim();
+      } else if (line && !line.startsWith("<") && !line.startsWith("[") && !line.startsWith("#")) {
+        current.description = line;
+      }
     }
   }
   if (current) entries.push(current);
@@ -101,6 +109,7 @@ export async function POST(
 
   const body = await req.json();
   const type: string = body.type;
+
   if (type !== "characters" && type !== "locations") {
     return NextResponse.json({ error: "Invalid type" }, { status: 400 });
   }
@@ -110,20 +119,30 @@ export async function POST(
     columns: { id: true, type: true, content: true },
   });
 
-  const episodesTab = allTabs.find((t) => t.type === "predefined_episodes");
+  const sourceTabs = allTabs.filter(
+    (t) => t.type === "predefined_episodes" || t.type === "series_overview"
+  );
   const targetTab = allTabs.find((t) => t.type === type);
 
   if (!targetTab) {
     return NextResponse.json({ error: "Target tab not found" }, { status: 404 });
   }
 
-  const episodesTagged = tiptapJsonToTagged(episodesTab?.content ?? null);
+  if (sourceTabs.length === 0) {
+    return NextResponse.json({ added: [], empty: true });
+  }
+
+  const episodesTagged = sourceTabs
+    .map((t) => tiptapJsonToTagged(t.content ?? null))
+    .filter(Boolean)
+    .join("\n\n");
+
   if (!episodesTagged.trim()) {
     return NextResponse.json({ added: [], empty: true });
   }
 
-  const entityLabel = type === "characters" ? "characters" : "locations";
-  const model = await getAIModel("gemini-2.5-pro");
+  const entityLabel = type === "characters" ? "characters and their descriptions" : "locations and their descriptions";
+  const model = await getAIModel("gemini-2.5-flash");
   const { text } = await generateText({
     model,
     system: ENTITY_EXTRACTION_SYSTEM_PROMPT,
@@ -136,6 +155,7 @@ export async function POST(
 
   const existing = extractExistingNames(targetTab.content);
   const extracted = parseExtractionOutput(text);
+
   const newEntries = extracted.filter(
     (e) => e.name && !existing.has(e.name.toLowerCase().trim())
   );

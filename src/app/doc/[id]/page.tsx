@@ -46,6 +46,7 @@ export default function DocumentPage() {
   const [doc, setDoc] = useState<DocumentData | null>(null);
   const [tabs, setTabs] = useState<TabRow[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [editorContentKey, setEditorContentKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState("");
   const [titleSaveTimeout, setTitleSaveTimeout] =
@@ -308,6 +309,23 @@ export default function DocumentPage() {
       if (list[0]) handleTabSwitch(list[0].id);
     }
   }, [activeTabId, fetchTabs, handleTabSwitch]);
+
+  const handleForceTabRefresh = useCallback(async (tabId: string) => {
+    try {
+      const res = await fetch(`/api/documents/${params.id}/tabs/${tabId}/content`);
+      if (res.ok) {
+        const fresh = await res.json();
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.id === tabId
+              ? { ...t, content: fresh.content ?? null, updatedAt: fresh.updatedAt ?? t.updatedAt }
+              : t
+          )
+        );
+      }
+    } catch { /* fall back to cached content */ }
+    setEditorContentKey((k) => k + 1);
+  }, [params.id]);
 
   const handleTitleChange = useCallback(
     (newTitle: string) => {
@@ -719,6 +737,10 @@ export default function DocumentPage() {
           isOwner={doc.isOwner}
           onSwitch={handleTabSwitch}
           onTabsChange={handleTabsChange}
+          onFlushSave={async () => {
+            try { await editorRef.current?.flushPendingSave?.(); } catch { /* ignore */ }
+          }}
+          onForceTabRefresh={handleForceTabRefresh}
         />
 
         {activeTab?.type === "pipeline_playground" ? (
@@ -733,7 +755,7 @@ export default function DocumentPage() {
           />
         ) : (
           <Editor
-            key={activeTabId}
+            key={`${activeTabId}-${editorContentKey}`}
             ref={editorRef}
             documentId={doc.id}
             tabId={activeTabId}
