@@ -72,8 +72,8 @@ export function insertMissingCanonicalTabs(
     .orderBy(tabs.position)
     .all();
 
-  // Build target position map: canonical slots 0–9, legacy types mapped to their
-  // canonical position, non-canonical types (custom, research, archive) trail at 10+.
+  // Build target position map: canonical slots 0–10, legacy types mapped to their
+  // canonical position, non-canonical types (custom, research, archive) trail at 11+.
   const canonicalPositionMap = new Map<string, number>(
     CANONICAL_TABS.map((s) => [s.type, s.position])
   );
@@ -83,7 +83,7 @@ export function insertMissingCanonicalTabs(
   }
 
   let repositioned = 0;
-  let trailingPos = 10;
+  let trailingPos = 11;
 
   for (const row of allRows) {
     const targetPos = canonicalPositionMap.has(row.type)

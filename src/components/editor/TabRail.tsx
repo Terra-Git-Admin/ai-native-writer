@@ -6,15 +6,16 @@ export type TabType =
   | "custom"
   | "series_overview"
   | "characters"
+  | "locations"
   | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
   | "workbook"
-  // Multi-Step Episode Pipeline tabs (pipeline positions 6–8).
+  // Multi-Step Episode Pipeline tabs (pipeline positions 7–9).
   | "world_state"
   | "beat_sequence"
   | "story_logic"
-  // Pipeline Playground — curation surface (position 9).
+  // Pipeline Playground — curation surface (position 10).
   | "pipeline_playground"
   // Legacy values kept for docs that haven't been healed yet — a tab fetched
   // between migration and heal may still arrive with one of these. Badges
@@ -41,6 +42,7 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
     className: "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
   },
   characters: { label: "Characters", className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+  locations: { label: "Locations", className: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
   series_skeleton: {
     label: "Series Skeleton",
     className: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300",
@@ -157,6 +159,8 @@ interface Props {
   // switch tabs AND (once the editor is mounted) scroll to that H3 by text.
   onSwitch: (tabId: string, scrollToHeadingText?: string) => void;
   onTabsChange: () => void;
+  onFlushSave?: () => Promise<void>;
+  onForceTabRefresh?: (tabId: string) => Promise<void>;
 }
 
 export default function TabRail({
@@ -167,6 +171,8 @@ export default function TabRail({
   isOwner,
   onSwitch,
   onTabsChange,
+  onFlushSave,
+  onForceTabRefresh,
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [createTitle, setCreateTitle] = useState("");
@@ -178,6 +184,8 @@ export default function TabRail({
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [syncingTabId, setSyncingTabId] = useState<string | null>(null);
+  const [syncResults, setSyncResults] = useState<Record<string, string>>({});
   const createTitleRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
 
@@ -316,6 +324,44 @@ export default function TabRail({
       if (remaining[0]) onSwitch(remaining[0].id);
     }
     onTabsChange();
+  };
+
+  const handleSync = async (e: React.MouseEvent, tab: TabRow) => {
+    e.stopPropagation();
+    if (syncingTabId) return;
+    setSyncingTabId(tab.id);
+    setSyncResults((prev) => ({ ...prev, [tab.id]: "" }));
+    try {
+      await onFlushSave?.();
+      const res = await fetch(`/api/documents/${documentId}/sync-entities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: tab.type }),
+      });
+      const data: { added?: string[]; error?: string } = await res.json();
+
+      if (data.error) {
+        setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
+        return;
+      }
+
+      const count: number = data.added?.length ?? 0;
+      setSyncResults((prev) => ({ ...prev, [tab.id]: count > 0 ? `Added ${count}` : "No new entries" }));
+
+      if (count > 0) {
+        if (tab.id === activeTabId) {
+          await onForceTabRefresh?.(tab.id);
+        } else {
+          onSwitch(tab.id);
+        }
+      }
+      onTabsChange();
+    } catch {
+      setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
+    } finally {
+      setSyncingTabId(null);
+      setTimeout(() => setSyncResults((prev) => ({ ...prev, [tab.id]: "" })), 3000);
+    }
   };
 
   const toggleCollapse = (tabId: string) => {
@@ -626,6 +672,28 @@ export default function TabRail({
                   </div>
                 </button>
 
+                {isOwner && tab.type === "locations" && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleSync(e, tab)}
+                    disabled={!!syncingTabId}
+                    className="p-1 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
+                    title={syncResults[tab.id] || "Sync from episodes & research"}
+                    aria-label="Sync"
+                  >
+                    {!!syncingTabId ? (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
+                    ) : (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="23 4 23 10 17 10" />
+                        <polyline points="1 20 1 14 7 14" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                      </svg>
+                    )}
+                  </button>
+                )}
                 {isOwner && !protectedTab && (
                   <button
                     type="button"
