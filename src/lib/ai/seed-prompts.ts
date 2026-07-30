@@ -48,6 +48,7 @@ import {
   BEAT_GEN_SYSTEM_PROMPT,
   CAUSALITY_SYSTEM_PROMPT,
   PLOT_SYNTH_SYSTEM_PROMPT,
+  ENTITY_EXTRACTION_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -82,6 +83,7 @@ const DEFAULTS = [
   { id: "pipe_beat_gen",    label: "Pipeline: Suggest Beats", content: BEAT_GEN_SYSTEM_PROMPT },
   { id: "pipe_causality",   label: "Pipeline: Connect the Story", content: CAUSALITY_SYSTEM_PROMPT },
   { id: "pipe_plot_synth",  label: "Pipeline: Write Plots", content: PLOT_SYNTH_SYSTEM_PROMPT },
+  { id: "entity_extraction", label: "Sync: Entity Extraction (Characters + Locations)", content: ENTITY_EXTRACTION_SYSTEM_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {

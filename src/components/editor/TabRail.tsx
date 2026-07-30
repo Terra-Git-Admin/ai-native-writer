@@ -6,15 +6,16 @@ export type TabType =
   | "custom"
   | "series_overview"
   | "characters"
+  | "locations"
   | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
   | "workbook"
-  // Multi-Step Episode Pipeline tabs (pipeline positions 6–8).
+  // Multi-Step Episode Pipeline tabs (pipeline positions 7–9).
   | "world_state"
   | "beat_sequence"
   | "story_logic"
-  // Pipeline Playground — curation surface (position 9).
+  // Pipeline Playground — curation surface (position 10).
   | "pipeline_playground"
   // Legacy values kept for docs that haven't been healed yet — a tab fetched
   // between migration and heal may still arrive with one of these. Badges
@@ -41,6 +42,7 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
     className: "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300",
   },
   characters: { label: "Characters", className: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300" },
+  locations: { label: "Locations", className: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300" },
   series_skeleton: {
     label: "Series Skeleton",
     className: "bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300",
@@ -178,6 +180,8 @@ export default function TabRail({
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [syncingTabId, setSyncingTabId] = useState<string | null>(null);
+  const [syncResults, setSyncResults] = useState<Record<string, string>>({});
   const createTitleRef = useRef<HTMLInputElement>(null);
   const renameRef = useRef<HTMLInputElement>(null);
 
@@ -316,6 +320,34 @@ export default function TabRail({
       if (remaining[0]) onSwitch(remaining[0].id);
     }
     onTabsChange();
+  };
+
+  const handleSync = async (e: React.MouseEvent, tab: TabRow) => {
+    e.stopPropagation();
+    if (syncingTabId) return;
+    setSyncingTabId(tab.id);
+    setSyncResults((prev) => ({ ...prev, [tab.id]: "" }));
+    try {
+      const res = await fetch(`/api/documents/${documentId}/sync-entities`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: tab.type }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
+        return;
+      }
+      const count: number = data.added?.length ?? 0;
+      const msg = count > 0 ? `Added ${count}` : "No new entries";
+      setSyncResults((prev) => ({ ...prev, [tab.id]: msg }));
+      if (count > 0) onTabsChange();
+    } catch {
+      setSyncResults((prev) => ({ ...prev, [tab.id]: "Failed" }));
+    } finally {
+      setSyncingTabId(null);
+      setTimeout(() => setSyncResults((prev) => ({ ...prev, [tab.id]: "" })), 3000);
+    }
   };
 
   const toggleCollapse = (tabId: string) => {
@@ -626,6 +658,20 @@ export default function TabRail({
                   </div>
                 </button>
 
+                {isOwner && (tab.type === "characters" || tab.type === "locations") && (
+                  <button
+                    type="button"
+                    onClick={(e) => handleSync(e, tab)}
+                    disabled={syncingTabId === tab.id}
+                    className="px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
+                    title="Sync from Predefined Episodes"
+                    aria-label="Sync entities"
+                  >
+                    {syncingTabId === tab.id
+                      ? "Syncing…"
+                      : syncResults[tab.id] || "Sync"}
+                  </button>
+                )}
                 {isOwner && !protectedTab && (
                   <button
                     type="button"
