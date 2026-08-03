@@ -12,6 +12,7 @@ import StoryboardPanel from "@/components/ai/StoryboardPanel";
 import ResearchAgentPanel from "@/components/ai/ResearchAgentPanel";
 import OutsidersPerspectivePanel from "@/components/ai/OutsidersPerspectivePanel";
 import OutsidersPerspectiveModal from "@/components/ai/OutsidersPerspectiveModal";
+import NarrativeScanPanel from "@/components/ai/NarrativeScanPanel";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
@@ -84,6 +85,7 @@ export default function DocumentPage() {
     episodeLabel: string;
     episodeIndex: number;
   } | null>(null);
+  const [narrativeScanOpen, setNarrativeScanOpen] = useState(false);
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -673,6 +675,18 @@ export default function DocumentPage() {
               Outsiders View
             </button>
           )}
+          {activeTab?.type === "predefined_episodes" && (
+            <button
+              onClick={() => setNarrativeScanOpen((o) => !o)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                narrativeScanOpen
+                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                  : "bg-rose-600 text-white hover:bg-rose-700"
+              }`}
+            >
+              Story Scan
+            </button>
+          )}
           {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
               <>
@@ -887,6 +901,15 @@ export default function DocumentPage() {
               episodeIndex={outsidersPanelRequest.episodeIndex}
               episodeLabel={outsidersPanelRequest.episodeLabel}
               onClose={() => setOutsidersPanelRequest(null)}
+            />
+          </div>
+        )}
+        {narrativeScanOpen && activeTabId && (
+          <div className="w-96 border-l border-border bg-muted">
+            <NarrativeScanPanel
+              documentId={doc.id}
+              episodeTabId={activeTabId}
+              onClose={() => setNarrativeScanOpen(false)}
             />
           </div>
         )}
