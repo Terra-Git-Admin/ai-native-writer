@@ -675,18 +675,6 @@ export default function DocumentPage() {
               Outsiders View
             </button>
           )}
-          {activeTab?.type === "predefined_episodes" && (
-            <button
-              onClick={() => setNarrativeScanOpen((o) => !o)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                narrativeScanOpen
-                  ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-                  : "bg-rose-600 text-white hover:bg-rose-700"
-              }`}
-            >
-              Story Scan
-            </button>
-          )}
           {(session?.user as { role?: string })?.role === "admin" &&
             activeTab?.type === "predefined_episodes" && (
               <>
@@ -697,14 +685,14 @@ export default function DocumentPage() {
                   Quality Agent
                 </button>
                 <button
-                  onClick={() => setStoryboardOpen((o) => !o)}
+                  onClick={() => setNarrativeScanOpen((o) => !o)}
                   className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    storyboardOpen
-                      ? "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300"
-                      : "bg-fuchsia-600 text-white hover:bg-fuchsia-700"
+                    narrativeScanOpen
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                      : "bg-rose-600 text-white hover:bg-rose-700"
                   }`}
                 >
-                  Storyboard
+                  Story Scan
                 </button>
               </>
             )}
@@ -921,14 +909,6 @@ export default function DocumentPage() {
               episodeLabel={qualityPanelRequest.episodeLabel}
               episodeIndex={qualityPanelRequest.episodeIndex}
               onClose={() => setQualityPanelRequest(null)}
-            />
-          </div>
-        )}
-        {storyboardOpen && (
-          <div className="w-[520px] border-l border-border bg-card">
-            <StoryboardPanel
-              documentId={doc.id}
-              onClose={() => setStoryboardOpen(false)}
             />
           </div>
         )}
