@@ -49,6 +49,8 @@ import {
   CAUSALITY_SYSTEM_PROMPT,
   PLOT_SYNTH_SYSTEM_PROMPT,
   ENTITY_EXTRACTION_SYSTEM_PROMPT,
+  NARRATIVE_SCAN_STATE_PROMPT,
+  NARRATIVE_SCAN_AUDIT_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -84,6 +86,8 @@ const DEFAULTS = [
   { id: "pipe_causality",   label: "Pipeline: Connect the Story", content: CAUSALITY_SYSTEM_PROMPT },
   { id: "pipe_plot_synth",  label: "Pipeline: Write Plots", content: PLOT_SYNTH_SYSTEM_PROMPT },
   { id: "entity_extraction", label: "Sync: Entity Extraction (Characters + Locations)", content: ENTITY_EXTRACTION_SYSTEM_PROMPT },
+  { id: "narrative_scan_state", label: "Narrative Scanner: State Extraction (Pass 1)", content: NARRATIVE_SCAN_STATE_PROMPT },
+  { id: "narrative_scan_audit", label: "Narrative Scanner: Journey Audit (Pass 2)", content: NARRATIVE_SCAN_AUDIT_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {
