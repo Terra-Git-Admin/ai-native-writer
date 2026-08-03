@@ -61,7 +61,6 @@ function extractEpisodeSections(content: string | null): string[] {
 
 function safeParseJson<T>(text: string): T | null {
   const trimmed = text.trim();
-  // Strip any markdown fences the model might add despite instructions
   const stripped = trimmed
     .replace(/^```(?:json)?\n?/, "")
     .replace(/\n?```$/, "")
@@ -69,14 +68,14 @@ function safeParseJson<T>(text: string): T | null {
   try {
     return JSON.parse(stripped) as T;
   } catch {
-    // Try to extract a JSON array from somewhere in the text
-    const match = stripped.match(/\[[\s\S]*\]/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as T;
-      } catch {
-        return null;
-      }
+    // Try to extract a JSON array or object from somewhere in the text
+    const arrMatch = stripped.match(/\[[\s\S]*\]/);
+    if (arrMatch) {
+      try { return JSON.parse(arrMatch[0]) as T; } catch { /* fall through */ }
+    }
+    const objMatch = stripped.match(/\{[\s\S]*\}/);
+    if (objMatch) {
+      try { return JSON.parse(objMatch[0]) as T; } catch { /* fall through */ }
     }
     return null;
   }
@@ -85,6 +84,7 @@ function safeParseJson<T>(text: string): T | null {
 export interface ScanFlag {
   episode: string;
   character: string;
+  type: "action" | "decision" | "inaction" | "dialogue" | "no_goal";
   moment: string;
   gap: string;
   severity: "critical" | "notable";
@@ -152,7 +152,7 @@ export async function POST(
       prompt: `EPISODES:\n\n${allEpisodesText}`,
     });
 
-    const stateChain = safeParseJson<unknown[]>(stateText);
+    const stateChain = safeParseJson<unknown>(stateText);
     const stateChainStr = stateChain
       ? JSON.stringify(stateChain, null, 2)
       : stateText; // fallback: send raw if parse failed

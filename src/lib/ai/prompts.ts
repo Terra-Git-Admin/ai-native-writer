@@ -3790,67 +3790,98 @@ Formatting:
 
 export const NARRATIVE_SCAN_STATE_PROMPT = `You are a narrative state extractor for a microdrama series.
 
-You will receive all episodes of a series. For each episode, extract a structured state snapshot: what happened, what each character learned, what decisions they made, and what they chose NOT to do.
+You will receive all episodes of a series. Your job is two-part.
 
-OUTPUT — a valid JSON array, one object per episode. No prose. No markdown fences. No explanation. Start your response with [ and end with ].
+PART A — CHARACTER GOALS (series-level)
+For every named character who appears in more than one episode, extract:
+- Their core goal or objective across the series (what do they want?)
+- Which episode first establishes this goal on screen
+- Their role/identity (CEO, detective, rival, love interest, etc.)
 
-Each episode object:
+If a character has no discernible goal by the end of the series, note "never established".
+
+PART B — PER-EPISODE ACTIONS
+For each episode, for each named character who appears, extract every significant:
+- Action (what they actively do)
+- Decision (what they choose, including choosing one option over another)
+- Inaction (what they conspicuously do NOT do, when their role/goal would suggest they should)
+- Key dialogue (lines that reveal intent, make a commitment, deliver information, or shift a relationship)
+
+OUTPUT — a single valid JSON object. No prose. No markdown fences. Start with { and end with }.
+
 {
-  "episode": "Episode N",
-  "events": ["brief event 1", "brief event 2"],
-  "characters": [
+  "character_goals": [
     {
       "name": "Character Name",
-      "info_gained": ["learns X", "discovers Y — shown explicitly on screen"],
-      "decisions": ["decides to do Z", "agrees to W"],
-      "inactions": ["does not tell X about Y", "avoids confronting Z"],
-      "objective": "what they want at episode end",
-      "state": "emotional/situational state at episode end"
+      "role": "their role in the story",
+      "goal": "what they want — their driving objective",
+      "goal_established": "Episode N or never established"
+    }
+  ],
+  "episodes": [
+    {
+      "episode": "Episode N",
+      "characters": [
+        {
+          "name": "Character Name",
+          "actions": ["actively does X"],
+          "decisions": ["chooses to do Y over Z"],
+          "inactions": ["does not confront X despite knowing Y"],
+          "key_dialogue": ["'line or paraphrase' — what it reveals or does"]
+        }
+      ]
     }
   ]
 }
 
 Rules:
-- Only include named characters who act, decide, or conspicuously do not act.
-- "info_gained" must be things the character was SHOWN receiving on screen — not things they might have known off-screen.
-- "inactions" are meaningful absences: a character who should act given their role/state but doesn't. Flag only significant ones.
-- Keep each field to 1 short sentence. Do not summarize plot — extract state.
-- If an episode has no named characters taking meaningful actions, output an empty characters array.`;
+- Only include named characters with meaningful presence in the episode. Exclude extras.
+- "inactions" must be meaningful absences — not just things a character didn't happen to do, but things their role/goal would logically demand. These are often where gaps hide — include them.
+- "key_dialogue" — load-bearing lines only: lines that reveal hidden knowledge, make a promise or threat, shift allegiance, or expose a secret.
+- Do not summarize. Extract raw facts. One short sentence per item.`;
 
-export const NARRATIVE_SCAN_AUDIT_PROMPT = `You are a viewer journey auditor for a microdrama series.
+export const NARRATIVE_SCAN_AUDIT_PROMPT = `You are a story logic auditor for a microdrama series.
 
 You will receive:
-1. A STATE CHAIN — a JSON array of per-episode state snapshots (what each character knew, decided, and felt)
-2. The FULL EPISODE TEXT — the complete scripts for all episodes
+1. A STORY MAP — character goals and per-episode actions/decisions/inactions/key dialogue
+2. The FULL EPISODE TEXT
 
-Your job: identify moments where a character makes a decision, takes an action, has a strong reaction, or conspicuously does NOT act — and the viewer has not been given enough prior context to find it believable.
+Your job: audit every character action, decision, inaction, and key dialogue moment against two tests.
 
-WHAT COUNTS AS A GAP:
-- A character acts on information they were never shown receiving
-- A character makes a decision inconsistent with their established role, personality, or prior choices — without any transition shown
-- A character reacts emotionally (betrayal, devotion, rage, sacrifice) without the relationship or stakes having been built up on screen
-- A character does not act when their established role/personality would demand it — and this absence is never acknowledged
-- A major plot turn rests on a character motivation that was never established
+TEST 1 — GOAL COHERENCE
+Every named character who appears across multiple episodes must have an established goal. Evaluate:
+- Does this character have a clear goal? If not → flag.
+- Does this action/decision/inaction/dialogue serve, hinder, or respond to their goal? If there is no clear connection and it is not explained → flag.
+- If a character's goal would logically demand they act and they do not → flag the absence.
 
-WHAT TO IGNORE:
-- Small continuity details (costume, prop, timing)
-- Subjective quality issues (dialogue style, pacing preference)
-- Things a reasonable viewer would infer from genre convention
-- Gaps you are uncertain about — only flag what you are confident is missing
+TEST 2 — INFORMATION & SETUP
+Does the viewer have the context to understand WHY this character does/says/decides/avoids this?
+- Was the information the character acts on shown explicitly on screen in a prior episode?
+- Was the relationship, history, or stakes established before this moment depends on them?
+- Was the motivation built up over prior episodes, or does it appear without setup?
+
+Flag every moment that fails either test. Do NOT be conservative — if the connection between an action and a goal is thin or implicit, flag it. The writer decides whether to fix or accept. Missing real gaps is worse than surfacing debatable ones.
+
+Inaction is a decision. Treat it identically to an action. If a character's established goal/role demands they do something and they don't, that absence must be explained on screen or it is a gap.
+
+Dialogue that contradicts a character's established goal, or reveals knowledge they were never shown receiving, is a gap.
 
 SEVERITY:
-- "critical" — viewer would be confused or disengaged. The moment does not land without the missing setup.
-- "notable" — viewer would feel something is off but can continue. Worth fixing before final.
+- "critical" — viewer would be confused or pulled out of the story. The moment cannot land without the missing setup.
+- "notable" — viewer would feel something is off. The logic is thin. Worth addressing.
 
 OUTPUT — a valid JSON array of flag objects. No prose. No markdown fences. Start with [ and end with ].
 
 {
   "episode": "Episode N",
   "character": "Name",
-  "moment": "what they do/decide/feel/don't do — one sentence",
-  "gap": "what prior setup is missing that would make this believable — be specific about which episode(s) should have established it",
+  "type": "action" | "decision" | "inaction" | "dialogue" | "no_goal",
+  "moment": "what they do / say / decide / don't do — one sentence",
+  "gap": "what is missing: which episode should have established this, or what goal connection is unclear",
   "severity": "critical" | "notable"
 }
 
-If no significant gaps exist, output [].`;
+For "no_goal" flags: episode = first episode where this matters, moment = describe the character's role, gap = goal was never established on screen.
+
+If genuinely no gaps exist, output [].`;
 

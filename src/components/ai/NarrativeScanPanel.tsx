@@ -5,10 +5,19 @@ import { useState } from "react";
 interface ScanFlag {
   episode: string;
   character: string;
+  type: "action" | "decision" | "inaction" | "dialogue" | "no_goal";
   moment: string;
   gap: string;
   severity: "critical" | "notable";
 }
+
+const TYPE_LABEL: Record<ScanFlag["type"], string> = {
+  action: "action",
+  decision: "decision",
+  inaction: "inaction",
+  dialogue: "dialogue",
+  no_goal: "no goal",
+};
 
 interface NarrativeScanPanelProps {
   documentId: string;
@@ -193,9 +202,16 @@ export default function NarrativeScanPanel({
                     className="rounded-lg border border-border bg-card p-3 space-y-1.5"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        {flag.character}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate">
+                          {flag.character}
+                        </span>
+                        {flag.type && (
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground">
+                            {TYPE_LABEL[flag.type] ?? flag.type}
+                          </span>
+                        )}
+                      </div>
                       <span
                         className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                           flag.severity === "critical"
