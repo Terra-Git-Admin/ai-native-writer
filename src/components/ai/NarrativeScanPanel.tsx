@@ -36,11 +36,20 @@ export default function NarrativeScanPanel({
     try {
       setPhase("pass2");
 
-      const res = await fetch(`/api/documents/${documentId}/narrative-scan`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episodeTabId }),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 115_000);
+
+      let res: Response;
+      try {
+        res = await fetch(`/api/documents/${documentId}/narrative-scan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ episodeTabId }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

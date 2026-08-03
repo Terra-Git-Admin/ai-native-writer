@@ -1,3 +1,5 @@
+export const maxDuration = 120;
+
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
 import { auth } from "@/lib/auth";
