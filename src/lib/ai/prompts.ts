@@ -3868,11 +3868,48 @@ Episode N — [Character]: [what happens] — payoff of [what it resolves or bre
   Prior build: [episodes with visible setup — e.g. "Ep 3 (vulnerability shown), Ep 7 (loyalty tested)"]
   Build count: [N]
 
-Mark ⚠ UNDERBUILD if fewer than 2 prior episodes contain visible build toward this moment.`;
+Mark ⚠ UNDERBUILD if fewer than 2 prior episodes contain visible build toward this moment.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5: SCENE TIMELINE (location & time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For every episode, list each distinct scene in order:
+
+Episode N
+  Scene 1 — [Location] | [Time of day / time period] | [Characters present]
+    Reason present: [why each MAIN/ANTAGONIST character is here — stated, implied, or ⚠ unexplained]
+    Shift from prior scene: [location change / time jump / continuous — and what bridges it]
+  Scene 2 — ...
+
+RULES:
+- "Reason present" for MAIN/ANTAGONIST: trace it. Did they plan to go here, follow someone, get summoned, or just appear? If the episode gives no explanation → mark ⚠ unexplained.
+- "Shift from prior scene": note if there's a logical bridge (character travels, time passes, cut with explanation) or if it's an abrupt jump with no transition logic → mark ⚠ abrupt.
+- Flag episodes where all scenes share the same location and time (no movement) — mark the episode: ⚠ NO LOCATION/TIME MOVEMENT.
+- A healthy episode has at least 2 distinct locations or 1 clear time shift.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6: PHYSICAL OBJECT LOG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Track every significant physical object that is given, taken, planted, intercepted, or used as evidence. Objects that drive plot decisions must be here.
+
+[Object name / description]
+  First appears: Ep N — [who has it, how they got it — on screen / ⚠ unexplained]
+  Handoffs:
+    Ep N — [Character A] → [Character B] — [how/why — on screen / ⚠ unexplained]
+  Used as leverage/evidence: Ep N — [Character] — [what they do with it]
+  ⚠ PROVENANCE GAP: [if at any point the object appears in someone's possession with no explanation of how they got it]
+
+RULES:
+- Include: documents, devices, weapons, keys, recordings, trackers, money, and any item whose possession changes the plot.
+- Every handoff must be traceable. If a character has an object they couldn't logically have acquired → mark ⚠ PROVENANCE GAP.
+- If a tracker is placed, an interception happens, or something is stolen — the HOW must be on screen or it's a gap.
+- Skip purely decorative props.`;
 
 export const NARRATIVE_SCAN_AUDIT_PROMPT = `You are a story logic auditor for a microdrama series.
 
-You will receive a STATE MAP covering main characters and antagonists only. Your job is to surface the gaps that matter — moments where a VIEWER would actively ask "why would they do that?" or "how do they know that?"
+You will receive a STATE MAP covering main characters and antagonists only. Your job is to surface the gaps that matter — moments where a VIEWER would actively ask "why would they do that?", "how do they know that?", or "why are they even there?"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCOPE
@@ -3884,45 +3921,47 @@ Only audit characters classified as MAIN or ANTAGONIST in Section 0. Do not flag
 THE QUALITY THRESHOLD — apply before flagging anything
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Before flagging any moment, ask: "Would a viewer actively question WHY this character does this — not just feel slightly off, but genuinely not be able to follow the logic?"
+Before flagging any moment, ask: "Would a viewer actively question this — not just feel slightly off, but genuinely not be able to follow the logic?"
 
-If yes → flag.
-If the gap is small, genre-conventional, or something a viewer would fill in without noticing → do NOT flag.
-
-Examples of what NOT to flag:
-- A character in a thriller breaks into a building without prior "capability" established — viewers accept this in the genre
-- A character learns something between episodes that's plausible given their role — viewers accept reasonable inference
-- A side plot detail is thin — viewers don't track every thread
-
-Examples of what TO flag:
-- A character acts on specific, non-obvious information they were never shown receiving, and it drives a major plot turn
-- A character's behavior directly contradicts their established goal with no explanation — not just a deviation, a contradiction
-- A relationship dynamic reverses completely (from ally to enemy, or deep trust to betrayal) with no on-screen scene that caused the shift
+If yes → flag. If genre-conventional or something a viewer fills in without noticing → do NOT flag.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THREE GAP TESTS
+SIX GAP TESTS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 TEST 1 — KNOWLEDGE GAP (highest priority)
-A main/antagonist character acts on specific, non-obvious information that drives a significant plot decision.
-Check: is that information listed in Information Acquired (on screen) before this episode?
-If marked "⚠ implied offscreen" AND the knowledge directly causes a goal-critical action → flag as critical.
-If the character acts on knowledge with no trace in the state map at all → flag as critical.
-Do NOT flag routine inferences (e.g. a spy knowing how to tail someone, a detective knowing how to access records).
+A main/antagonist acts on specific, non-obvious information that drives a significant plot decision.
+Check Information Acquired: is it listed as on screen before this episode?
+If marked "⚠ implied offscreen" AND it directly causes a goal-critical action → flag critical.
+If the character acts on knowledge with no trace in the state map at all → flag critical.
+Do NOT flag routine inferences (a spy tailing someone, a detective accessing records).
 
 TEST 2 — GOAL COHERENCE GAP
-A main/antagonist character makes a significant decision that directly contradicts their established goal, with no on-screen explanation for the shift.
-This is NOT "the decision doesn't serve their goal." This is: "the decision actively works against their goal with no visible reason."
-Also flag: a main/antagonist character who appears across multiple episodes with no goal ever established on screen (type: no_goal).
+A main/antagonist makes a decision that directly contradicts their established goal with no on-screen explanation.
+NOT "doesn't serve the goal" — only "actively works against it with no visible reason."
+Also flag: main/antagonist with no goal established on screen across multiple episodes (type: no_goal).
 
 TEST 3 — RELATIONSHIP REVERSAL GAP
-A relationship dynamic between a MAIN or ANTAGONIST character and another character flips significantly — from ally to enemy, deep trust to betrayal, indifference to active threat — with no on-screen scene establishing what caused the reversal.
-Check Relationship States: if the shift is marked "⚠ implied offscreen" or there is no shift recorded at all despite a clear change in behavior → flag.
-Do NOT flag gradual tension buildup — only hard reversals with no cause.
+A relationship flips hard — ally to enemy, deep trust to betrayal, indifference to active threat — with no on-screen scene causing the reversal.
+Check Relationship States: shift marked "⚠ implied offscreen" or no shift recorded despite clear behavior change → flag.
+Do NOT flag gradual tension — only hard unexplained reversals.
 
 TEST 4 — PAYOFF BUILD GAP
-For every payoff moment in Section 4 marked "⚠ UNDERBUILD" → flag as critical.
-Zero prior build episodes → critical. One prior build episode → notable.
+Every payoff moment in Section 4 marked "⚠ UNDERBUILD" → flag.
+Zero prior build → critical. One prior build episode → notable.
+
+TEST 5 — PRESENCE GAP (from Section 5)
+For every scene where a MAIN or ANTAGONIST is marked "⚠ unexplained" under Reason Present:
+Ask: does the viewer have any basis — prior planning shown, foreshadowing, surveillance established — to understand why this character is here?
+If genuinely no basis exists → flag. Characters should not materialize at the exact right place with zero setup.
+Also flag: scene shifts marked "⚠ abrupt" where the jump breaks viewer orientation (wrong character suddenly present, time skip with no signal).
+Also flag: any episode marked "⚠ NO LOCATION/TIME MOVEMENT" — same location/time throughout creates pacing stagnation.
+
+TEST 6 — PHYSICAL OBJECT GAP (from Section 6)
+For every item marked "⚠ PROVENANCE GAP" in the Object Log:
+Flag if a MAIN or ANTAGONIST uses or possesses an object whose acquisition is unexplained and its possession drives the plot.
+Tracker placed with no shown access → flag. Evidence produced with no chain of custody → flag. Object handed off with no scene showing the exchange → flag.
+Do NOT flag objects where the gap is minor or the possession is genre-expected.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT — JSONL
@@ -3930,12 +3969,12 @@ OUTPUT FORMAT — JSONL
 
 Output one JSON object per line. No array wrapper. No prose. No markdown fences.
 
-{"episode":"Episode N","character":"Name","type":"action","moment":"what they do — one sentence, specific","gap":"what specific knowledge/setup is missing and why a viewer would question it — name the episode where this should have been established if possible","severity":"critical"}
+{"episode":"Episode N","character":"Name","type":"action","moment":"what they do — one sentence, specific","gap":"what is missing and why a viewer would question it — name episode where setup should have appeared if possible","severity":"critical"}
 
-type: "action" | "decision" | "inaction" | "dialogue" | "no_goal"
+type: "action" | "decision" | "inaction" | "dialogue" | "no_goal" | "presence" | "object"
 severity: "critical" | "notable"
 
-Be selective. 5 real gaps are more valuable than 20 questionable ones. If you are uncertain whether a moment clears the quality threshold — do not flag it.
+Be selective. 5 real gaps beat 20 questionable ones. If uncertain whether a moment clears the threshold — do not flag it.
 
 If no gaps exist, output a single line: []`;
 

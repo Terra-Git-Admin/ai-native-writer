@@ -5,7 +5,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 interface ScanFlag {
   episode: string;
   character: string;
-  type: "action" | "decision" | "inaction" | "dialogue" | "no_goal";
+  type: "action" | "decision" | "inaction" | "dialogue" | "no_goal" | "presence" | "object";
   moment: string;
   gap: string;
   severity: "critical" | "notable";
@@ -17,6 +17,8 @@ const TYPE_LABEL: Record<ScanFlag["type"], string> = {
   inaction: "inaction",
   dialogue: "dialogue",
   no_goal: "no goal",
+  presence: "presence",
+  object: "object",
 };
 
 interface NarrativeScanPanelProps {
