@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 
 interface ScanFlag {
   episode: string;
@@ -46,6 +46,9 @@ export default function NarrativeScanPanel({
   const [stateText, setStateText] = useState("");
   const [flags, setFlags] = useState<ScanFlag[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [episodes, setEpisodes] = useState<string[]>([]);
+  const [fromIndex, setFromIndex] = useState(0);
+  const [toIndex, setToIndex] = useState(0);
 
   const stateTextRef = useRef("");
   const stateScrollRef = useRef<HTMLDivElement>(null);
@@ -65,6 +68,25 @@ export default function NarrativeScanPanel({
     }
   }, [flags, phase]);
 
+  // Fetch episode list for the range picker
+  const fetchEpisodes = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/documents/${documentId}/narrative-scan/state?episodeTabId=${episodeTabId}`
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { episodes: string[] };
+      setEpisodes(data.episodes);
+      setToIndex(data.episodes.length - 1);
+    } catch {
+      // non-critical — picker just won't show
+    }
+  }, [documentId, episodeTabId]);
+
+  useEffect(() => {
+    fetchEpisodes();
+  }, [fetchEpisodes]);
+
   const runPass1 = async () => {
     setPhase("pass1");
     setStateText("");
@@ -78,7 +100,7 @@ export default function NarrativeScanPanel({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ episodeTabId }),
+          body: JSON.stringify({ episodeTabId, fromIndex, toIndex }),
         }
       );
 
@@ -165,6 +187,8 @@ export default function NarrativeScanPanel({
     stateTextRef.current = "";
     setFlags([]);
     setError(null);
+    setFromIndex(0);
+    setToIndex(episodes.length > 0 ? episodes.length - 1 : 0);
   };
 
   const criticalFlags = flags.filter((f) => f.severity === "critical");
@@ -213,15 +237,62 @@ export default function NarrativeScanPanel({
       <div className="flex min-h-0 flex-1 flex-col">
         {/* ── IDLE ── */}
         {phase === "idle" && (
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             <p className="text-sm text-muted-foreground">
-              Scans all episodes to find moments where a character decision, reaction, knowledge, or inaction isn&apos;t earned by prior on-screen context. Runs in two passes — you&apos;ll see the state map build live before the audit starts.
+              Scans episodes to find moments where a character decision, reaction, knowledge, or inaction isn&apos;t earned by prior on-screen context. Runs in two passes — you&apos;ll see the state map build live before the audit starts.
             </p>
+
+            {episodes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-foreground">Episode range</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs text-muted-foreground">From</label>
+                    <select
+                      value={fromIndex}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setFromIndex(v);
+                        if (v > toIndex) setToIndex(v);
+                      }}
+                      className="w-full rounded border border-border bg-card px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    >
+                      {episodes.map((label, i) => (
+                        <option key={i} value={i}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="mb-1 block text-xs text-muted-foreground">To</label>
+                    <select
+                      value={toIndex}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setToIndex(v);
+                        if (v < fromIndex) setFromIndex(v);
+                      }}
+                      className="w-full rounded border border-border bg-card px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-rose-500"
+                    >
+                      {episodes.map((label, i) => (
+                        <option key={i} value={i}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {toIndex - fromIndex + 1} episode{toIndex - fromIndex + 1 !== 1 ? "s" : ""} selected
+                  {toIndex - fromIndex + 1 === episodes.length ? " (all)" : ""}
+                </p>
+              </div>
+            )}
+
             <button
               onClick={runPass1}
               className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700"
             >
-              Scan All Episodes
+              Scan {episodes.length > 0 && toIndex - fromIndex + 1 < episodes.length
+                ? `Ep ${fromIndex + 1}–${toIndex + 1}`
+                : "All Episodes"}
             </button>
           </div>
         )}

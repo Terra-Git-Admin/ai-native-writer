@@ -56,6 +56,39 @@ function extractEpisodeSections(content: string | null): string[] {
   }
 }
 
+// GET — returns episode labels for the range picker
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const { searchParams } = new URL(req.url);
+  const episodeTabId = searchParams.get("episodeTabId");
+
+  if (!episodeTabId) {
+    return NextResponse.json({ error: "episodeTabId is required" }, { status: 400 });
+  }
+
+  const episodeTab = await db.query.tabs.findFirst({
+    where: and(eq(tabs.id, episodeTabId), eq(tabs.documentId, id)),
+    columns: { content: true },
+  });
+  if (!episodeTab) {
+    return NextResponse.json({ error: "Episode tab not found" }, { status: 404 });
+  }
+
+  const sections = extractEpisodeSections(episodeTab.content);
+  const labels = sections.map((s) => s.split("\n")[0].trim());
+
+  return NextResponse.json({ episodes: labels });
+}
+
+// POST — streams Pass 1 state map for the selected episode range
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -76,7 +109,11 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({}));
-  const { episodeTabId } = body as { episodeTabId?: string };
+  const { episodeTabId, fromIndex, toIndex } = body as {
+    episodeTabId?: string;
+    fromIndex?: number;
+    toIndex?: number;
+  };
 
   if (!episodeTabId) {
     return NextResponse.json({ error: "episodeTabId is required" }, { status: 400 });
@@ -89,15 +126,20 @@ export async function POST(
     return NextResponse.json({ error: "Episode tab not found" }, { status: 404 });
   }
 
-  const sections = extractEpisodeSections(episodeTab.content);
-  if (sections.length === 0) {
+  const allSections = extractEpisodeSections(episodeTab.content);
+  if (allSections.length === 0) {
     return NextResponse.json(
       { error: "No episodes found in this tab" },
       { status: 400 }
     );
   }
 
-  const allEpisodesText = sections.join("\n\n---\n\n");
+  const start = fromIndex ?? 0;
+  const end = toIndex ?? allSections.length - 1;
+  const sections = allSections.slice(
+    Math.max(0, start),
+    Math.min(allSections.length - 1, end) + 1
+  );
 
   const promptRow = await db.query.prompts.findFirst({
     where: eq(prompts.id, "narrative_scan_state"),
@@ -109,7 +151,7 @@ export async function POST(
   const result = streamText({
     model,
     system: systemPrompt,
-    prompt: `EPISODES (${sections.length} total):\n\n${allEpisodesText}`,
+    prompt: `EPISODES (${sections.length} of ${allSections.length} total):\n\n${sections.join("\n\n---\n\n")}`,
   });
 
   return result.toTextStreamResponse();
