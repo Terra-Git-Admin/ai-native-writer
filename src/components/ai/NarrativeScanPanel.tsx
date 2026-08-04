@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 interface ScanFlag {
   episode: string;
@@ -25,51 +25,151 @@ interface NarrativeScanPanelProps {
   onClose: () => void;
 }
 
-type ScanPhase = "idle" | "pass1" | "pass2" | "done" | "error";
+type Phase = "idle" | "pass1" | "pass1_done" | "pass2" | "done" | "error";
+
+function safeParseFlag(line: string): ScanFlag | null {
+  const trimmed = line.trim();
+  if (!trimmed || !trimmed.startsWith("{")) return null;
+  try {
+    return JSON.parse(trimmed) as ScanFlag;
+  } catch {
+    return null;
+  }
+}
 
 export default function NarrativeScanPanel({
   documentId,
   episodeTabId,
   onClose,
 }: NarrativeScanPanelProps) {
-  const [phase, setPhase] = useState<ScanPhase>("idle");
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [stateText, setStateText] = useState("");
   const [flags, setFlags] = useState<ScanFlag[]>([]);
-  const [episodeCount, setEpisodeCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const runScan = async () => {
+  const stateTextRef = useRef("");
+  const stateScrollRef = useRef<HTMLDivElement>(null);
+  const flagsScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll state text as it streams
+  useEffect(() => {
+    if (phase === "pass1" && stateScrollRef.current) {
+      stateScrollRef.current.scrollTop = stateScrollRef.current.scrollHeight;
+    }
+  }, [stateText, phase]);
+
+  // Auto-scroll flags as they appear
+  useEffect(() => {
+    if (phase === "pass2" && flagsScrollRef.current) {
+      flagsScrollRef.current.scrollTop = flagsScrollRef.current.scrollHeight;
+    }
+  }, [flags, phase]);
+
+  const runPass1 = async () => {
     setPhase("pass1");
+    setStateText("");
     setFlags([]);
     setError(null);
+    stateTextRef.current = "";
 
     try {
-      setPhase("pass2");
+      const res = await fetch(
+        `/api/documents/${documentId}/narrative-scan/state`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ episodeTabId }),
+        }
+      );
 
-      const res = await fetch(`/api/documents/${documentId}/narrative-scan`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episodeTabId }),
-      });
-
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error || "Scan failed");
+        throw new Error((data as { error?: string }).error ?? "State extraction failed");
       }
 
-      const data = (await res.json()) as { flags: ScanFlag[]; episodeCount: number };
-      setFlags(data.flags);
-      setEpisodeCount(data.episodeCount);
-      setPhase("done");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        stateTextRef.current += chunk;
+        setStateText(stateTextRef.current);
+      }
+
+      setPhase("pass1_done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
+      setError(err instanceof Error ? err.message : "State extraction failed");
       setPhase("error");
     }
+  };
+
+  const runPass2 = async () => {
+    setPhase("pass2");
+    setFlags([]);
+
+    try {
+      const res = await fetch(
+        `/api/documents/${documentId}/narrative-scan/audit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stateMap: stateTextRef.current }),
+        }
+      );
+
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "Audit failed");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const flag = safeParseFlag(line);
+          if (flag) {
+            setFlags((prev) => [...prev, flag]);
+          }
+        }
+      }
+
+      // Flush remaining buffer
+      if (buffer.trim()) {
+        const flag = safeParseFlag(buffer);
+        if (flag) {
+          setFlags((prev) => [...prev, flag]);
+        }
+      }
+
+      setPhase("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Audit failed");
+      setPhase("error");
+    }
+  };
+
+  const reset = () => {
+    setPhase("idle");
+    setStateText("");
+    stateTextRef.current = "";
+    setFlags([]);
+    setError(null);
   };
 
   const criticalFlags = flags.filter((f) => f.severity === "critical");
   const notableFlags = flags.filter((f) => f.severity === "notable");
 
-  // Group flags by episode for display
   const byEpisode = flags.reduce<Record<string, ScanFlag[]>>((acc, f) => {
     if (!acc[f.episode]) acc[f.episode] = [];
     acc[f.episode].push(f);
@@ -85,7 +185,7 @@ export default function NarrativeScanPanel({
   return (
     <div className="flex h-full flex-col bg-muted">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-rose-600">
             Story Scan
@@ -110,14 +210,15 @@ export default function NarrativeScanPanel({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* ── IDLE ── */}
         {phase === "idle" && (
-          <div className="space-y-3">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Scans all episodes to find moments where a character decision, reaction, or inaction isn&apos;t earned by prior viewer context.
+              Scans all episodes to find moments where a character decision, reaction, knowledge, or inaction isn&apos;t earned by prior on-screen context. Runs in two passes — you&apos;ll see the state map build live before the audit starts.
             </p>
             <button
-              onClick={runScan}
+              onClick={runPass1}
               className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700"
             >
               Scan All Episodes
@@ -125,43 +226,77 @@ export default function NarrativeScanPanel({
           </div>
         )}
 
-        {(phase === "pass1" || phase === "pass2") && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {/* ── PASS 1 STREAMING ── */}
+        {phase === "pass1" && (
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 gap-3">
+            <div className="flex items-center gap-2 shrink-0">
               <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "0ms" }} />
               <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "150ms" }} />
               <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "300ms" }} />
+              <p className="text-xs text-muted-foreground">Pass 1: building state map…</p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {phase === "pass1"
-                ? "Pass 1: Mapping story state across all episodes…"
-                : "Pass 2: Auditing viewer journey gaps…"}
-            </p>
-            <p className="text-xs text-muted-foreground">This takes 30–60 seconds for a full series.</p>
-          </div>
-        )}
-
-        {phase === "error" && (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
-              {error}
-            </div>
-            <button
-              onClick={runScan}
-              className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700"
+            <div
+              ref={stateScrollRef}
+              className="flex-1 overflow-y-auto rounded-lg border border-border bg-card p-3"
             >
-              Retry Scan
-            </button>
+              <pre className="whitespace-pre-wrap font-mono text-xs text-foreground leading-relaxed">
+                {stateText || <span className="text-muted-foreground">Extracting character goals, information flows, and episode actions…</span>}
+              </pre>
+            </div>
           </div>
         )}
 
-        {phase === "done" && (
-          <div className="space-y-4">
-            {/* Summary row */}
-            <div className="flex items-center justify-between">
+        {/* ── PASS 1 DONE — waiting for user to trigger audit ── */}
+        {phase === "pass1_done" && (
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 gap-3">
+            <div
+              ref={stateScrollRef}
+              className="flex-1 overflow-y-auto rounded-lg border border-border bg-card p-3"
+            >
+              <pre className="whitespace-pre-wrap font-mono text-xs text-foreground leading-relaxed">
+                {stateText}
+              </pre>
+            </div>
+            <div className="shrink-0 space-y-2">
               <p className="text-xs text-muted-foreground">
-                {episodeCount} episode{episodeCount !== 1 ? "s" : ""} scanned
+                State map complete. Review above, then run the gap audit.
               </p>
+              <button
+                onClick={runPass2}
+                className="w-full rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-rose-700"
+              >
+                Run Gap Audit →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── PASS 2 STREAMING ── */}
+        {phase === "pass2" && (
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 gap-3">
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "0ms" }} />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "150ms" }} />
+              <span className="h-2 w-2 animate-bounce rounded-full bg-rose-500" style={{ animationDelay: "300ms" }} />
+              <p className="text-xs text-muted-foreground">Pass 2: auditing gaps…</p>
+            </div>
+            <div
+              ref={flagsScrollRef}
+              className="flex-1 overflow-y-auto space-y-3"
+            >
+              {flags.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Flags will appear here as they&apos;re found…</p>
+              ) : (
+                <FlagList flags={flags} episodeOrder={episodeOrder} byEpisode={byEpisode} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── DONE ── */}
+        {phase === "done" && (
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3 gap-3">
+            <div className="shrink-0 flex items-center justify-between">
               <div className="flex gap-2">
                 {criticalFlags.length > 0 && (
                   <span className="rounded-full bg-red-100 dark:bg-red-950/40 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-300">
@@ -179,59 +314,91 @@ export default function NarrativeScanPanel({
                   </span>
                 )}
               </div>
+              <button
+                onClick={reset}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Re-scan
+              </button>
             </div>
+            <div className="flex-1 overflow-y-auto space-y-3">
+              <FlagList flags={flags} episodeOrder={episodeOrder} byEpisode={byEpisode} />
+            </div>
+          </div>
+        )}
 
-            {/* Flags by episode */}
-            {episodeOrder.map((ep) => (
-              <div key={ep} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {ep}
-                </p>
-                {byEpisode[ep].map((flag, i) => (
-                  <div
-                    key={i}
-                    className="rounded-lg border border-border bg-card p-3 space-y-1.5"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-sm font-medium text-foreground truncate">
-                          {flag.character}
-                        </span>
-                        {flag.type && (
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground">
-                            {TYPE_LABEL[flag.type] ?? flag.type}
-                          </span>
-                        )}
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                          flag.severity === "critical"
-                            ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300"
-                            : "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
-                        }`}
-                      >
-                        {flag.severity}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground">{flag.moment}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      <span className="font-medium">Missing: </span>
-                      {flag.gap}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ))}
-
+        {/* ── ERROR ── */}
+        {phase === "error" && (
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">
+              {error}
+            </div>
             <button
-              onClick={runScan}
+              onClick={reset}
               className="w-full rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted"
             >
-              Re-scan
+              Start Over
             </button>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function FlagList({
+  flags,
+  episodeOrder,
+  byEpisode,
+}: {
+  flags: ScanFlag[];
+  episodeOrder: string[];
+  byEpisode: Record<string, ScanFlag[]>;
+}) {
+  if (flags.length === 0) return null;
+
+  return (
+    <>
+      {episodeOrder.map((ep) => (
+        <div key={ep} className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {ep}
+          </p>
+          {byEpisode[ep].map((flag, i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-border bg-card p-3 space-y-1.5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {flag.character}
+                  </span>
+                  {flag.type && (
+                    <span className="shrink-0 rounded px-1.5 py-0.5 text-xs bg-muted text-muted-foreground">
+                      {TYPE_LABEL[flag.type] ?? flag.type}
+                    </span>
+                  )}
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                    flag.severity === "critical"
+                      ? "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300"
+                      : "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  {flag.severity}
+                </span>
+              </div>
+              <p className="text-sm text-foreground">{flag.moment}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="font-medium">Missing: </span>
+                {flag.gap}
+              </p>
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
   );
 }
