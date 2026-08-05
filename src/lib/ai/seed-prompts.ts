@@ -51,6 +51,8 @@ import {
   ENTITY_EXTRACTION_SYSTEM_PROMPT,
   NARRATIVE_SCAN_STATE_PROMPT,
   NARRATIVE_SCAN_AUDIT_PROMPT,
+  PLOT_SCAN_ANALYZE_PROMPT,
+  PLOT_SCAN_REVIEW_PROMPT,
 } from "@/lib/ai/prompts";
 
 const DEFAULTS = [
@@ -88,6 +90,8 @@ const DEFAULTS = [
   { id: "entity_extraction", label: "Sync: Entity Extraction (Characters + Locations)", content: ENTITY_EXTRACTION_SYSTEM_PROMPT },
   { id: "narrative_scan_state", label: "Narrative Scanner: State Extraction (Pass 1)", content: NARRATIVE_SCAN_STATE_PROMPT },
   { id: "narrative_scan_audit", label: "Narrative Scanner: Journey Audit (Pass 2)", content: NARRATIVE_SCAN_AUDIT_PROMPT },
+  { id: "plot_scan_analyze", label: "Plot Scanner: Structure Analysis (Pass 1)", content: PLOT_SCAN_ANALYZE_PROMPT },
+  { id: "plot_scan_review", label: "Plot Scanner: Gap & Improvement Review (Pass 2)", content: PLOT_SCAN_REVIEW_PROMPT },
 ];
 
 export async function seedPromptsFromCode(): Promise<number> {

@@ -3978,3 +3978,126 @@ Be selective. 5 real gaps beat 20 questionable ones. If uncertain whether a mome
 
 If no gaps exist, output a single line: []`;
 
+export const PLOT_SCAN_ANALYZE_PROMPT = `You are a microdrama plot structure analyst.
+
+You will receive episode-by-episode microdrama plots for a series. Build a structural map of the entire plot sequence.
+
+Output four sections in this exact order. Use the exact section headers shown. No preamble. No commentary after the last section.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1: CHARACTER ARC MAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For each MAIN character and ANTAGONIST, trace their arc through the plots:
+
+[Character Name] — [role]
+  Overall arc: [what changes by series end vs series start — one sentence]
+  Episode-by-episode:
+    [Ep N]: [concrete shift — goal, power, knowledge, emotional state, relationship]
+    [Ep N+1]: ...
+  ⚠ STAGNANT Ep N–M: [mark if character has no meaningful development for 3+ consecutive episodes]
+  ⚠ NO ARC: [mark if character ends where they started — no change in goal, power, or understanding]
+
+RULES:
+- Only include MAIN and ANTAGONIST characters. Skip side characters entirely.
+- Shifts must be concrete: "gains leverage over X", "loses ally Y", "discovers Z" — not vague like "develops further".
+- Stagnant = 3+ episodes with no change in any of: goal, power, knowledge, relationships, emotional state.
+- If a character appears in fewer than 3 episodes, note their role but skip arc tracking.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2: EPISODE PACING MAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For each episode, rate its three structural elements:
+
+Episode N
+  Opening hook: [what it is] — STRONG / WEAK / MISSING
+  Mid escalation: [what it is] — STRONG / WEAK / MISSING
+  End hook / cliffhanger: [what it is] — STRONG / WEAK / MISSING
+  ⚠ PACING RISK: [mark if 2 or more of the 3 elements are WEAK or MISSING]
+
+Overall escalation curve:
+  Describe the tension arc across the full series — rising, flat, peaks and valleys.
+  Tension peaks: [list the 3–5 episodes with the strongest escalation]
+  ⚠ PLATEAU Ep N–M: [mark any stretch of 3+ episodes where tension doesn't meaningfully rise]
+
+RULES:
+- STRONG: viewer cannot stop — reveals, reversals, confrontations, high-stakes decisions, time pressure
+- WEAK: moves the plot but creates no urgency or emotional stakes
+- MISSING: episode ends without any compelling reason to watch the next one
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3: PLOT LOGIC CHAIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For each major plot event, trace its cause and consequence:
+
+  Ep N: [Event] — caused by: [prior setup, Ep X] | causes: [consequence, Ep Y]
+  ⚠ UNMOTIVATED: [mark if an event happens with no visible cause in prior plots]
+  ⚠ NO CONSEQUENCE: [mark if a significant event produces no visible effect in subsequent plots]
+
+RULES:
+- Major events only: turning points, confrontations, betrayals, revelations, decisions that redirect the story.
+- "Caused by" must point to a specific prior plot point — not genre convention.
+- "No consequence" is a flag when the story behaves as if the event didn't happen in the following episodes.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4: KEY EVENTS INVENTORY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+List every major turning point, reversal, revelation, confrontation, and betrayal:
+
+  Ep N — [TURNING POINT / REVERSAL / REVELATION / CONFRONTATION / BETRAYAL]
+    What happens: [one sentence]
+    Build rating: EARNED (prior setup visible) / RUSHED (≤1 episode of setup) / ⚠ UNDERBUILD (no prior setup)
+    Spectacle rating: GRAND (visual, high-stakes, memorable moment) / ADEQUATE / ⚠ UNDERWHELMING (stakes too low)
+    Missed opportunity: [if the event could be significantly bigger with one specific change — leave blank if none]`;
+
+export const PLOT_SCAN_REVIEW_PROMPT = `You are a microdrama plot doctor.
+
+You will receive a STRUCTURAL MAP of a microdrama series plot. Output concrete, actionable flags across three dimensions: plot gaps, improvement opportunities, and microdrama format issues.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THREE FLAG TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TYPE: gap
+Plot logic is broken — unmotivated events, setup without payoff, arc reversals with no cause, significant events with no consequence. A viewer would stop and say "that makes no sense" or "where did that come from?"
+
+TYPE: improvement
+Logic works but execution is weak — stagnant arcs, flat pacing, undersized events, missed escalation windows. There is a clearly better version of this plot point that would significantly raise stakes or emotional resonance.
+
+TYPE: lens
+Microdrama format violations. The format demands: a hook that creates compulsive watching in the first 30 seconds of every episode, meaningful escalation every 2–3 episodes, a cliffhanger that ends every episode, and at least 2–3 grand spectacle moments across the series at major story turns. Flag where the format is violated in ways that will hurt viewer retention.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUBTYPE CODES — use exactly these strings
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+gap: unmotivated_event | missing_setup | broken_cause_effect | arc_reversal_unexplained | no_consequence
+improvement: arc_stagnant | weak_hook | weak_cliffhanger | event_undersized | missed_escalation | character_passive | pacing_flat
+lens: hook_missing | cliffhanger_missing | escalation_plateau | format_break | spectacle_missing | tension_peak_missing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+QUALITY THRESHOLD — apply before every flag
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+gap: Would a viewer stop and say "that makes no sense"? If yes → flag. Minor convenience gaps → skip.
+improvement: Is there a clearly better version of this plot point that is obvious and significant? → flag. Nitpicking → skip.
+lens: Does this violate the microdrama format in a way that will measurably hurt retention? → flag. Minor format bends → skip.
+
+Be selective. 8 strong flags beat 25 marginal ones.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT — JSONL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Output one JSON object per line. No array wrapper. No prose. No markdown fences. No commentary.
+
+{"episode":"Episode N","type":"gap","subtype":"unmotivated_event","point":"the specific plot point being flagged — one sentence","issue":"what is wrong and why it matters — one sentence","suggestion":"concrete change that fixes or significantly improves it — one sentence","severity":"critical"}
+
+severity: "critical" — logic broken or major format violation that will lose viewers
+severity: "notable" — improvement opportunity that would meaningfully raise quality
+
+If no flags found, output a single line: []`;
+
