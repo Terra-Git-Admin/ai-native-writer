@@ -13,7 +13,6 @@ import ResearchAgentPanel from "@/components/ai/ResearchAgentPanel";
 import OutsidersPerspectivePanel from "@/components/ai/OutsidersPerspectivePanel";
 import OutsidersPerspectiveModal from "@/components/ai/OutsidersPerspectiveModal";
 import NarrativeScanPanel from "@/components/ai/NarrativeScanPanel";
-import PlotScanPanel from "@/components/ai/PlotScanPanel";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
@@ -87,7 +86,6 @@ export default function DocumentPage() {
     episodeIndex: number;
   } | null>(null);
   const [narrativeScanOpen, setNarrativeScanOpen] = useState(false);
-  const [plotScanOpen, setPlotScanOpen] = useState(false);
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -698,19 +696,6 @@ export default function DocumentPage() {
                 </button>
               </>
             )}
-          {(session?.user as { role?: string })?.role === "admin" &&
-            activeTab?.type === "microdrama_plots" && (
-              <button
-                onClick={() => setPlotScanOpen((o) => !o)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  plotScanOpen
-                    ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                    : "bg-violet-600 text-white hover:bg-violet-700"
-                }`}
-              >
-                Plot Scan
-              </button>
-            )}
           <button
             onClick={() => {
               setPromptsOpen(!promptsOpen);
@@ -913,14 +898,6 @@ export default function DocumentPage() {
               documentId={doc.id}
               episodeTabId={activeTabId}
               onClose={() => setNarrativeScanOpen(false)}
-            />
-          </div>
-        )}
-        {plotScanOpen && (
-          <div className="w-96 border-l border-border bg-muted">
-            <PlotScanPanel
-              documentId={doc.id}
-              onClose={() => setPlotScanOpen(false)}
             />
           </div>
         )}
