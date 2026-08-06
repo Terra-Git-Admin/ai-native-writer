@@ -209,7 +209,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
       saveTimeout.current = setTimeout(() => {
         saveDocument(editor.getJSON());
-      }, 180_000);
+      }, 60_000);
     },
   });
 
@@ -979,7 +979,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     return () => document.removeEventListener("keydown", handler);
   }, [editor, isOwner, saveDocument]);
 
-  // Force-save every 5 minutes even if the writer never stops typing.
+  // Force-save every 1 minute even if the writer never stops typing.
   // Caps the maximum data-loss window regardless of debounce state.
   useEffect(() => {
     if (!editor || !isOwner) return;
@@ -987,8 +987,32 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       if (saveStatusRef.current === "unsaved") {
         saveDocument(editor.getJSON());
       }
-    }, 300_000);
+    }, 60_000);
     return () => clearInterval(interval);
+  }, [editor, isOwner, saveDocument]);
+
+  // Save when the writer leaves the current view without switching in-app
+  // tabs — e.g. switches to another browser tab, or minimizes the window.
+  // Non-forced (no version snapshot forced — the 5-min throttle still governs
+  // version history). Guarded by the unsaved check so a background/foreground
+  // flip with no edits sends nothing.
+  useEffect(() => {
+    if (!editor || !isOwner) return;
+    const onVisibility = () => {
+      if (document.visibilityState !== "hidden") return;
+      if (saveStatusRef.current === "saved") return;
+      if (saveTimeout.current) {
+        clearTimeout(saveTimeout.current);
+        saveTimeout.current = null;
+      }
+      saveDocument(editor.getJSON(), {
+        forceVersion: false,
+        reason: "leave-away",
+      });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
   }, [editor, isOwner, saveDocument]);
 
   const handleAddComment = useCallback(() => {
