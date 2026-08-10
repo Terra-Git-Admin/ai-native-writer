@@ -208,6 +208,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
       saveTimeout.current = setTimeout(() => {
+        saveTimeout.current = null;
         saveDocument(editor.getJSON());
       }, 60_000);
     },
@@ -1054,6 +1055,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     setSaveStatus("unsaved");
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
+      saveTimeout.current = null;
       saveDocument(editor.getJSON());
     }, 500);
   }, [editor, saveDocument]);
