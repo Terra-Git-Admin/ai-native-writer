@@ -566,13 +566,19 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     async flushPendingSave() {
       if (!editor || !isOwner) return;
+      // Capture BEFORE clearing — a pending timeout means onUpdate fired since
+      // the last completed save, even if a concurrent save already finished and
+      // raced the status back to "saved". Without this flag we'd clear the
+      // timer, see "saved", and skip — losing the edit that onUpdate captured.
+      const hadPendingTimeout = !!saveTimeout.current;
       if (saveTimeout.current) {
         clearTimeout(saveTimeout.current);
         saveTimeout.current = null;
       }
-      // Only flush if there's actually unsaved work. A "saved" state means the
-      // server already has what's in the editor — an extra PUT is pure waste.
-      if (saveStatusRef.current === "saved") return;
+      // Skip only if status is "saved" AND no pending debounce was in flight.
+      // If a timeout was pending it means onUpdate fired after the last save
+      // completed — there is unsaved content even though status reads "saved".
+      if (saveStatusRef.current === "saved" && !hadPendingTimeout) return;
       trace("client.flushPendingSave.start", {
         docId: documentId,
         docTabId: tabId,
