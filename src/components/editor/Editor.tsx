@@ -76,6 +76,7 @@ interface EditorProps {
   onCommentMarkClick?: (commentMarkId: string) => void;
   onHeadingsChange?: (headings: HeadingItem[]) => void;
   onCommentMarkPositions?: (positions: Record<string, number>) => void;
+  initialUpdatedAt?: string | null;
 }
 
 export interface EditorHandle {
@@ -116,6 +117,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     onCommentMarkClick,
     onHeadingsChange,
     onCommentMarkPositions,
+    initialUpdatedAt,
   },
   ref
 ) {
@@ -132,6 +134,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // recognise our own saves and avoid false conflict banners.
   const lastSavedServerUpdatedAtRef = useRef<string | null>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Authoritative "there is unsaved content" flag. Unlike saveStatus (a React
+  // state that a completing in-flight PUT can race back to "saved"), this is
+  // monotonic: set true on every edit, cleared ONLY when a save actually
+  // captures the content being sent. Every save gate reads this, never saveStatus.
+  const hasUnsavedEdits = useRef(false);
+  const saveInFlight = useRef(false);
+  // Latest save requested while a PUT was in flight. Coalesced: only the most
+  // recent content is queued; forceVersion is OR-ed so a Ctrl+S/tab-switch
+  // snapshot request is never dropped by a plain debounce save.
+  const pendingSave = useRef<{ content: object; opts?: { forceVersion?: boolean; reason?: string } } | null>(null);
   // Tracks the set of commentMark IDs present after the last rAF tick.
   // Used to detect when marks disappear from the editor document.
   const prevMarkIdsRef = useRef<Set<string>>(new Set());
@@ -177,6 +189,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [documentId, isOwner, initialContent]);
 
+  // Seed the last-known server updatedAt from the prop so the stale-write
+  // check engages from the very first save, not just after the first PUT response.
+  useEffect(() => {
+    if (initialUpdatedAt) lastSavedServerUpdatedAtRef.current = initialUpdatedAt;
+  }, [initialUpdatedAt]);
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -204,6 +222,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       if (!isOwner) return;
+      hasUnsavedEdits.current = true;
       setSaveStatus("unsaved");
 
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -572,7 +591,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       }
       // Only flush if there's actually unsaved work. A "saved" state means the
       // server already has what's in the editor — an extra PUT is pure waste.
-      if (saveStatusRef.current === "saved") return;
+      if (!hasUnsavedEdits.current) return;
       trace("client.flushPendingSave.start", {
         docId: documentId,
         docTabId: tabId,
@@ -613,7 +632,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         clearTimeout(saveTimeout.current);
         saveTimeout.current = null;
       }
-      if (saveStatusRef.current !== "saved") {
+      if (hasUnsavedEdits.current) {
         trace("client.unmount.unsavedWork", {
           docId: documentId,
           docTabId: tabId,
@@ -728,8 +747,25 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       content: object,
       opts?: { forceVersion?: boolean; reason?: string }
     ) => {
+      // Phase 2: Serialize saves — only one PUT in flight at a time. Coalesce
+      // any save that arrives while one is in flight; the drain in `finally`
+      // picks it up so the LAST requested content always wins.
+      if (saveInFlight.current) {
+        const mergedForce = !!(pendingSave.current?.opts?.forceVersion || opts?.forceVersion);
+        pendingSave.current = {
+          content,
+          opts: { ...opts, forceVersion: mergedForce },
+        };
+        return;
+      }
+      saveInFlight.current = true;
+
       const reqId = newId();
       const contentStr = JSON.stringify(content);
+      // Phase 1: Clear the dirty ref at snapshot time — NOT on completion.
+      // Any edit that lands during the in-flight PUT re-sets this to true via
+      // onUpdate, so it can never be lost by a racing completion.
+      hasUnsavedEdits.current = false;
       const tStart =
         typeof performance !== "undefined" ? performance.now() : Date.now();
       trace("client.save.start", {
@@ -755,6 +791,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (isOwner && opts?.forceVersion) {
           payload.forceVersion = true;
           payload.versionReason = opts.reason ?? "force";
+        }
+        // Phase 3: Thread last-known server updatedAt so the server can reject
+        // stale writes (a second editor window / stale mount with older content).
+        // Exempt: non-owner saves and forceVersion (deliberate checkpoint).
+        if (isOwner && !opts?.forceVersion && lastSavedServerUpdatedAtRef.current) {
+          payload.baseUpdatedAt = lastSavedServerUpdatedAtRef.current;
         }
         const res = await fetch(
           `/api/documents/${documentId}/tabs/${tabId}/content`,
@@ -786,28 +828,56 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             latencyMs: latency,
           });
         } else {
-          // DON'T mask non-2xx as "saved" — that was the original silent-failure
-          // bug. Surface it, clear the server-updatedAt ref so poll won't
-          // falsely suppress a conflict banner on the next tick, and flip state
-          // back to "unsaved" so the next keystroke will retry via debounce.
           const errBody = await res.text().catch(() => "");
-          lastSavedServerUpdatedAtRef.current = null;
-          setSaveStatus("unsaved");
-          setSaveError(
-            `Save failed (HTTP ${res.status}). ${errBody.slice(0, 200)}`
-          );
-          trace("client.save.fail", {
-            reqId,
-            status: res.status,
-            bodyPreview: errBody.slice(0, 200),
-            latencyMs: latency,
-          });
+          if (res.status === 409) {
+            // Phase 3: Stale write rejected by server — another instance wrote
+            // newer content. Re-arm dirty so the conflict/poll path can surface
+            // the banner. Do NOT surface as a hard save error; the poll will
+            // detect the mismatch and show the conflict UI (lines ~872-915).
+            hasUnsavedEdits.current = true;
+            lastSavedServerUpdatedAtRef.current = null;
+            setSaveStatus("unsaved");
+            trace("client.save.stale.rejected", {
+              reqId,
+              status: res.status,
+              bodyPreview: errBody.slice(0, 200),
+              latencyMs: latency,
+            });
+          } else {
+            // DON'T mask non-2xx as "saved" — that was the original silent-failure
+            // bug. Surface it, clear the server-updatedAt ref so poll won't
+            // falsely suppress a conflict banner on the next tick, and flip state
+            // back to "unsaved" so the next keystroke will retry via debounce.
+            hasUnsavedEdits.current = true;
+            lastSavedServerUpdatedAtRef.current = null;
+            setSaveStatus("unsaved");
+            setSaveError(
+              `Save failed (HTTP ${res.status}). ${errBody.slice(0, 200)}`
+            );
+            trace("client.save.fail", {
+              reqId,
+              status: res.status,
+              bodyPreview: errBody.slice(0, 200),
+              latencyMs: latency,
+            });
+          }
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        // Re-arm dirty so the content is retried on next edit/gate.
+        hasUnsavedEdits.current = true;
         setSaveStatus("unsaved");
         setSaveError(`Network error while saving: ${msg}`);
         trace("client.save.throw", { reqId, err: msg });
+      } finally {
+        // Phase 2: Release the in-flight lock and drain any coalesced request.
+        saveInFlight.current = false;
+        const queued = pendingSave.current;
+        if (queued) {
+          pendingSave.current = null;
+          // Fire-and-forget; it re-enters the guard and serializes itself.
+          void saveDocument(queued.content, queued.opts);
+        }
       }
     },
     [documentId, tabId, isOwner]
@@ -984,7 +1054,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   useEffect(() => {
     if (!editor || !isOwner) return;
     const interval = setInterval(() => {
-      if (saveStatusRef.current === "unsaved") {
+      if (hasUnsavedEdits.current) {
         saveDocument(editor.getJSON());
       }
     }, 60_000);
@@ -1000,7 +1070,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     if (!editor || !isOwner) return;
     const onVisibility = () => {
       if (document.visibilityState !== "hidden") return;
-      if (saveStatusRef.current === "saved") return;
+      if (!hasUnsavedEdits.current) return;
       if (saveTimeout.current) {
         clearTimeout(saveTimeout.current);
         saveTimeout.current = null;
@@ -1045,6 +1115,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const triggerSave = useCallback(() => {
     if (!editor) return;
+    hasUnsavedEdits.current = true;
     setSaveStatus("unsaved");
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {

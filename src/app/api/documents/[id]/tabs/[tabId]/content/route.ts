@@ -377,6 +377,28 @@ export async function PUT(
     });
   }
 
+  // Phase 3: Optimistic concurrency — reject a write whose baseline is older
+  // than what's stored. Prevents a stale editor instance or a second browser
+  // window from clobbering newer content (lost update). Only for owner content
+  // saves — comment-mark and forced snapshots are deliberate writes and are
+  // exempt. tab.updatedAt is seconds-precision; compare as epoch seconds.
+  const baseUpdatedAt = typeof body.baseUpdatedAt === "string" ? body.baseUpdatedAt : null;
+  if (isOwner && !commentMarkOnly && !forceVersion && baseUpdatedAt && tab.updatedAt) {
+    const baseSec = Math.floor(new Date(baseUpdatedAt).getTime() / 1000);
+    const storedSec = Math.floor(new Date(tab.updatedAt).getTime() / 1000);
+    if (storedSec > baseSec) {
+      warnTrace("tab.put.stale.reject", {
+        ...entryLog,
+        baseUpdatedAt,
+        storedUpdatedAt: new Date(tab.updatedAt).toISOString(),
+      });
+      return NextResponse.json(
+        { error: "Stale write rejected", conflict: true, updatedAt: new Date(tab.updatedAt).toISOString() },
+        { status: 409 }
+      );
+    }
+  }
+
   // tabs.updatedAt is `integer({ mode: "timestamp" })` — SECONDS precision in
   // SQLite. The next GET reads back `new Date(seconds * 1000)`, which
   // serialises with `.000Z`. If we returned `new Date().toISOString()` here

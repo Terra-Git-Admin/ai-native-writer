@@ -778,6 +778,7 @@ export default function DocumentPage() {
             tabId={activeTabId}
             tabType={activeTab?.type}
             initialContent={activeTabContent}
+            initialUpdatedAt={activeTab?.updatedAt ? new Date(activeTab.updatedAt).toISOString() : null}
             isOwner={doc.isOwner}
             activeCommentId={activeCommentId}
             onAddComment={handleAddComment}
