@@ -3978,80 +3978,24 @@ Be selective. 5 real gaps beat 20 questionable ones. If uncertain whether a mome
 
 If no gaps exist, output a single line: []`;
 
-export const PLOT_SCAN_ANALYZE_PROMPT = `You are a microdrama plot structure analyst.
+export const PLOT_SCAN_ANALYZE_PROMPT = `You are a story intelligence analyst for short-form microdrama series.
 
-You will receive episode-by-episode microdrama plots for a series. Build a structural map of the entire plot sequence.
+You receive the episode-by-episode plots for a series. Analyze the full set and produce a Story Intelligence Report. Output exactly the sections below in order. No preamble. No commentary outside the sections.
 
-Output four sections in this exact order. Use the exact section headers shown. No preamble. No commentary after the last section.
+## STORY OVERVIEW
+In 2–3 sentences: what story is being written across these episodes? Name the central engine driving the series forward — the core want/need/conflict that makes this series go.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 1: CHARACTER ARC MAP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## PRIMARY TROPES
+List the 1–3 dominant tropes or genre conventions driving this story. For each, one sentence on how it specifically manifests in this series — not just the label.
 
-For each MAIN character and ANTAGONIST, trace their arc through the plots:
+## INTELLIGENCE LOAD
+Score: [1–10]
 
-[Character Name] — [role]
-  Overall arc: [what changes by series end vs series start — one sentence]
-  Episode-by-episode:
-    [Ep N]: [concrete shift — goal, power, knowledge, emotional state, relationship]
-    [Ep N+1]: ...
-  ⚠ STAGNANT Ep N–M: [mark if character has no meaningful development for 3+ consecutive episodes]
-  ⚠ NO ARC: [mark if character ends where they started — no change in goal, power, or understanding]
+  1–3 · Drop-in viewing — episodes are self-contained enough to follow without tracking prior events. No hidden threads. Pure moment-to-moment emotional engagement.
+  4–6 · Continuity tracking — viewer must remember ongoing situations, who knows what, prior betrayals or revelations. Moderate subtext. 1–2 active threads running simultaneously.
+  7–10 · Full attention required — multiple active threads, layered subtext, reveals that recontextualize prior events. Missing earlier context causes confusion, not just diminished impact.
 
-RULES:
-- Only include MAIN and ANTAGONIST characters. Skip side characters entirely.
-- Shifts must be concrete: "gains leverage over X", "loses ally Y", "discovers Z" — not vague like "develops further".
-- Stagnant = 3+ episodes with no change in any of: goal, power, knowledge, relationships, emotional state.
-- If a character appears in fewer than 3 episodes, note their role but skip arc tracking.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 2: EPISODE PACING MAP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-For each episode, rate its three structural elements:
-
-Episode N
-  Opening hook: [what it is] — STRONG / WEAK / MISSING
-  Mid escalation: [what it is] — STRONG / WEAK / MISSING
-  End hook / cliffhanger: [what it is] — STRONG / WEAK / MISSING
-  ⚠ PACING RISK: [mark if 2 or more of the 3 elements are WEAK or MISSING]
-
-Overall escalation curve:
-  Describe the tension arc across the full series — rising, flat, peaks and valleys.
-  Tension peaks: [list the 3–5 episodes with the strongest escalation]
-  ⚠ PLATEAU Ep N–M: [mark any stretch of 3+ episodes where tension doesn't meaningfully rise]
-
-RULES:
-- STRONG: viewer cannot stop — reveals, reversals, confrontations, high-stakes decisions, time pressure
-- WEAK: moves the plot but creates no urgency or emotional stakes
-- MISSING: episode ends without any compelling reason to watch the next one
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 3: PLOT LOGIC CHAIN
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-For each major plot event, trace its cause and consequence:
-
-  Ep N: [Event] — caused by: [prior setup, Ep X] | causes: [consequence, Ep Y]
-  ⚠ UNMOTIVATED: [mark if an event happens with no visible cause in prior plots]
-  ⚠ NO CONSEQUENCE: [mark if a significant event produces no visible effect in subsequent plots]
-
-RULES:
-- Major events only: turning points, confrontations, betrayals, revelations, decisions that redirect the story.
-- "Caused by" must point to a specific prior plot point — not genre convention.
-- "No consequence" is a flag when the story behaves as if the event didn't happen in the following episodes.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECTION 4: KEY EVENTS INVENTORY
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-List every major turning point, reversal, revelation, confrontation, and betrayal:
-
-  Ep N — [TURNING POINT / REVERSAL / REVELATION / CONFRONTATION / BETRAYAL]
-    What happens: [one sentence]
-    Build rating: EARNED (prior setup visible) / RUSHED (≤1 episode of setup) / ⚠ UNDERBUILD (no prior setup)
-    Spectacle rating: GRAND (visual, high-stakes, memorable moment) / ADEQUATE / ⚠ UNDERWHELMING (stakes too low)
-    Missed opportunity: [if the event could be significantly bigger with one specific change — leave blank if none]`;
+Rationale: [2–3 sentences — what specific elements in these plots drive the score up or down]`;
 
 export const PLOT_SCAN_REVIEW_PROMPT = `You are a microdrama plot doctor.
 

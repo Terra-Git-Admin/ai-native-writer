@@ -97,7 +97,7 @@ export async function POST(
   });
   const systemPrompt = promptRow?.content ?? PLOT_SCAN_ANALYZE_PROMPT;
 
-  const model = await getAIModel("gemini-3.1-pro-preview");
+  const model = await getAIModel("gemini-2.5-flash");
 
   const result = streamText({
     model,
