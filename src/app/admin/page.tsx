@@ -44,6 +44,26 @@ export default function AdminPage() {
   const [transferDocId, setTransferDocId] = useState<string | null>(null);
   const [transferUserId, setTransferUserId] = useState("");
 
+  // Export (Characters / Locations / Episodes → downloadable .md)
+  const [exportDocId, setExportDocId] = useState<string | null>(null);
+  const [exportFrom, setExportFrom] = useState("");
+  const [exportTo, setExportTo] = useState("");
+
+  const downloadExport = (docId: string) => {
+    const p = new URLSearchParams();
+    if (exportFrom.trim()) p.set("from", exportFrom.trim());
+    if (exportTo.trim()) p.set("to", exportTo.trim());
+    const qs = p.toString();
+    const a = document.createElement("a");
+    a.href = `/api/documents/${docId}/export${qs ? `?${qs}` : ""}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setExportDocId(null);
+    setExportFrom("");
+    setExportTo("");
+  };
+
   useEffect(() => {
     if (session?.user?.role !== "admin") {
       router.push("/");
@@ -233,7 +253,7 @@ export default function AdminPage() {
                     Owner: {ownerName(doc.ownerId)}
                   </p>
                 </div>
-                <div>
+                <div className="flex items-center gap-4">
                   {transferDocId === doc.id ? (
                     <div className="flex items-center gap-2">
                       <select
@@ -269,6 +289,58 @@ export default function AdminPage() {
                       className="text-xs text-indigo-600 hover:text-indigo-800"
                     >
                       Transfer ownership
+                    </button>
+                  )}
+
+                  {exportDocId === doc.id ? (
+                    <div
+                      className="flex items-center gap-2"
+                      title="Leave range blank to export all episodes"
+                    >
+                      <input
+                        type="number"
+                        min={1}
+                        value={exportFrom}
+                        onChange={(e) => setExportFrom(e.target.value)}
+                        placeholder="From"
+                        className="w-16 rounded border border-border px-2 py-1 text-sm"
+                      />
+                      <span className="text-xs text-muted-foreground">–</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={exportTo}
+                        onChange={(e) => setExportTo(e.target.value)}
+                        placeholder="To"
+                        className="w-16 rounded border border-border px-2 py-1 text-sm"
+                      />
+                      <button
+                        onClick={() => downloadExport(doc.id)}
+                        className="text-xs font-medium text-emerald-600"
+                      >
+                        Download .md
+                      </button>
+                      <button
+                        onClick={() => {
+                          setExportDocId(null);
+                          setExportFrom("");
+                          setExportTo("");
+                        }}
+                        className="text-xs text-muted-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setExportDocId(doc.id);
+                        setExportFrom("");
+                        setExportTo("");
+                      }}
+                      className="text-xs text-emerald-600 hover:text-emerald-800"
+                    >
+                      Export
                     </button>
                   )}
                 </div>
