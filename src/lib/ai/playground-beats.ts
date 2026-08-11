@@ -135,8 +135,17 @@ export function parseBeatsFromTiptap(content: string | null): PlaygroundBeat[] {
 // ─── Render ───────────────────────────────────────────────────────────────────
 
 function beatToTaggedLines(beat: PlaygroundBeat): string[] {
-  // beat.text may be "Beat N: Title\nDescription" — emit each part as its own [P] tag.
-  return beat.text.split("\n").map((l) => `[P] ${l.trim()}`).filter((l) => l !== "[P] ");
+  // One beat = exactly one [UL] bullet. Collapse any embedded newlines (legacy
+  // "Title\nDescription" beats, or user edits with Enter) into a single line —
+  // emitting multiple lines here would re-parse into multiple beats and silently
+  // duplicate them. Strip any legacy "Beat N:" prefix so old docs lose numbering too.
+  const collapsed = beat.text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/^Beat\s+\d+:\s*/i, "");
+  return collapsed ? [`[UL] ${collapsed}`] : [];
 }
 
 export function renderLockedBeatsTagged(beats: PlaygroundBeat[]): string {

@@ -3648,14 +3648,13 @@ The writer has triggered the "Suggest Beats" step. You receive:
 - World State: post-latest-episode character positions and series-end destination
 - Prior Locked Beats (when present): every beat committed in previous batches
 
-Your job: generate a wide spread of candidate scene-level beats. Volume target: 25–35. The writer curates, not you.
+Your job: generate a wide, varied spread of candidate scene-level beats — a random assortment of interesting things that could happen. Volume target: 25–35. The writer curates, not you.
 
 Rules:
-- Beats are UNORDERED and UNCOMMITTED — do not sequence them or assign episode numbers.
-- Each beat is ONE SCENE — a single event with a clear before and after.
-- Every beat must be CAUSALLY GENERATIVE — it implies consequences; avoid isolated events that connect to nothing.
-- Vary dramatic roles across the set: mix setups (plants), escalations, confrontations, fallouts. Do not cluster all confrontations together.
-- Ground beats in the World State. Characters must act from their current positions, moving toward or away from the series-end destination.
+- Beats are INDEPENDENT and UNORDERED. Each beat stands entirely on its own — do not sequence them, do not number them, do not assign episode numbers, and never let one beat depend on, reference, or build on another. The writer must be able to reject any single beat without any other beat losing meaning.
+- Each beat is ONE SCENE — a single self-contained event with a clear before and after.
+- Aim for range and surprise: unique, dramatic, fun, emotionally charged moments — confrontations, reversals, tender beats, betrayals, comic turns, quiet revelations. Do not cluster similar beats together.
+- Ground beats in the World State — use the actual characters and their relationships and current positions. A beat need NOT move toward the series-end destination; it only needs to be a compelling thing that could happen to these characters in this world.
 - If Prior Locked Beats are provided, read every beat there first. Do NOT generate any beat that repeats, varies, or rephrases a beat already listed. This batch must open genuinely new dramatic territory.
 - Batch numbering: count the "[H2] Batch" headings in Prior Locked Beats; this batch is that count + 1. If none, this is Batch 1.
 - No preamble. No closing commentary. No episode numbering. Output only the formatted document.
@@ -3666,8 +3665,8 @@ OUTPUT FORMAT:
 
 [H2] Batch <N> (draft)
 
-Then for each beat:
-[P] Beat N: <Who is present, what happens, what changes. 1-2 sentences max. Lead with the action. Be specific — name the object, location, or line that makes the scene concrete.>
+Then one bullet per beat:
+[UL] <Who is present, what happens, what changes. 1-2 sentences max. Lead with the action. Be specific — name the object, location, or line that makes the scene concrete.>
 
 Generate 25–35 beats total. Stop after the last beat — no summary, no commentary.
 
@@ -3679,7 +3678,7 @@ You receive:
 - INSTRUCTIONS (optional): specific writer guidance for THIS run. May be absent — if so, there is no INSTRUCTIONS section at all.
 - SUMMARY: The overall story summary, character positions, and series-end destination
 - PLOTS: Episode plots already written for this series
-- BEATS: Candidate beats to potentially include in the story
+- BEATS: A loose, unordered pool of independent candidate beats. They are NOT pre-connected — each was written to stand alone, so finding the causal connections between them is your job, not the writer's.
 
 Your job: write a long, flowing sequence of beats and events that connects them into one causally coherent story — from the current state toward the series-end destination.
 
