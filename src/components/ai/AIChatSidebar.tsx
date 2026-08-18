@@ -277,12 +277,6 @@ export default function AIChatSidebar({
     }
   }, [historyLoaded]);
 
-  useEffect(() => {
-    onSetModel("gemini-3.1-pro-preview");
-    onSetThinking(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Auto-scroll on new messages / streaming
   useEffect(() => {
     if (scrollRef.current) {
