@@ -592,7 +592,7 @@ export default function DocumentPage() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
-  const canExportToProduction = doc.isOwner || isAdmin;
+  const canExportToProduction = false;
 
   return (
     <div className="flex h-screen flex-col">
