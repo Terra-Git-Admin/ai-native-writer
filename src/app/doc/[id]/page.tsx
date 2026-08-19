@@ -39,6 +39,16 @@ interface DocumentData {
   isOwner: boolean;
 }
 
+interface HandoffExportResult {
+  exportId: string;
+  exportUrl: string;
+  preview: {
+    episodes: number;
+    characters: number;
+    locations: number;
+  };
+}
+
 export default function DocumentPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -88,6 +98,11 @@ export default function DocumentPage() {
   } | null>(null);
   const [narrativeScanOpen, setNarrativeScanOpen] = useState(false);
   const [plotScanOpen, setPlotScanOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [handoffExport, setHandoffExport] = useState<HandoffExportResult | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -532,6 +547,38 @@ export default function DocumentPage() {
     []
   );
 
+  const handleCreateHandoffExport = useCallback(async () => {
+    setExportModalOpen(true);
+    setExportLoading(true);
+    setExportError(null);
+    setCopyStatus("idle");
+    try {
+      const res = await fetch(`/api/documents/${params.id}/export`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || "Export failed");
+      }
+      setHandoffExport(data as HandoffExportResult);
+    } catch (err) {
+      setHandoffExport(null);
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExportLoading(false);
+    }
+  }, [params.id]);
+
+  const handleCopyExportUrl = useCallback(async () => {
+    if (!handoffExport?.exportUrl) return;
+    try {
+      await navigator.clipboard.writeText(handoffExport.exportUrl);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }, [handoffExport?.exportUrl]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -544,6 +591,8 @@ export default function DocumentPage() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
+  const canExportToProduction = doc.isOwner || isAdmin;
 
   return (
     <div className="flex h-screen flex-col">
@@ -657,6 +706,15 @@ export default function DocumentPage() {
               </button>
             </>
           )}
+          {canExportToProduction && (
+            <button
+              onClick={handleCreateHandoffExport}
+              disabled={exportLoading}
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
+            >
+              {exportLoading ? "Exporting..." : "Export to Production"}
+            </button>
+          )}
           {doc?.isOwner && activeTab?.type === "workbook" && (
             <button
               onClick={() => setResearchAgentOpen((o) => !o)}
@@ -677,7 +735,7 @@ export default function DocumentPage() {
               Outsiders View
             </button>
           )}
-          {(session?.user as { role?: string })?.role === "admin" &&
+          {isAdmin &&
             activeTab?.type === "predefined_episodes" && (
               <>
                 <button
@@ -698,7 +756,7 @@ export default function DocumentPage() {
                 </button>
               </>
             )}
-          {(session?.user as { role?: string })?.role === "admin" &&
+          {isAdmin &&
             activeTab?.type === "microdrama_plots" && (
               <button
                 onClick={() => setPlotScanOpen((o) => !o)}
@@ -814,7 +872,7 @@ export default function DocumentPage() {
               commentMarkPositions={commentMarkPositions}
               showSectionFilter={
                 activeTab?.type === "predefined_episodes" &&
-                (doc.isOwner || (session?.user as { role?: string })?.role === "admin")
+                (doc.isOwner || isAdmin)
               }
             />
           </div>
@@ -959,6 +1017,99 @@ export default function DocumentPage() {
           }}
           onCancel={() => setQualityModalOpen(false)}
         />
+      )}
+      {exportModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-lg rounded-lg border border-border bg-card p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">
+                  Export to Production
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Share this link with Comics Dash to import the Writer snapshot.
+                </p>
+              </div>
+              <button
+                onClick={() => setExportModalOpen(false)}
+                className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+
+            {exportLoading && (
+              <div className="rounded-md border border-border bg-muted px-3 py-3 text-sm text-muted-foreground">
+                Creating export...
+              </div>
+            )}
+
+            {exportError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                {exportError}
+              </div>
+            )}
+
+            {handoffExport && !exportLoading && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.episodes}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Episodes</div>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.characters}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Characters</div>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.locations}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Locations</div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Export link
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      readOnly
+                      value={handoffExport.exportUrl}
+                      className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <button
+                      onClick={handleCopyExportUrl}
+                      className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  {copyStatus === "copied" && (
+                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      Copied.
+                    </p>
+                  )}
+                  {copyStatus === "failed" && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                      Copy failed. Select the link manually.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
