@@ -245,6 +245,39 @@ export const aiJobsRelations = relations(aiJobs, ({ one }) => ({
   }),
 }));
 
+export const handoffExports = sqliteTable(
+  "handoff_exports",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    exportJson: text("export_json").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("idx_handoff_exports_doc").on(table.documentId),
+    index("idx_handoff_exports_expires").on(table.expiresAt),
+  ]
+);
+
+export const handoffExportsRelations = relations(handoffExports, ({ one }) => ({
+  document: one(documents, {
+    fields: [handoffExports.documentId],
+    references: [documents.id],
+  }),
+  creator: one(users, {
+    fields: [handoffExports.createdBy],
+    references: [users.id],
+  }),
+}));
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),

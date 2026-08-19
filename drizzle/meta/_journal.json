@@ -57,6 +57,13 @@
       "when": 1784895058239,
       "tag": "0007_stormy_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787702400000,
+      "tag": "0008_handoff_exports",
+      "breakpoints": true
     }
   ]
 }
