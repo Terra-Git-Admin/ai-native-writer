@@ -14,7 +14,6 @@ import {
   renderLockedBeatsTagged,
   renderAllBeatsTagged,
   preserveLockState,
-  BEAT_LINE_RE,
 } from "@/lib/ai/playground-beats";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -213,13 +212,15 @@ export default function PipelinePlayground({
 
   const [state, dispatch] = useReducer(reducer, {
     worldContent: data.blocks.world_state?.content ?? null,
-    // Reducer initializer: use saved beats[] only if they look valid (at least one "Beat N:" line).
-    // A corrupt prior session could have saved non-beat text (e.g. a preamble paragraph) as beats.
-    // In that case fall through to parseBeatsFromTiptap — if no legacy .content, returns [] and
-    // auto-populate (below) will re-fetch from canonical on the next render.
+    // Reducer initializer: use saved beats[] only if they carry real text. Beats are now
+    // un-numbered ideas (no "Beat N:" prefix), so validity is "has non-empty text", not a
+    // prefix match. This preserves lock state across reloads — if we returned [] here, the
+    // mount-time POPULATE would re-source beats from canonical with an empty lock map and
+    // every beat would come back unlocked. A corrupt/empty save falls through to
+    // parseBeatsFromTiptap (legacy .content), else [] and auto-populate re-fetches canonical.
     beats: (() => {
       const saved = data.blocks.beat_sequence?.beats;
-      if (Array.isArray(saved) && saved.length > 0 && saved.some((b) => BEAT_LINE_RE.test(b.text))) {
+      if (Array.isArray(saved) && saved.some((b) => b.text.trim().length > 0)) {
         return saved;
       }
       return parseBeatsFromTiptap(data.blocks.beat_sequence?.content ?? null);
