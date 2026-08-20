@@ -119,9 +119,7 @@ export async function POST(
     columns: { id: true, type: true, content: true },
   });
 
-  const sourceTabs = allTabs.filter(
-    (t) => t.type === "predefined_episodes" || t.type === "series_overview"
-  );
+  const sourceTabs = allTabs.filter((t) => t.type === "predefined_episodes");
   const targetTab = allTabs.find((t) => t.type === type);
 
   if (!targetTab) {

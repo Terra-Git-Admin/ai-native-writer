@@ -678,7 +678,7 @@ export default function TabRail({
                     onClick={(e) => handleSync(e, tab)}
                     disabled={!!syncingTabId}
                     className="p-1 text-muted-foreground hover:text-emerald-700 dark:hover:text-emerald-300 rounded disabled:opacity-50"
-                    title={syncResults[tab.id] || "Sync from episodes & research"}
+                    title={syncResults[tab.id] || "Sync from predefined episodes"}
                     aria-label="Sync"
                   >
                     {!!syncingTabId ? (
