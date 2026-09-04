@@ -45,6 +45,41 @@ function splitByH2(tagged: string): H2Section[] {
   return sections;
 }
 
+// Split character/location tabs by explicit name headings. Older docs and
+// pasted imports often store entity names as H1 "Name: ..." blocks, not H2.
+function splitByEntityHeading(tagged: string): H2Section[] {
+  if (!tagged) return [];
+  const lines = tagged.split("\n");
+  const sections: H2Section[] = [];
+  let current: H2Section | null = null;
+  const buffer: string[] = [];
+
+  const flush = () => {
+    if (current) {
+      sections.push({ ...current, body: buffer.join("\n").trim() });
+      buffer.length = 0;
+    }
+  };
+
+  for (const line of lines) {
+    const explicitName = line.match(/^\[H[123]\]\s*((?:Name|Location)\s*:\s*.+)/i);
+    const anyHeading = line.match(/^\[H[123]\]\s*(.+)/);
+    if (explicitName) {
+      flush();
+      current = { heading: explicitName[1].trim(), body: "" };
+      continue;
+    }
+    if (anyHeading) {
+      flush();
+      current = null;
+      continue;
+    }
+    if (current) buffer.push(line);
+  }
+  flush();
+  return sections;
+}
+
 // Extract plain text from a tagged body (strips [P], [UL], [OL] tags).
 function bodyToPlainText(body: string): string {
   return body
@@ -69,15 +104,28 @@ export function parseSeriesOverview(
   };
 }
 
-// Parse characters or locations tab: each H2 = one entity (name + description).
+function normalizeEntityName(name: string): string {
+  return name.replace(/^(?:Name|Location)\s*:\s*/i, "").trim();
+}
+
+// Parse characters or locations tab: each explicit Name:/Location: heading is
+// one entity. Fall back to H2 sections for older manually structured docs.
 export function parseH2Entities(
   contentJson: string | null
 ): Array<{ name: string; description: string }> {
   const tagged = tiptapJsonToTagged(contentJson ?? null);
-  return splitByH2(tagged).map((s) => ({
-    name: s.heading,
-    description: bodyToPlainText(s.body),
-  }));
+  const sections = splitByEntityHeading(tagged);
+  const entitySections = sections.length > 0 ? sections : splitByH2(tagged);
+  return entitySections
+    .map((s) => ({
+      name: normalizeEntityName(s.heading),
+      description: bodyToPlainText(s.body),
+    }))
+    .filter(
+      (entity) =>
+        entity.name &&
+        !["characters", "locations"].includes(entity.name.toLowerCase())
+    );
 }
 
 // Parse a single beat line: "Visual: ... | Dialogue: ... | V.O.: ..."
