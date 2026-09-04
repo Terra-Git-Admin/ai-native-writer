@@ -8,7 +8,7 @@ import { buildExport } from "@/lib/export/writer-export";
 // POST /api/documents/[id]/export
 // Creates a handoff export link for a document. Auth required, owner/admin only.
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -28,15 +28,23 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const result = await buildExport(id, doc.title, session.user.id);
+  const result = await buildExport(
+    id,
+    doc.title,
+    session.user.id,
+    new URL(req.url).origin
+  );
 
   return NextResponse.json({
     exportId: result.exportId,
     exportUrl: result.exportUrl,
     preview: {
+      hasTitle: result.export.series.title.trim().length > 0,
       episodes: result.export.episodes.length,
       characters: result.export.characters.length,
       locations: result.export.locations.length,
+      hasSummary: result.export.series.summary.trim().length > 0,
+      hasLogline: result.export.series.logline.trim().length > 0,
     },
   });
 }

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { db } from "@/lib/db";
 import { tabs, handoffExports } from "@/lib/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import {
   parseSeriesOverview,
@@ -42,7 +42,8 @@ export interface WriterExport {
 export async function buildExport(
   documentId: string,
   documentTitle: string,
-  userId: string
+  userId: string,
+  requestBaseUrl?: string
 ): Promise<{ exportId: string; exportUrl: string; export: WriterExport }> {
   const allTabs = await db.query.tabs.findMany({
     where: eq(tabs.documentId, documentId),
@@ -61,9 +62,13 @@ export async function buildExport(
   const locations = parseH2Entities(locationsTab?.content ?? null);
   const episodes = parsePredefinedEpisodes(episodesTab?.content ?? null);
 
-  const exportId = nanoid();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const existingExport = await db.query.handoffExports.findFirst({
+    where: eq(handoffExports.documentId, documentId),
+    orderBy: [desc(handoffExports.createdAt)],
+  });
+  const exportId = existingExport?.id ?? nanoid();
   const tabSnapshots: WriterExportTabSnapshot[] = allTabs.map((tab) => ({
     id: tab.id,
     title: tab.title,
@@ -86,16 +91,29 @@ export async function buildExport(
     episodes,
   };
 
-  await db.insert(handoffExports).values({
-    id: exportId,
-    documentId,
-    createdBy: userId,
-    exportJson: JSON.stringify(writerExport),
-    createdAt: now,
-    expiresAt,
-  });
+  if (existingExport) {
+    await db
+      .update(handoffExports)
+      .set({
+        createdBy: userId,
+        exportJson: JSON.stringify(writerExport),
+        createdAt: now,
+        expiresAt,
+      })
+      .where(eq(handoffExports.id, exportId));
+  } else {
+    await db.insert(handoffExports).values({
+      id: exportId,
+      documentId,
+      createdBy: userId,
+      exportJson: JSON.stringify(writerExport),
+      createdAt: now,
+      expiresAt,
+    });
+  }
 
   const baseUrl =
+    requestBaseUrl ??
     process.env.NEXT_PUBLIC_APP_URL ??
     "https://ai-native-writer-936494534526.asia-south1.run.app";
 
