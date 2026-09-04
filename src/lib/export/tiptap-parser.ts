@@ -160,18 +160,24 @@ export function parsePredefinedEpisodes(
   };
 
   for (const line of lines) {
-    const h3 = line.match(/^\[H3\]\s*(.+)/);
-    if (h3) {
+    const episodeHeading = line.match(/^\[H[123]\]\s*(Episode\s+\d+(?:\s*[:—–-]\s*.*)?)$/i);
+    const anyHeading = line.match(/^\[H[123]\]\s*(.+)/);
+    if (episodeHeading) {
       flush();
       // Accept "Episode N", "Episode N: Title", or "Episode N - Title".
-      const epMatch = h3[1].match(/^Episode\s+(\d+)(?:\s*[:—–-]\s*(.*))?$/i);
+      const epMatch = episodeHeading[1].match(/^Episode\s+(\d+)(?:\s*[:—–-]\s*(.*))?$/i);
       const episodeNumber = epMatch ? parseInt(epMatch[1], 10) : episodes.length + 1;
       const parsedTitle = epMatch ? epMatch[2]?.trim() : null;
       current = {
         episodeNumber,
-        title: parsedTitle || h3[1].trim() || `Episode ${episodeNumber}`,
+        title: parsedTitle || episodeHeading[1].trim() || `Episode ${episodeNumber}`,
         beats: [],
       };
+      continue;
+    }
+    if (anyHeading) {
+      flush();
+      current = null;
       continue;
     }
     if (current) {

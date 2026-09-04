@@ -556,6 +556,7 @@ export default function DocumentPage() {
     setExportError(null);
     setCopyStatus("idle");
     try {
+      await editorRef.current?.flushPendingSave?.();
       const res = await fetch(`/api/documents/${params.id}/export`, {
         method: "POST",
       });
