@@ -5,6 +5,20 @@ import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { buildExport } from "@/lib/export/writer-export";
 
+function getPublicBaseUrl(req: Request): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+
+  const forwardedHost = req.headers.get("x-forwarded-host");
+  const forwardedProto = req.headers.get("x-forwarded-proto") ?? "https";
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return new URL(req.url).origin;
+}
+
 // POST /api/documents/[id]/export
 // Creates a handoff export link for a document. Auth required, owner/admin only.
 export async function POST(
@@ -32,7 +46,7 @@ export async function POST(
     id,
     doc.title,
     session.user.id,
-    new URL(req.url).origin
+    getPublicBaseUrl(req)
   );
 
   return NextResponse.json({
