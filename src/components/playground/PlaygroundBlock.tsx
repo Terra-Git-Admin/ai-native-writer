@@ -75,10 +75,7 @@ function PlaygroundBlock({
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        link: false,
-        underline: false,
-      }),
+      StarterKit,
       Placeholder.configure({ placeholder }),
       Underline,
       Highlight.configure({ multicolor: true }),

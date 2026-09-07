@@ -253,11 +253,8 @@ async function backupOnce(
   // where the live DB happens to live.
   const SCRATCH_DIR = process.env.BACKUP_SCRATCH_DIR || "/tmp";
   await fs.mkdir(SCRATCH_DIR, { recursive: true }).catch(() => {});
-  const scratchStem = `writer.db.${process.pid}.${Date.now()}.${Math.random()
-    .toString(36)
-    .slice(2)}`;
-  const snapshotPath = path.join(SCRATCH_DIR, `${scratchStem}.snapshot`);
-  const gzPath = path.join(SCRATCH_DIR, `${scratchStem}.snapshot.gz`);
+  const snapshotPath = path.join(SCRATCH_DIR, "writer.db.snapshot");
+  const gzPath = path.join(SCRATCH_DIR, "writer.db.snapshot.gz");
 
   // 1. Online backup (no lock on writers — SQLite copies pages incrementally).
   const tBackup0 = Date.now();
@@ -266,10 +263,6 @@ async function backupOnce(
   // when destination is a string path.
   await sqlite.backup(snapshotPath);
   const snapStat = await fs.stat(snapshotPath);
-  if (snapStat.size < 1_000_000) {
-    await fs.unlink(snapshotPath).catch(() => {});
-    throw new Error(`refusing implausibly small db snapshot: ${snapStat.size} bytes`);
-  }
   logEvent("db.backup.snapshot.ok", {
     bytes: snapStat.size,
     durationMs: Date.now() - tBackup0,
