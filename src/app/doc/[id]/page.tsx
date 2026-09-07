@@ -275,6 +275,7 @@ export default function DocumentPage() {
         await editorRef.current?.flushPendingSave?.();
       } catch {
         /* logged via client-trace */
+        return;
       }
 
       // 2. Fetch fresh content for the TARGET tab. The `tabs` state cache is
@@ -637,7 +638,14 @@ export default function DocumentPage() {
       <header className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.push("/")}
+            onClick={async () => {
+              try {
+                await editorRef.current?.flushPendingSave?.();
+              } catch {
+                return;
+              }
+              router.push("/");
+            }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
             &larr; Back
@@ -851,7 +859,7 @@ export default function DocumentPage() {
           onSwitch={handleTabSwitch}
           onTabsChange={handleTabsChange}
           onFlushSave={async () => {
-            try { await editorRef.current?.flushPendingSave?.(); } catch { /* ignore */ }
+            await editorRef.current?.flushPendingSave?.();
           }}
           onForceTabRefresh={handleForceTabRefresh}
         />
@@ -936,7 +944,7 @@ export default function DocumentPage() {
               aiJob={aiJob}
               onApplyToTab={applyToTab}
               onFlushPendingSave={async () => {
-                try { await editorRef.current?.flushPendingSave?.(); } catch { /* logged */ }
+                await editorRef.current?.flushPendingSave?.();
               }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}

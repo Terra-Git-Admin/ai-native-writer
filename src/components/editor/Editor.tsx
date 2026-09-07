@@ -65,6 +65,10 @@ function trace(event: string, data: Record<string, unknown> = {}): void {
   clientTrace(event, data);
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface EditorProps {
   documentId: string;
   tabId: string;
@@ -139,6 +143,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // monotonic: set true on every edit, cleared ONLY when a save actually
   // captures the content being sent. Every save gate reads this, never saveStatus.
   const hasUnsavedEdits = useRef(false);
+  // Last content snapshot the server is known to have, serialized from
+  // Tiptap's normalised editor JSON. Compare exact bytes for save skipping;
+  // hashes are only for logging/correlation.
+  const lastSavedContentRef = useRef<string | null>(null);
+  const baselineSeededRef = useRef(false);
   const saveInFlight = useRef(false);
   // Latest save requested while a PUT was in flight. Coalesced: only the most
   // recent content is queued; forceVersion is OR-ed so a Ctrl+S/tab-switch
@@ -195,9 +204,50 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     if (initialUpdatedAt) lastSavedServerUpdatedAtRef.current = initialUpdatedAt;
   }, [initialUpdatedAt]);
 
+  const matchesLastSavedContent = useCallback((content: object, contentStr: string): boolean => {
+    const saved = lastSavedContentRef.current;
+    if (!saved) return false;
+    if (saved === contentStr) return true;
+    try {
+      return isNormalisedEqual(JSON.parse(saved), content);
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const markUnsavedIfChanged = useCallback(
+    (content: object, source: string): boolean => {
+      const contentStr = JSON.stringify(content);
+      const hash = contentHash(contentStr);
+      if (matchesLastSavedContent(content, contentStr)) {
+        if (saveTimeout.current) {
+          clearTimeout(saveTimeout.current);
+          saveTimeout.current = null;
+        }
+        hasUnsavedEdits.current = false;
+        setSaveStatus("saved");
+        trace("client.save.skip.noopDirty", {
+          docId: documentId,
+          docTabId: tabId,
+          tabId: tabIdRef.current,
+          source,
+          hash,
+        });
+        return false;
+      }
+      hasUnsavedEdits.current = true;
+      setSaveStatus("unsaved");
+      return true;
+    },
+    [documentId, matchesLastSavedContent, tabId]
+  );
+
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        link: false,
+        underline: false,
+      }),
       Placeholder.configure({
         placeholder: "Start writing your script...",
       }),
@@ -222,8 +272,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       if (!isOwner) return;
-      hasUnsavedEdits.current = true;
-      setSaveStatus("unsaved");
+      if (!markUnsavedIfChanged(editor.getJSON(), "editor-update")) return;
 
       if (saveTimeout.current) clearTimeout(saveTimeout.current);
       saveTimeout.current = setTimeout(() => {
@@ -231,6 +280,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       }, 60_000);
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    if (baselineSeededRef.current) return;
+    if (hasUnsavedEdits.current) return;
+    const contentStr = JSON.stringify(editor.getJSON());
+    baselineSeededRef.current = true;
+    lastSavedContentRef.current = contentStr;
+    hasUnsavedEdits.current = false;
+    setSaveStatus("saved");
+    trace("client.save.baseline", {
+      docId: documentId,
+      docTabId: tabId,
+      tabId: tabIdRef.current,
+      bytes: contentStr.length,
+      hash: contentHash(contentStr),
+    });
+  }, [editor, documentId, tabId]);
 
   useImperativeHandle(ref, () => ({
     removeCommentMark(commentId: string) {
@@ -590,8 +657,8 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         saveTimeout.current = null;
       }
       // Only flush if there's actually unsaved work. A "saved" state means the
-      // server already has what's in the editor — an extra PUT is pure waste.
-      if (!hasUnsavedEdits.current) return;
+      // server already has what's in the editor; an extra PUT is pure waste.
+      if (!hasUnsavedEdits.current && !saveInFlight.current) return;
       trace("client.flushPendingSave.start", {
         docId: documentId,
         docTabId: tabId,
@@ -606,6 +673,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           forceVersion: false,
           reason: "tab-switch",
         });
+        const waitStartedAt = Date.now();
+        while (saveInFlight.current || pendingSave.current) {
+          if (Date.now() - waitStartedAt > 30_000) {
+            throw new Error("Timed out waiting for save to finish");
+          }
+          await delay(50);
+        }
+        if (hasUnsavedEdits.current || saveStatusRef.current === "unsaved") {
+          throw new Error("Save did not complete");
+        }
         trace("client.flushPendingSave.ok", {
           docId: documentId,
           docTabId: tabId,
@@ -616,6 +693,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           docTabId: tabId,
           err: err instanceof Error ? err.message : String(err),
         });
+        throw err;
       }
     },
   }));
@@ -762,6 +840,28 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
       const reqId = newId();
       const contentStr = JSON.stringify(content);
+      const hash = contentHash(contentStr);
+      if (matchesLastSavedContent(content, contentStr)) {
+        hasUnsavedEdits.current = false;
+        setSaveStatus("saved");
+        setSaveError(null);
+        trace("client.save.skip.noop", {
+          reqId,
+          docId: documentId,
+          docTabId: tabId,
+          tabId: tabIdRef.current,
+          forceVersion: !!opts?.forceVersion,
+          versionReason: opts?.reason ?? null,
+          hash,
+        });
+        const queued = pendingSave.current;
+        pendingSave.current = null;
+        saveInFlight.current = false;
+        if (queued) {
+          void saveDocument(queued.content, queued.opts);
+        }
+        return;
+      }
       // Phase 1: Clear the dirty ref at snapshot time — NOT on completion.
       // Any edit that lands during the in-flight PUT re-sets this to true via
       // onUpdate, so it can never be lost by a racing completion.
@@ -819,12 +919,16 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
           if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          lastSavedContentRef.current = contentStr;
           setSaveStatus("saved");
           setSaveError(null);
+          setConflictDetected(false);
+          setPendingServerContent(null);
           trace("client.save.ok", {
             reqId,
             status: res.status,
             updatedAt: data.updatedAt ?? null,
+            noop: Boolean(data.noop),
             latencyMs: latency,
           });
         } else {
@@ -880,7 +984,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         }
       }
     },
-    [documentId, tabId, isOwner]
+    [documentId, tabId, isOwner, matchesLastSavedContent]
   );
 
   // Poll for tab updates (picks up comment marks added by reviewers).
@@ -921,11 +1025,23 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
         const localStr = JSON.stringify(localContent);
 
         // Identical bytes → obvious no-op.
-        if (serverStr === localStr) return;
+        if (serverStr === localStr) {
+          setConflictDetected(false);
+          setPendingServerContent(null);
+          lastSavedContentRef.current = localStr;
+          if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          return;
+        }
         // Tiptap can add default null attrs (e.g. textAlign: null) on load
         // that aren't in the stored JSON. Treat those as equal so a
         // freshly-split doc doesn't fire a false conflict banner on first open.
-        if (isNormalisedEqual(serverContent, localContent)) return;
+        if (isNormalisedEqual(serverContent, localContent)) {
+          setConflictDetected(false);
+          setPendingServerContent(null);
+          lastSavedContentRef.current = localStr;
+          if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          return;
+        }
 
         const commentMarkOnly = isCommentMarkOnlyDiff(
           serverContent,
@@ -977,6 +1093,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           });
           trace("client.poll.reviewer.applyServer", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
+          lastSavedContentRef.current = JSON.stringify(editor.getJSON());
+          if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          setConflictDetected(false);
+          setPendingServerContent(null);
           restoreCursor();
           return;
         }
@@ -1005,6 +1125,10 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           });
           trace("client.poll.applyCommentMarks", pollCtx);
           editor.commands.setContent(serverContent, { emitUpdate: false });
+          lastSavedContentRef.current = JSON.stringify(editor.getJSON());
+          if (data.updatedAt) lastSavedServerUpdatedAtRef.current = data.updatedAt;
+          setConflictDetected(false);
+          setPendingServerContent(null);
           restoreCursor();
         } else {
           // Structural content differs from another instance. Never silently revert —
@@ -1115,13 +1239,12 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
 
   const triggerSave = useCallback(() => {
     if (!editor) return;
-    hasUnsavedEdits.current = true;
-    setSaveStatus("unsaved");
+    if (!markUnsavedIfChanged(editor.getJSON(), "trigger-save")) return;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(() => {
       saveDocument(editor.getJSON());
     }, 500);
-  }, [editor, saveDocument]);
+  }, [editor, markUnsavedIfChanged, saveDocument]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

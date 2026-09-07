@@ -83,13 +83,27 @@ export function stripNullAttrs(doc: unknown): unknown {
   return doc;
 }
 
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries
+      .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 // True when the two docs are structurally equal ignoring both comment marks
 // and null-valued attrs (Tiptap normalisation). Used by the save-revert
 // seatbelt AND the client poll to decide whether there's a "real" diff.
 export function isCommentMarkOnlyDiff(a: unknown, b: unknown): boolean {
   return (
-    JSON.stringify(stripNullAttrs(stripCommentMarks(a))) ===
-    JSON.stringify(stripNullAttrs(stripCommentMarks(b)))
+    stableStringify(stripNullAttrs(stripCommentMarks(a))) ===
+    stableStringify(stripNullAttrs(stripCommentMarks(b)))
   );
 }
 
@@ -98,7 +112,7 @@ export function isCommentMarkOnlyDiff(a: unknown, b: unknown): boolean {
 // reacting to before even asking whether it's comment-mark-only.
 export function isNormalisedEqual(a: unknown, b: unknown): boolean {
   return (
-    JSON.stringify(stripNullAttrs(a)) === JSON.stringify(stripNullAttrs(b))
+    stableStringify(stripNullAttrs(a)) === stableStringify(stripNullAttrs(b))
   );
 }
 

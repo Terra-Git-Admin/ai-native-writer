@@ -160,7 +160,12 @@ export default function AIChatSidebar({
 
   const handleStartJob = useCallback(async () => {
     if (isAIBusy || isStreaming) return;
-    try { await onFlushPendingSave(); } catch { /* logged */ }
+    try {
+      await onFlushPendingSave();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed before AI start.");
+      return;
+    }
     const r = await aiJob.start("next_reference_episode");
     if (!r.ok) setError(r.error ?? "Could not start AI job.");
   }, [aiJob, isAIBusy, isStreaming, onFlushPendingSave]);

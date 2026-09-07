@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { handoffExports } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { logEvent } from "@/lib/saveTrace";
 
 // Simple in-memory rate limiter: 60 req/min per client and per export token.
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -17,7 +18,7 @@ function getClientIp(req: Request): string {
       .map((part) => part.trim())
       .filter(Boolean);
     if (parts.length > 0) {
-      return parts[parts.length - 1];
+      return parts[0];
     }
   }
   return (
@@ -38,17 +39,20 @@ function cleanupRateLimitMap(now: number): void {
   }
 }
 
-function isRateLimited(key: string): boolean {
+function checkRateLimit(key: string): { limited: boolean; resetAt: number } {
   const now = Date.now();
   cleanupRateLimitMap(now);
   const entry = rateLimitMap.get(key);
   if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return false;
+    const resetAt = now + RATE_LIMIT_WINDOW_MS;
+    rateLimitMap.set(key, { count: 1, resetAt });
+    return { limited: false, resetAt };
   }
-  if (entry.count >= RATE_LIMIT_MAX) return true;
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return { limited: true, resetAt: entry.resetAt };
+  }
   entry.count++;
-  return false;
+  return { limited: false, resetAt: entry.resetAt };
 }
 
 // GET /api/export/[exportId]
@@ -60,8 +64,36 @@ export async function GET(
   const { exportId } = await params;
   const ip = getClientIp(req);
 
-  if (isRateLimited(`ip:${ip}`) || isRateLimited(`export:${exportId}`)) {
-    return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+  const ipLimit = checkRateLimit(`ip:${ip}`);
+  if (ipLimit.limited) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((ipLimit.resetAt - Date.now()) / 1000)
+    );
+    logEvent("export.rate_limited", {
+      keyType: "ip",
+      retryAfter,
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
+
+  const exportLimit = checkRateLimit(`export:${exportId}`);
+  if (exportLimit.limited) {
+    const retryAfter = Math.max(
+      1,
+      Math.ceil((exportLimit.resetAt - Date.now()) / 1000)
+    );
+    logEvent("export.rate_limited", {
+      keyType: "export",
+      retryAfter,
+    });
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
   }
 
   const row = await db.query.handoffExports.findFirst({
