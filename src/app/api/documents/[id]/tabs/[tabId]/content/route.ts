@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, dbFileStats } from "@/lib/db";
 import { documents, tabs, comments, documentVersions } from "@/lib/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { compareDocs, extractCommentMarkIds } from "@/lib/commentMarks";
 import {
@@ -451,23 +451,32 @@ export async function PUT(
   // Fire-and-forget: the actual content save above is already awaited (durable).
   // On single-instance Cloud Run a container kill in the gap between response
   // and this completing could drop the version snapshot — never the content itself.
-  let msVersionSnapshot = 0;
+  const response = NextResponse.json({ ok: true, updatedAt: now.toISOString() });
+  let versionSnapshotQueued = false;
   if (isOwner && !commentMarkOnly && body.content) {
-    try {
+    versionSnapshotQueued = true;
+    void (async () => {
       const tSnap = Date.now();
       await maybeCreateTabVersion(id, tabId, body.content, session.user.id, {
         force: forceVersion,
         reason: versionReason ?? undefined,
       });
-      msVersionSnapshot = Date.now() - tSnap;
-    } catch (err) {
+      logEvent("tab.version.async.ok", {
+        docId: id,
+        docTabIdPath: tabId,
+        userId: session.user.id,
+        msVersionSnapshot: Date.now() - tSnap,
+        ...trace,
+      });
+    })().catch((err) => {
       warnTrace("tab.version.failed", {
         docId: id,
         docTabIdPath: tabId,
         userId: session.user.id,
         err: err instanceof Error ? err.message : String(err),
+        ...trace,
       });
-    }
+    });
   }
 
   logEvent("tab.put.ok", {
@@ -480,7 +489,7 @@ export async function PUT(
     contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
     hashAfter: contentHash(body.content ?? tab.content),
     msTotal: Date.now() - t0,
-    msVersionSnapshot,
+    versionSnapshotQueued,
     phase: "heal-skip",
     ...trace,
   });
@@ -496,5 +505,5 @@ export async function PUT(
     ...dbFileStats(),
   });
 
-  return NextResponse.json({ ok: true, updatedAt: now.toISOString() });
+  return response;
 }
