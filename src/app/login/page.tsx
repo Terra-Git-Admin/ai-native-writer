@@ -2,6 +2,20 @@
 
 import { signIn } from "next-auth/react";
 
+function getSafeCallbackUrl(): string {
+  if (typeof window === "undefined") return "/";
+
+  const callbackUrl = new URLSearchParams(window.location.search).get(
+    "callbackUrl"
+  );
+
+  if (callbackUrl?.startsWith("/") && !callbackUrl.startsWith("//")) {
+    return callbackUrl;
+  }
+
+  return "/";
+}
+
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -13,7 +27,7 @@ export default function LoginPage() {
           </p>
         </div>
         <button
-          onClick={() => signIn("google", { callbackUrl: "/" })}
+          onClick={() => signIn("google", { callbackUrl: getSafeCallbackUrl() })}
           className="inline-flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground shadow-sm hover:bg-muted transition-colors"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
