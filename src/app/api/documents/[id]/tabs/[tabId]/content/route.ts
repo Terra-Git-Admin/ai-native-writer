@@ -281,6 +281,28 @@ export async function PUT(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (typeof body.content === "string" && body.content === tab.content) {
+    const updatedAt = tab.updatedAt
+      ? new Date(tab.updatedAt).toISOString()
+      : null;
+    logEvent("tab.put.noop", {
+      docId: id,
+      docTabIdPath: tabId,
+      tabType: tab.type,
+      userId: session.user.id,
+      isOwner,
+      commentMarkOnly,
+      forceVersion,
+      versionReason,
+      updatedAt,
+      contentLen: body.content.length,
+      hash: contentHash(body.content),
+      msTotal: Date.now() - t0,
+      ...trace,
+    });
+    return NextResponse.json({ ok: true, noop: true, updatedAt });
+  }
+
   // Same commentMark diff diagnostics as documents PUT — preserves the ongoing
   // save-revert investigation (PR #14). tabId is now part of the save-trace.
   let diff: ReturnType<typeof compareDocs> | null = null;
