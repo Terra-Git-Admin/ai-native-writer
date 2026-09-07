@@ -15,10 +15,6 @@ export function middleware(request: NextRequest) {
 
   if (!sessionCookie) {
     const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set(
-      "callbackUrl",
-      `${request.nextUrl.pathname}${request.nextUrl.search}`
-    );
     return NextResponse.redirect(loginUrl);
   }
 
@@ -27,7 +23,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Protect everything except auth routes, login page, and static assets.
-    "/((?!api/auth|login|_next/static|_next/image|favicon.ico).*)",
+    // Protect everything except auth/export routes, login page, and static assets.
+    "/((?!api/auth|api/export|login|_next/static|_next/image|favicon.ico).*)",
   ],
 };
