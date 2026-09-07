@@ -3,12 +3,10 @@ import { db } from "@/lib/db";
 import { tabs, handoffExports } from "@/lib/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
-import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 import {
   parseSeriesOverview,
   parseH2Entities,
   parsePredefinedEpisodes,
-  type EpisodeBeat,
 } from "./tiptap-parser";
 
 export interface WriterExportTabSnapshot {
@@ -37,61 +35,15 @@ export interface WriterExport {
   episodes: Array<{
     episodeNumber: number;
     title: string;
-    beats: EpisodeBeat[];
+    beats: Array<{ visual: string; dialogue: string; vo: string }>;
   }>;
-}
-
-export interface WriterExportOptions {
-  episodeRange?: {
-    from: number;
-    to: number;
-  };
-}
-
-type ExportEntity = { name: string; description: string };
-
-function serializeEntitiesToTagged(entities: ExportEntity[]): string {
-  return entities
-    .map((entity) => {
-      const description = entity.description
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => `[P] ${line}`)
-        .join("\n");
-      return [`[H2] ${entity.name}`, description].filter(Boolean).join("\n");
-    })
-    .join("\n\n");
-}
-
-function serializeTaggedToJson(tagged: string): string | null {
-  const trimmed = tagged.trim();
-  if (!trimmed) return null;
-  return JSON.stringify(taggedTextToTiptapDoc(trimmed));
-}
-
-function stripOverviewEpisodeSections(tagged: string): string {
-  const lines = tagged.split("\n");
-  const filtered: string[] = [];
-  let skipping = false;
-
-  for (const line of lines) {
-    const h2 = line.match(/^\[H2\]\s*(.+)$/);
-    if (h2) {
-      skipping = /^original\s+episodes?$/i.test(h2[1].trim());
-    }
-    if (!skipping) filtered.push(line);
-  }
-
-  return filtered.join("\n").trim();
 }
 
 export async function buildExport(
   documentId: string,
   documentTitle: string,
   userId: string,
-  requestBaseUrl?: string,
-  options: WriterExportOptions = {}
+  requestBaseUrl?: string
 ): Promise<{ exportId: string; exportUrl: string; export: WriterExport }> {
   const allTabs = await db.query.tabs.findMany({
     where: eq(tabs.documentId, documentId),
@@ -106,61 +58,22 @@ export async function buildExport(
   const episodesTab = findTab("predefined_episodes");
 
   const { summary, logline } = parseSeriesOverview(overviewTab?.content ?? null);
-  const allCharacters = parseH2Entities(charactersTab?.content ?? null);
-  const allLocations = parseH2Entities(locationsTab?.content ?? null);
-  const allEpisodes = parsePredefinedEpisodes(episodesTab?.content ?? null);
-  const episodeRange = options.episodeRange;
-  const selectedEpisodes = episodeRange
-    ? allEpisodes.filter(
-        (episode) =>
-          episode.episodeNumber >= episodeRange.from &&
-          episode.episodeNumber <= episodeRange.to
-      )
-    : allEpisodes;
-  const characters = allCharacters;
-  const locations = allLocations;
-  const episodes = selectedEpisodes.map(({ episodeNumber, title, beats }) => ({
-    episodeNumber,
-    title,
-    beats,
-  }));
+  const characters = parseH2Entities(charactersTab?.content ?? null);
+  const locations = parseH2Entities(locationsTab?.content ?? null);
+  const episodes = parsePredefinedEpisodes(episodesTab?.content ?? null);
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
   const exportId = nanoid();
-  const relevantTypes = new Set([
-    "series_overview",
-    "characters",
-    "locations",
-    "predefined_episodes",
-  ]);
-  const tabSnapshots: WriterExportTabSnapshot[] = allTabs
-    .filter((tab) => relevantTypes.has(tab.type))
-    .map((tab) => {
-      let contentTagged = tiptapJsonToTagged(tab.content ?? null);
-      if (tab.type === "series_overview" && episodeRange) {
-        contentTagged = stripOverviewEpisodeSections(contentTagged);
-      } else if (tab.type === "characters") {
-        contentTagged = serializeEntitiesToTagged(allCharacters);
-      } else if (tab.type === "locations") {
-        contentTagged = serializeEntitiesToTagged(allLocations);
-      } else if (tab.type === "predefined_episodes") {
-        contentTagged = selectedEpisodes
-          .map((episode) => episode.sourceTagged)
-          .filter(Boolean)
-          .join("\n\n");
-      }
-
-      return {
-        id: tab.id,
-        title: tab.title,
-        type: tab.type,
-        position: tab.position,
-        contentJson: serializeTaggedToJson(contentTagged),
-        contentTagged,
-        updatedAt: tab.updatedAt.toISOString(),
-      };
-    });
+  const tabSnapshots: WriterExportTabSnapshot[] = allTabs.map((tab) => ({
+    id: tab.id,
+    title: tab.title,
+    type: tab.type,
+    position: tab.position,
+    contentJson: tab.content,
+    contentTagged: tiptapJsonToTagged(tab.content ?? null),
+    updatedAt: tab.updatedAt.toISOString(),
+  }));
 
   const writerExport: WriterExport = {
     exportId,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
@@ -50,29 +50,6 @@ interface HandoffExportResult {
     hasSummary: boolean;
     hasLogline: boolean;
   };
-}
-
-interface ExportEpisodeOption {
-  episodeNumber: number;
-  label: string;
-}
-
-function getExportEpisodeOptions(contentJson: string | null): ExportEpisodeOption[] {
-  const tagged = tiptapJsonToTagged(contentJson ?? null);
-  if (!tagged) return [];
-
-  const options: ExportEpisodeOption[] = [];
-  for (const line of tagged.split("\n")) {
-    const match = line.match(/^\[H[123]\]\s*(Episode\s+(\d+)(?:\s*[:-]\s*.*)?)$/i);
-    if (!match) continue;
-    const episodeNumber = Number(match[2]);
-    if (!Number.isInteger(episodeNumber)) continue;
-    options.push({
-      episodeNumber,
-      label: match[1].trim(),
-    });
-  }
-  return options;
 }
 
 export default function DocumentPage() {
@@ -129,8 +106,6 @@ export default function DocumentPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [handoffExport, setHandoffExport] = useState<HandoffExportResult | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
-  const [exportFromEpisode, setExportFromEpisode] = useState<number | null>(null);
-  const [exportToEpisode, setExportToEpisode] = useState<number | null>(null);
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -581,19 +556,9 @@ export default function DocumentPage() {
     setExportError(null);
     setCopyStatus("idle");
     try {
-      if (exportFromEpisode == null || exportToEpisode == null) {
-        throw new Error("Choose an episode range before exporting");
-      }
       await editorRef.current?.flushPendingSave?.();
       const res = await fetch(`/api/documents/${params.id}/export`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          episodeRange: {
-            from: exportFromEpisode,
-            to: exportToEpisode,
-          },
-        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -606,7 +571,7 @@ export default function DocumentPage() {
     } finally {
       setExportLoading(false);
     }
-  }, [exportFromEpisode, exportToEpisode, params.id]);
+  }, [params.id]);
 
   const handleCopyExportUrl = useCallback(async () => {
     if (!handoffExport?.exportUrl) return;
@@ -617,33 +582,6 @@ export default function DocumentPage() {
       setCopyStatus("failed");
     }
   }, [handoffExport?.exportUrl]);
-
-  const exportEpisodeOptions = useMemo(() => {
-    const episodesTab = tabs.find((tab) => tab.type === "predefined_episodes");
-    return getExportEpisodeOptions(episodesTab?.content ?? null);
-  }, [tabs]);
-
-  useEffect(() => {
-    if (exportEpisodeOptions.length === 0) {
-      setExportFromEpisode(null);
-      setExportToEpisode(null);
-      return;
-    }
-
-    const episodeNumbers = new Set(
-      exportEpisodeOptions.map((episode) => episode.episodeNumber)
-    );
-    setExportFromEpisode((current) =>
-      current != null && episodeNumbers.has(current)
-        ? current
-        : exportEpisodeOptions[0].episodeNumber
-    );
-    setExportToEpisode((current) =>
-      current != null && episodeNumbers.has(current)
-        ? current
-        : exportEpisodeOptions[exportEpisodeOptions.length - 1].episodeNumber
-    );
-  }, [exportEpisodeOptions]);
 
   if (loading) {
     return (
@@ -659,10 +597,40 @@ export default function DocumentPage() {
   const activeTabContent = activeTab?.content ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
   const canExportToProduction = doc.isOwner || isAdmin;
-  const exportRangeReady =
-    exportFromEpisode != null &&
-    exportToEpisode != null &&
-    exportFromEpisode <= exportToEpisode;
+  const exportChecklist = handoffExport
+    ? [
+        {
+          label: "Summary and logline",
+          status:
+            handoffExport.preview.hasSummary && handoffExport.preview.hasLogline
+              ? "Ready"
+              : "Missing",
+          detail: [
+            handoffExport.preview.hasSummary ? "Summary" : "No summary",
+            handoffExport.preview.hasLogline ? "Logline" : "No logline",
+          ].join(" · "),
+          tabType: "series_overview",
+        },
+        {
+          label: "Characters",
+          status: handoffExport.preview.characters > 0 ? "Ready" : "Missing",
+          detail: `${handoffExport.preview.characters} parsed`,
+          tabType: "characters",
+        },
+        {
+          label: "Locations",
+          status: handoffExport.preview.locations > 0 ? "Ready" : "Missing",
+          detail: `${handoffExport.preview.locations} parsed`,
+          tabType: "locations",
+        },
+        {
+          label: "Predefined episodes",
+          status: handoffExport.preview.episodes > 0 ? "Ready" : "Missing",
+          detail: `${handoffExport.preview.episodes} parsed`,
+          tabType: "predefined_episodes",
+        },
+      ]
+    : [];
 
   return (
     <div className="flex h-screen flex-col">
@@ -778,16 +746,11 @@ export default function DocumentPage() {
           )}
           {canExportToProduction && (
             <button
-              onClick={() => {
-                setExportModalOpen(true);
-                setExportError(null);
-                setHandoffExport(null);
-                setCopyStatus("idle");
-              }}
+              onClick={handleCreateHandoffExport}
               disabled={exportLoading}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
             >
-              Export to Production
+              {exportLoading ? "Exporting..." : "Export to Production"}
             </button>
           )}
           {doc?.isOwner && activeTab?.type === "workbook" && (
@@ -1106,7 +1069,7 @@ export default function DocumentPage() {
                   Export to Production
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Generate a 4-hour link with only the selected episodes.
+                  Share this link with Comics Dash to import the Writer snapshot.
                 </p>
               </div>
               <button
@@ -1117,128 +1080,83 @@ export default function DocumentPage() {
               </button>
             </div>
 
-            {exportError && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                {exportError}
+            {exportLoading && (
+              <div className="rounded-md border border-border bg-muted px-3 py-3 text-sm text-muted-foreground">
+                Creating export...
               </div>
             )}
 
-            {!handoffExport && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                      From episode
-                    </span>
-                    <select
-                      value={exportFromEpisode ?? ""}
-                      onChange={(event) => {
-                        setExportFromEpisode(Number(event.target.value));
-                        setCopyStatus("idle");
-                      }}
-                      disabled={exportLoading || exportEpisodeOptions.length === 0}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {exportEpisodeOptions.map((episode) => (
-                        <option
-                          key={`from-${episode.episodeNumber}`}
-                          value={episode.episodeNumber}
-                        >
-                          {episode.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                      To episode
-                    </span>
-                    <select
-                      value={exportToEpisode ?? ""}
-                      onChange={(event) => {
-                        setExportToEpisode(Number(event.target.value));
-                        setCopyStatus("idle");
-                      }}
-                      disabled={exportLoading || exportEpisodeOptions.length === 0}
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {exportEpisodeOptions.map((episode) => (
-                        <option
-                          key={`to-${episode.episodeNumber}`}
-                          value={episode.episodeNumber}
-                        >
-                          {episode.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {exportEpisodeOptions.length === 0 && (
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    No predefined episodes found.
-                  </p>
-                )}
-                {exportFromEpisode != null &&
-                  exportToEpisode != null &&
-                  exportFromEpisode > exportToEpisode && (
-                    <p className="text-xs text-red-600 dark:text-red-400">
-                      Start episode must be before end episode.
-                    </p>
-                  )}
-                <button
-                  onClick={handleCreateHandoffExport}
-                  disabled={exportLoading || !exportRangeReady}
-                  className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
-                >
-                  {exportLoading ? "Creating export..." : "Generate export link"}
-                </button>
+            {exportError && (
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                {exportError}
               </div>
             )}
 
             {handoffExport && !exportLoading && (
               <div className="space-y-4">
-                <div className="rounded-md border border-border bg-muted/60 px-3 py-3">
-                  <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Export summary
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.episodes}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Episodes</div>
                   </div>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        Episodes {exportFromEpisode}-{exportToEpisode}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {handoffExport.preview.episodes} selected
-                      </div>
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.characters}
                     </div>
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        {handoffExport.preview.characters}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Characters
-                      </div>
+                    <div className="text-xs text-muted-foreground">Characters</div>
+                  </div>
+                  <div className="rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="text-lg font-semibold text-foreground">
+                      {handoffExport.preview.locations}
                     </div>
-                    <div>
-                      <div className="font-semibold text-foreground">
-                        {handoffExport.preview.locations}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Locations
-                      </div>
-                    </div>
+                    <div className="text-xs text-muted-foreground">Locations</div>
                   </div>
                 </div>
 
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                <div className="rounded-md border border-border bg-muted/70">
+                  {exportChecklist.map((item) => {
+                    const ready = item.status === "Ready";
+                    return (
+                      <div
+                        key={item.tabType}
+                        className="border-b border-border px-3 py-2 last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {item.label}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                ready
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                              }`}
+                            >
+                              {item.status}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {item.detail}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
                     Export link
-                  </span>
+                  </label>
                   <div className="flex gap-2">
                     <input
                       readOnly
                       value={handoffExport.exportUrl}
                       className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
-                      onFocus={(event) => event.currentTarget.select()}
+                      onFocus={(e) => e.currentTarget.select()}
                     />
                     <button
                       onClick={handleCopyExportUrl}
@@ -1247,17 +1165,17 @@ export default function DocumentPage() {
                       Copy
                     </button>
                   </div>
-                </label>
-                {copyStatus === "copied" && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
-                    Copied.
-                  </p>
-                )}
-                {copyStatus === "failed" && (
-                  <p className="text-xs text-red-600 dark:text-red-400">
-                    Copy failed. Select the link manually.
-                  </p>
-                )}
+                  {copyStatus === "copied" && (
+                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      Copied.
+                    </p>
+                  )}
+                  {copyStatus === "failed" && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                      Copy failed. Select the link manually.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
