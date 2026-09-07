@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { handoffExports } from "@/lib/db/schema";
+import { documents, handoffExports } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 // Simple in-memory rate limiter: 60 req/min per client and per export token.
@@ -52,11 +53,17 @@ function isRateLimited(key: string): boolean {
 }
 
 // GET /api/export/[exportId]
-// Public: no auth required. Returns the stored WriterExport JSON.
+// Auth required. Returns the stored WriterExport JSON to the export creator,
+// document owner, or an admin.
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ exportId: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { exportId } = await params;
   const ip = getClientIp(req);
 
@@ -73,6 +80,24 @@ export async function GET(
   }
   if (row.expiresAt < new Date()) {
     return NextResponse.json({ error: "Export expired" }, { status: 410 });
+  }
+
+  const doc = await db.query.documents.findFirst({
+    where: eq(documents.id, row.documentId),
+    columns: { ownerId: true },
+  });
+
+  if (!doc) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const canReadExport =
+    row.createdBy === session.user.id ||
+    doc.ownerId === session.user.id ||
+    session.user.role === "admin";
+
+  if (!canReadExport) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   return NextResponse.json(JSON.parse(row.exportJson), {
