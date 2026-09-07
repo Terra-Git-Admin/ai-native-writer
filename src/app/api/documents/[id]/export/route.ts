@@ -19,6 +19,29 @@ function getPublicBaseUrl(req: Request): string {
   return new URL(req.url).origin;
 }
 
+function parseEpisodeRange(body: unknown):
+  | { episodeRange?: { from: number; to: number }; error?: never }
+  | { episodeRange?: never; error: string } {
+  if (!body || typeof body !== "object") return {};
+  const value = (body as { episodeRange?: unknown }).episodeRange;
+  if (value == null) return {};
+  if (typeof value !== "object") {
+    return { error: "Episode range must be an object" };
+  }
+
+  const rawRange = value as { from?: unknown; to?: unknown };
+  const from = Number(rawRange.from);
+  const to = Number(rawRange.to);
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1) {
+    return { error: "Episode range must use positive whole numbers" };
+  }
+  if (from > to) {
+    return { error: "Start episode must be before end episode" };
+  }
+
+  return { episodeRange: { from, to } };
+}
+
 // POST /api/documents/[id]/export
 // Creates a handoff export link for a document. Auth required, owner/admin only.
 export async function POST(
@@ -42,11 +65,18 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const body = await req.json().catch(() => ({}));
+  const rangeResult = parseEpisodeRange(body);
+  if (rangeResult.error) {
+    return NextResponse.json({ error: rangeResult.error }, { status: 400 });
+  }
+
   const result = await buildExport(
     id,
     doc.title,
     session.user.id,
-    getPublicBaseUrl(req)
+    getPublicBaseUrl(req),
+    { episodeRange: rangeResult.episodeRange }
   );
 
   return NextResponse.json({

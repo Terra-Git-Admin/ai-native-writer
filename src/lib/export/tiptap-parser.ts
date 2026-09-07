@@ -15,6 +15,8 @@ export interface ParsedEpisode {
   episodeNumber: number;
   title: string;
   beats: EpisodeBeat[];
+  sourceTagged: string;
+  sourceText: string;
 }
 
 // Split tagged content by [H2] headings into one section per H2.
@@ -89,6 +91,10 @@ function bodyToPlainText(body: string): string {
     .join("\n");
 }
 
+function linesToPlainText(lines: string[]): string {
+  return bodyToPlainText(lines.join("\n"));
+}
+
 // Parse series_overview tab: extract Summary and Logline H2 sections.
 export function parseSeriesOverview(
   contentJson: string | null
@@ -153,10 +159,16 @@ export function parsePredefinedEpisodes(
   const lines = tagged.split("\n");
   const episodes: ParsedEpisode[] = [];
   let current: ParsedEpisode | null = null;
+  let currentLines: string[] = [];
 
   const flush = () => {
-    if (current) episodes.push(current);
+    if (current) {
+      current.sourceTagged = currentLines.join("\n").trim();
+      current.sourceText = linesToPlainText(currentLines);
+      episodes.push(current);
+    }
     current = null;
+    currentLines = [];
   };
 
   for (const line of lines) {
@@ -172,7 +184,10 @@ export function parsePredefinedEpisodes(
         episodeNumber,
         title: parsedTitle || episodeHeading[1].trim() || `Episode ${episodeNumber}`,
         beats: [],
+        sourceTagged: "",
+        sourceText: "",
       };
+      currentLines.push(line);
       continue;
     }
     if (anyHeading) {
@@ -181,6 +196,7 @@ export function parsePredefinedEpisodes(
       continue;
     }
     if (current) {
+      currentLines.push(line);
       const beat = parseBeatLine(line);
       if (beat && (beat.visual || beat.dialogue || beat.vo)) {
         current.beats.push(beat);
