@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
@@ -50,8 +50,41 @@ interface HandoffExportResult {
     locations: number;
     hasSummary: boolean;
     hasLogline: boolean;
+    payloadBytes: number;
+    episodeRange: {
+      from: number;
+      to: number;
+      availableEpisodes: number;
+      selectedEpisodes: number;
+    } | null;
   };
 }
+
+interface ExportEpisodeOption {
+  episodeNumber: number;
+  label: string;
+}
+
+function getExportEpisodeOptions(contentJson: string | null): ExportEpisodeOption[] {
+  const tagged = tiptapJsonToTagged(contentJson ?? null);
+  if (!tagged) return [];
+
+  const seen = new Set<number>();
+  const options: ExportEpisodeOption[] = [];
+  for (const line of tagged.split("\n")) {
+    const match = line.match(/^\[H[123]\]\s*(Episode\s+(\d+)(?:\s*[:\u2014\u2013-]\s*.*)?)$/i);
+    if (!match) continue;
+    const episodeNumber = Number(match[2]);
+    if (!Number.isInteger(episodeNumber) || seen.has(episodeNumber)) continue;
+    seen.add(episodeNumber);
+    options.push({
+      episodeNumber,
+      label: match[1].trim(),
+    });
+  }
+  return options.sort((a, b) => a.episodeNumber - b.episodeNumber);
+}
+
 
 export default function DocumentPage() {
   const params = useParams<{ id: string }>();
@@ -107,6 +140,8 @@ export default function DocumentPage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [handoffExport, setHandoffExport] = useState<HandoffExportResult | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [exportFromEpisode, setExportFromEpisode] = useState("1");
+  const [exportToEpisode, setExportToEpisode] = useState("");
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -553,25 +588,41 @@ export default function DocumentPage() {
   );
 
   const handleCreateHandoffExport = useCallback(async () => {
-    setExportModalOpen(true);
+    const from = Number(exportFromEpisode);
+    const to = Number(exportToEpisode);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1) {
+      setExportError("Choose a valid episode range.");
+      return;
+    }
+    if (from > to) {
+      setExportError("Start episode must be before end episode.");
+      return;
+    }
+
+    const episodeRange = { from, to };
     setExportLoading(true);
     setExportError(null);
     setCopyStatus("idle");
     clientTrace("export.client.click", {
       docId: params.id,
       mode: "last_saved_no_flush",
+      episodeRange,
     });
     try {
       const res = await fetch(`/api/documents/${params.id}/export`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ episodeRange }),
       });
       const data = await res.json().catch(() => null);
       clientTrace("export.client.response", {
         docId: params.id,
         mode: "last_saved_no_flush",
+        episodeRange,
         ok: res.ok,
         status: res.status,
         exportId: data?.exportId ?? null,
+        preview: data?.preview ?? null,
       });
       if (!res.ok) {
         throw new Error(data?.error || "Export failed");
@@ -582,6 +633,7 @@ export default function DocumentPage() {
       clientTrace("export.client.fail", {
         docId: params.id,
         mode: "last_saved_no_flush",
+        episodeRange,
         message,
       });
       setHandoffExport(null);
@@ -589,7 +641,7 @@ export default function DocumentPage() {
     } finally {
       setExportLoading(false);
     }
-  }, [params.id]);
+  }, [exportFromEpisode, exportToEpisode, params.id]);
 
   const handleCopyExportUrl = useCallback(async () => {
     if (!handoffExport?.exportUrl) return;
@@ -601,6 +653,18 @@ export default function DocumentPage() {
     }
   }, [handoffExport?.exportUrl]);
 
+  const exportEpisodeOptions = useMemo(() => {
+    const episodesTab = tabs.find((tab) => tab.type === "predefined_episodes");
+    return getExportEpisodeOptions(episodesTab?.content ?? null);
+  }, [tabs]);
+
+  useEffect(() => {
+    if (exportEpisodeOptions.length === 0) return;
+    setExportFromEpisode((current) => current || String(exportEpisodeOptions[0].episodeNumber));
+    setExportToEpisode((current) =>
+      current || String(exportEpisodeOptions[exportEpisodeOptions.length - 1].episodeNumber)
+    );
+  }, [exportEpisodeOptions]);
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -615,40 +679,17 @@ export default function DocumentPage() {
   const activeTabContent = activeTab?.content ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
   const canExportToProduction = doc.isOwner || isAdmin;
-  const exportChecklist = handoffExport
-    ? [
-        {
-          label: "Summary and logline",
-          status:
-            handoffExport.preview.hasSummary && handoffExport.preview.hasLogline
-              ? "Ready"
-              : "Missing",
-          detail: [
-            handoffExport.preview.hasSummary ? "Summary" : "No summary",
-            handoffExport.preview.hasLogline ? "Logline" : "No logline",
-          ].join(" · "),
-          tabType: "series_overview",
-        },
-        {
-          label: "Characters",
-          status: handoffExport.preview.characters > 0 ? "Ready" : "Missing",
-          detail: `${handoffExport.preview.characters} parsed`,
-          tabType: "characters",
-        },
-        {
-          label: "Locations",
-          status: handoffExport.preview.locations > 0 ? "Ready" : "Missing",
-          detail: `${handoffExport.preview.locations} parsed`,
-          tabType: "locations",
-        },
-        {
-          label: "Predefined episodes",
-          status: handoffExport.preview.episodes > 0 ? "Ready" : "Missing",
-          detail: `${handoffExport.preview.episodes} parsed`,
-          tabType: "predefined_episodes",
-        },
-      ]
-    : [];
+  const exportFromNumber = Number(exportFromEpisode);
+  const exportToNumber = Number(exportToEpisode);
+  const exportRangeReady =
+    Number.isInteger(exportFromNumber) &&
+    Number.isInteger(exportToNumber) &&
+    exportFromNumber >= 1 &&
+    exportToNumber >= 1 &&
+    exportFromNumber <= exportToNumber;
+  const selectedRangeLabel = exportRangeReady
+    ? `Episodes ${exportFromNumber}-${exportToNumber}`
+    : "Selected episodes";
 
   return (
     <div className="flex h-screen flex-col">
@@ -771,11 +812,16 @@ export default function DocumentPage() {
           )}
           {canExportToProduction && (
             <button
-              onClick={handleCreateHandoffExport}
+              onClick={() => {
+                setExportModalOpen(true);
+                setExportError(null);
+                setHandoffExport(null);
+                setCopyStatus("idle");
+              }}
               disabled={exportLoading}
               className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
             >
-              {exportLoading ? "Exporting..." : "Export to Production"}
+              Export to Production
             </button>
           )}
           {doc?.isOwner && activeTab?.type === "workbook" && (
@@ -1105,15 +1151,76 @@ export default function DocumentPage() {
               </button>
             </div>
 
-            {exportLoading && (
-              <div className="rounded-md border border-border bg-muted px-3 py-3 text-sm text-muted-foreground">
-                Creating export...
+            {exportError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                {exportError}
               </div>
             )}
 
-            {exportError && (
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-                {exportError}
+            {!handoffExport && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                      From episode
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={exportFromEpisode}
+                      onChange={(event) => {
+                        setExportFromEpisode(event.target.value);
+                        setCopyStatus("idle");
+                      }}
+                      disabled={exportLoading}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                      To episode
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={exportToEpisode}
+                      onChange={(event) => {
+                        setExportToEpisode(event.target.value);
+                        setCopyStatus("idle");
+                      }}
+                      disabled={exportLoading}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                </div>
+
+                {exportEpisodeOptions.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Detected {exportEpisodeOptions.length} saved episodes: {exportEpisodeOptions[0].label} to {exportEpisodeOptions[exportEpisodeOptions.length - 1].label}.
+                  </p>
+                )}
+                {exportEpisodeOptions.length === 0 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    No saved episode headings detected. You can still enter a range manually.
+                  </p>
+                )}
+                {exportFromEpisode &&
+                  exportToEpisode &&
+                  !exportRangeReady && (
+                    <p className="text-xs text-red-600 dark:text-red-400">
+                      Start episode must be before end episode.
+                    </p>
+                  )}
+
+                <button
+                  onClick={handleCreateHandoffExport}
+                  disabled={exportLoading || !exportRangeReady}
+                  className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
+                >
+                  {exportLoading ? "Creating export..." : "Generate export link"}
+                </button>
               </div>
             )}
 
@@ -1138,38 +1245,11 @@ export default function DocumentPage() {
                     </div>
                     <div className="text-xs text-muted-foreground">Locations</div>
                   </div>
+
                 </div>
 
-                <div className="rounded-md border border-border bg-muted/70">
-                  {exportChecklist.map((item) => {
-                    const ready = item.status === "Ready";
-                    return (
-                      <div
-                        key={item.tabType}
-                        className="border-b border-border px-3 py-2 last:border-b-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate text-sm font-medium text-foreground">
-                              {item.label}
-                            </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                ready
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                                  : "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-                              }`}
-                            >
-                              {item.status}
-                            </span>
-                          </div>
-                          <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                            {item.detail}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-muted-foreground">
+                  {selectedRangeLabel} from the last saved Writer snapshot. Link active for 4 hours.
                 </div>
 
                 <div>
@@ -1201,6 +1281,16 @@ export default function DocumentPage() {
                     </p>
                   )}
                 </div>
+
+                <button
+                  onClick={() => {
+                    setHandoffExport(null);
+                    setCopyStatus("idle");
+                  }}
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Choose a different range
+                </button>
               </div>
             )}
           </div>

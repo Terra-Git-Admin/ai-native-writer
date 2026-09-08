@@ -4,9 +4,11 @@ import { tabs, handoffExports } from "@/lib/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import {
+  filterTiptapEpisodesByRange,
   parseSeriesOverview,
   parseH2Entities,
   parsePredefinedEpisodes,
+  type EpisodeRange,
 } from "./tiptap-parser";
 import { contentHash, logEvent } from "@/lib/saveTrace";
 
@@ -38,13 +40,24 @@ export interface WriterExport {
     title: string;
     beats: Array<{ visual: string; dialogue: string; vo: string }>;
   }>;
+  episodeRange: {
+    from: number;
+    to: number;
+    availableEpisodes: number;
+    selectedEpisodes: number;
+  } | null;
+}
+
+export interface WriterExportOptions {
+  episodeRange?: EpisodeRange;
 }
 
 export async function buildExport(
   documentId: string,
   documentTitle: string,
   userId: string,
-  requestBaseUrl?: string
+  requestBaseUrl?: string,
+  options: WriterExportOptions = {}
 ): Promise<{ exportId: string; exportUrl: string; export: WriterExport }> {
   const allTabs = await db.query.tabs.findMany({
     where: eq(tabs.documentId, documentId),
@@ -57,24 +70,34 @@ export async function buildExport(
   const charactersTab = findTab("characters");
   const locationsTab = findTab("locations");
   const episodesTab = findTab("predefined_episodes");
+  const episodeRange = options.episodeRange;
+  const allEpisodes = parsePredefinedEpisodes(episodesTab?.content ?? null);
+  const selectedEpisodesContent = filterTiptapEpisodesByRange(
+    episodesTab?.content ?? null,
+    episodeRange
+  );
 
   const { summary, logline } = parseSeriesOverview(overviewTab?.content ?? null);
   const characters = parseH2Entities(charactersTab?.content ?? null);
   const locations = parseH2Entities(locationsTab?.content ?? null);
-  const episodes = parsePredefinedEpisodes(episodesTab?.content ?? null);
+  const episodes = parsePredefinedEpisodes(selectedEpisodesContent);
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
   const exportId = nanoid();
-  const tabSnapshots: WriterExportTabSnapshot[] = allTabs.map((tab) => ({
-    id: tab.id,
-    title: tab.title,
-    type: tab.type,
-    position: tab.position,
-    contentJson: tab.content,
-    contentTagged: tiptapJsonToTagged(tab.content ?? null),
-    updatedAt: tab.updatedAt.toISOString(),
-  }));
+  const tabSnapshots: WriterExportTabSnapshot[] = allTabs.map((tab) => {
+    const contentJson =
+      tab.type === "predefined_episodes" ? selectedEpisodesContent : tab.content;
+    return {
+      id: tab.id,
+      title: tab.title,
+      type: tab.type,
+      position: tab.position,
+      contentJson,
+      contentTagged: tiptapJsonToTagged(contentJson ?? null),
+      updatedAt: tab.updatedAt.toISOString(),
+    };
+  });
 
   const writerExport: WriterExport = {
     exportId,
@@ -86,6 +109,14 @@ export async function buildExport(
     characters,
     locations,
     episodes,
+    episodeRange: episodeRange
+      ? {
+          from: episodeRange.from,
+          to: episodeRange.to,
+          availableEpisodes: allEpisodes.length,
+          selectedEpisodes: episodes.length,
+        }
+      : null,
   };
 
   const exportJson = JSON.stringify(writerExport);
@@ -95,6 +126,7 @@ export async function buildExport(
     userId,
     exportId,
     mode: "last_saved_no_flush",
+    episodeRange: writerExport.episodeRange,
     tabCount: tabSnapshots.length,
     payloadBytes: exportJson.length,
     payloadHash: contentHash(exportJson),
