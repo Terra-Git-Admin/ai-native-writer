@@ -22,6 +22,7 @@ import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
+import { clientTrace } from "@/lib/clientTrace";
 
 export type ApplyToTabResult = {
   ok: boolean;
@@ -556,19 +557,35 @@ export default function DocumentPage() {
     setExportLoading(true);
     setExportError(null);
     setCopyStatus("idle");
+    clientTrace("export.client.click", {
+      docId: params.id,
+      mode: "last_saved_no_flush",
+    });
     try {
-      await editorRef.current?.flushPendingSave?.();
       const res = await fetch(`/api/documents/${params.id}/export`, {
         method: "POST",
       });
       const data = await res.json().catch(() => null);
+      clientTrace("export.client.response", {
+        docId: params.id,
+        mode: "last_saved_no_flush",
+        ok: res.ok,
+        status: res.status,
+        exportId: data?.exportId ?? null,
+      });
       if (!res.ok) {
         throw new Error(data?.error || "Export failed");
       }
       setHandoffExport(data as HandoffExportResult);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Export failed";
+      clientTrace("export.client.fail", {
+        docId: params.id,
+        mode: "last_saved_no_flush",
+        message,
+      });
       setHandoffExport(null);
-      setExportError(err instanceof Error ? err.message : "Export failed");
+      setExportError(message);
     } finally {
       setExportLoading(false);
     }
@@ -1077,7 +1094,7 @@ export default function DocumentPage() {
                   Export to Production
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Share this link with Comics Dash to import the Writer snapshot.
+                  Share this link with Comics Dash to import the last saved Writer snapshot.
                 </p>
               </div>
               <button
