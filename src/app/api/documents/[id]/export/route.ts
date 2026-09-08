@@ -97,13 +97,8 @@ export async function POST(
       mode: "last_saved_no_flush",
       episodeRange: result.export.episodeRange,
       elapsedMs: Date.now() - startedAt,
-      tabCount: result.export.tabs.length,
       payloadBytes,
-      latestTabUpdatedAt: result.export.tabs.reduce<string | null>(
-        (latest, tab) =>
-          !latest || tab.updatedAt > latest ? tab.updatedAt : latest,
-        null
-      ),
+      predefinedUpdatedAt: result.export.predefinedEpisodes.updatedAt,
     });
 
     return NextResponse.json({
@@ -111,9 +106,7 @@ export async function POST(
       exportUrl: result.exportUrl,
       preview: {
         hasTitle: result.export.series.title.trim().length > 0,
-        episodes: result.export.episodes.length,
-        characters: result.export.characters.length,
-        locations: result.export.locations.length,
+        episodes: result.export.episodeRange?.selectedEpisodes ?? 0,
         hasSummary: result.export.series.summary.trim().length > 0,
         hasLogline: result.export.series.logline.trim().length > 0,
         episodeRange: result.export.episodeRange,

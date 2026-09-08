@@ -46,8 +46,6 @@ interface HandoffExportResult {
   preview: {
     hasTitle: boolean;
     episodes: number;
-    characters: number;
-    locations: number;
     hasSummary: boolean;
     hasLogline: boolean;
     payloadBytes: number;
@@ -1226,26 +1224,11 @@ export default function DocumentPage() {
 
             {handoffExport && !exportLoading && (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-md border border-border bg-muted px-3 py-2">
-                    <div className="text-lg font-semibold text-foreground">
-                      {handoffExport.preview.episodes}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Episodes</div>
+                <div className="rounded-md border border-border bg-muted px-3 py-2">
+                  <div className="text-lg font-semibold text-foreground">
+                    {handoffExport.preview.episodes}
                   </div>
-                  <div className="rounded-md border border-border bg-muted px-3 py-2">
-                    <div className="text-lg font-semibold text-foreground">
-                      {handoffExport.preview.characters}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Characters</div>
-                  </div>
-                  <div className="rounded-md border border-border bg-muted px-3 py-2">
-                    <div className="text-lg font-semibold text-foreground">
-                      {handoffExport.preview.locations}
-                    </div>
-                    <div className="text-xs text-muted-foreground">Locations</div>
-                  </div>
-
+                  <div className="text-xs text-muted-foreground">Episodes</div>
                 </div>
 
                 <div className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-muted-foreground">
