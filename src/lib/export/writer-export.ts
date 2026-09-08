@@ -8,6 +8,7 @@ import {
   parseH2Entities,
   parsePredefinedEpisodes,
 } from "./tiptap-parser";
+import { contentHash, logEvent } from "@/lib/saveTrace";
 
 export interface WriterExportTabSnapshot {
   id: string;
@@ -87,11 +88,29 @@ export async function buildExport(
     episodes,
   };
 
+  const exportJson = JSON.stringify(writerExport);
+
+  logEvent("export.build.snapshot", {
+    documentId,
+    userId,
+    exportId,
+    mode: "last_saved_no_flush",
+    tabCount: tabSnapshots.length,
+    payloadBytes: exportJson.length,
+    payloadHash: contentHash(exportJson),
+    tabs: tabSnapshots.map((tab) => ({
+      type: tab.type,
+      title: tab.title,
+      updatedAt: tab.updatedAt,
+      contentBytes: tab.contentJson?.length ?? 0,
+    })),
+  });
+
   await db.insert(handoffExports).values({
     id: exportId,
     documentId,
     createdBy: userId,
-    exportJson: JSON.stringify(writerExport),
+    exportJson,
     createdAt: now,
     expiresAt,
   });
