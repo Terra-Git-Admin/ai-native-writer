@@ -17,6 +17,82 @@ export interface ParsedEpisode {
   beats: EpisodeBeat[];
 }
 
+interface TiptapNode {
+  type?: string;
+  attrs?: { level?: number };
+  content?: TiptapNode[];
+  text?: string;
+}
+
+export interface EpisodeRange {
+  from: number;
+  to: number;
+}
+
+function textOf(node: TiptapNode): string {
+  if (typeof node.text === "string") return node.text;
+  if (!node.content) return "";
+  return node.content.map(textOf).join("");
+}
+
+export function parseEpisodeHeading(
+  text: string
+): { episodeNumber: number; title: string } | null {
+  const match = text.match(/^Episode\s+(\d+)(?:\s*[:\u2014\u2013-]\s*(.*))?$/i);
+  if (!match) return null;
+  const episodeNumber = Number(match[1]);
+  if (!Number.isInteger(episodeNumber)) return null;
+  return {
+    episodeNumber,
+    title: match[2]?.trim() || `Episode ${episodeNumber}`,
+  };
+}
+
+function episodeHeadingFromNode(
+  node: TiptapNode
+): { episodeNumber: number; title: string } | null {
+  if (node.type !== "heading") return null;
+  return parseEpisodeHeading(textOf(node).trim());
+}
+
+export function filterTiptapEpisodesByRange(
+  contentJson: string | null,
+  range?: EpisodeRange
+): string | null {
+  if (!contentJson || !range) return contentJson;
+
+  let doc: TiptapNode;
+  try {
+    doc = JSON.parse(contentJson);
+  } catch {
+    return contentJson;
+  }
+
+  if (!Array.isArray(doc.content)) return contentJson;
+
+  const filtered: TiptapNode[] = [];
+  let seenFirstEpisode = false;
+  let includeCurrentEpisode = false;
+
+  for (const node of doc.content) {
+    const episodeHeading = episodeHeadingFromNode(node);
+    if (episodeHeading) {
+      seenFirstEpisode = true;
+      includeCurrentEpisode =
+        episodeHeading.episodeNumber >= range.from &&
+        episodeHeading.episodeNumber <= range.to;
+      if (includeCurrentEpisode) filtered.push(node);
+      continue;
+    }
+
+    if (!seenFirstEpisode || includeCurrentEpisode) {
+      filtered.push(node);
+    }
+  }
+
+  return JSON.stringify({ ...doc, content: filtered });
+}
+
 // Split tagged content by [H2] headings into one section per H2.
 function splitByH2(tagged: string): H2Section[] {
   if (!tagged) return [];
@@ -62,7 +138,7 @@ function splitByEntityHeading(tagged: string): H2Section[] {
   };
 
   for (const line of lines) {
-    const explicitName = line.match(/^\[H[123]\]\s*((?:Name|Location)\s*:\s*.+)/i);
+    const explicitName = line.match(/^\[(?:H[123]|P|UL|OL)\]\s*((?:Name|Location)\s*:\s*.+)/i);
     const anyHeading = line.match(/^\[H[123]\]\s*(.+)/);
     if (explicitName) {
       flush();
@@ -89,7 +165,7 @@ function bodyToPlainText(body: string): string {
     .join("\n");
 }
 
-// Parse series_overview tab: extract Summary and Logline H2 sections.
+// Parse series_overview tab: extract Summary and Logline sections.
 export function parseSeriesOverview(
   contentJson: string | null
 ): { summary: string; logline: string } {
@@ -97,10 +173,20 @@ export function parseSeriesOverview(
   const sections = splitByH2(tagged);
   const find = (name: string) =>
     sections.find((s) => s.heading.toLowerCase() === name.toLowerCase());
+  const findLoose = (names: string[]) =>
+    sections.find((s) => names.includes(s.heading.toLowerCase()));
+  const findInline = (label: string) => {
+    const match = tagged.match(
+      new RegExp(`^\\[(?:P|UL|OL)\\]\\s*${label}:\\s*(.+)$`, "im")
+    );
+    return match?.[1]?.trim() ?? "";
+  };
 
   return {
-    summary: bodyToPlainText(find("Summary")?.body ?? ""),
-    logline: bodyToPlainText(find("Logline")?.body ?? ""),
+    summary:
+      bodyToPlainText(findLoose(["summary", "series summary"])?.body ?? "") ||
+      findInline("Summary"),
+    logline: bodyToPlainText(find("Logline")?.body ?? "") || findInline("Logline"),
   };
 }
 
@@ -130,7 +216,11 @@ export function parseH2Entities(
 
 // Parse a single beat line: "Visual: ... | Dialogue: ... | V.O.: ..."
 function parseBeatLine(line: string): EpisodeBeat | null {
-  const stripped = line.replace(/^\[(P|UL|OL)\]\s*/, "");
+  const stripped = line
+    .replace(/^\[(P|UL|OL)\]\s*/, "")
+    .trim()
+    .replace(/^\((.*)\)$/, "$1")
+    .trim();
   if (!stripped) return null;
   const extract = (prefix: string): string => {
     const re = new RegExp(`${prefix}:\\s*([^|]*)`, "i");
@@ -139,11 +229,11 @@ function parseBeatLine(line: string): EpisodeBeat | null {
   return {
     visual: extract("Visual"),
     dialogue: extract("Dialogue"),
-    vo: extract("V\\.O\\."),
+    vo: extract("V\\.?O\\.?"),
   };
 }
 
-// Parse predefined_episodes tab: each H3 = one episode.
+// Parse predefined_episodes tab: each Episode heading is one episode.
 export function parsePredefinedEpisodes(
   contentJson: string | null
 ): ParsedEpisode[] {
@@ -160,22 +250,18 @@ export function parsePredefinedEpisodes(
   };
 
   for (const line of lines) {
-    const episodeHeading = line.match(/^\[H[123]\]\s*(Episode\s+\d+(?:\s*[:—–-]\s*.*)?)$/i);
-    const anyHeading = line.match(/^\[H[123]\]\s*(.+)/);
-    if (episodeHeading) {
+    const heading = line.match(/^\[H[123]\]\s*(.+)/);
+    const parsedHeading = heading ? parseEpisodeHeading(heading[1].trim()) : null;
+    if (parsedHeading) {
       flush();
-      // Accept "Episode N", "Episode N: Title", or "Episode N - Title".
-      const epMatch = episodeHeading[1].match(/^Episode\s+(\d+)(?:\s*[:—–-]\s*(.*))?$/i);
-      const episodeNumber = epMatch ? parseInt(epMatch[1], 10) : episodes.length + 1;
-      const parsedTitle = epMatch ? epMatch[2]?.trim() : null;
       current = {
-        episodeNumber,
-        title: parsedTitle || episodeHeading[1].trim() || `Episode ${episodeNumber}`,
+        episodeNumber: parsedHeading.episodeNumber,
+        title: parsedHeading.title,
         beats: [],
       };
       continue;
     }
-    if (anyHeading) {
+    if (heading) {
       flush();
       current = null;
       continue;
