@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getPersistenceHealth } from "@/lib/db/persistence";
-import { dbFileStats, getDbPath } from "@/lib/db";
+import { dbFileStats, getDbPath, getDbStorageMode } from "@/lib/db";
 
 // GET /api/admin/persistence/health — returns durability state.
 //
@@ -20,11 +20,13 @@ export async function GET() {
   const persistence = getPersistenceHealth();
   const file = dbFileStats();
   const dbPath = getDbPath();
+  const storageMode = dbPath ? getDbStorageMode(dbPath) : null;
 
   return NextResponse.json({
     persistence,
     db: {
       path: dbPath,
+      storageMode,
       ...file,
       walMtimeISO: file.walMtime ? new Date(file.walMtime).toISOString() : null,
       dbMtimeISO: file.dbMtime ? new Date(file.dbMtime).toISOString() : null,

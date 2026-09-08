@@ -41,6 +41,46 @@ let _shutdownRegistered = false;
 
 const BACKUP_INTERVAL_MS = Number(process.env.BACKUP_INTERVAL_MS || "60000");
 const GCS_BACKUP_ENABLED = Boolean(process.env.GCS_BUCKET);
+export const EXPECTED_CLOUD_RUN_DB_PATH = "/tmp/writer.db";
+
+export function getDbStorageMode(dbPath: string): {
+  mode: "local_tmp" | "gcsfuse_mount" | "local_project" | "custom";
+  expectedPath: string;
+  isExpectedCloudRunPath: boolean;
+  risk: "ok" | "unsafe_gcsfuse" | "check";
+} {
+  const normalised = dbPath.replace(/\\/g, "/");
+  if (normalised === EXPECTED_CLOUD_RUN_DB_PATH) {
+    return {
+      mode: "local_tmp",
+      expectedPath: EXPECTED_CLOUD_RUN_DB_PATH,
+      isExpectedCloudRunPath: true,
+      risk: "ok",
+    };
+  }
+  if (normalised.startsWith("/app/data/")) {
+    return {
+      mode: "gcsfuse_mount",
+      expectedPath: EXPECTED_CLOUD_RUN_DB_PATH,
+      isExpectedCloudRunPath: false,
+      risk: "unsafe_gcsfuse",
+    };
+  }
+  if (normalised.endsWith("/data/writer.db")) {
+    return {
+      mode: "local_project",
+      expectedPath: EXPECTED_CLOUD_RUN_DB_PATH,
+      isExpectedCloudRunPath: false,
+      risk: "check",
+    };
+  }
+  return {
+    mode: "custom",
+    expectedPath: EXPECTED_CLOUD_RUN_DB_PATH,
+    isExpectedCloudRunPath: false,
+    risk: "check",
+  };
+}
 
 function fileStats(p: string): { size: number; mtime: number } | null {
   try {
@@ -164,9 +204,13 @@ export function getDb(): DB {
 
     const db = fileStats(dbPath);
     const wal = fileStats(`${dbPath}-wal`);
+    const storageMode = getDbStorageMode(dbPath);
     logEvent("db.open", {
       pid: process.pid,
       dbPath,
+      dbStorageMode: storageMode.mode,
+      dbStorageRisk: storageMode.risk,
+      expectedCloudRunDbPath: storageMode.expectedPath,
       gcsBackupEnabled: GCS_BACKUP_ENABLED,
       backupIntervalMs: BACKUP_INTERVAL_MS,
       journal_mode: sqlite.pragma("journal_mode", { simple: true }),
@@ -176,6 +220,14 @@ export function getDb(): DB {
       dbSize: db?.size ?? null,
       walSize: wal?.size ?? null,
     });
+    if (GCS_BACKUP_ENABLED && storageMode.risk === "unsafe_gcsfuse") {
+      logEvent("db.storage.config_mismatch", {
+        dbPath,
+        dbStorageMode: storageMode.mode,
+        expectedCloudRunDbPath: storageMode.expectedPath,
+        volumeHint: "/app/data is expected to be legacy fallback only",
+      });
+    }
 
     if (GCS_BACKUP_ENABLED) {
       // Fire one backup right away so a fresh boot's state lands in GCS
