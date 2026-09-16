@@ -1,5 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { db } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -8,11 +9,13 @@ import { decrypt } from "@/lib/crypto";
 interface AIModel {
   id: string;
   label: string;
-  provider: "anthropic" | "google";
+  provider: "anthropic" | "google" | "openai";
   thinking?: boolean;
 }
 
 export const AI_MODELS: AIModel[] = [
+  // OpenAI
+  { id: "gpt-5.2", label: "GPT-5.2", provider: "openai" },
   // Google
   { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro", provider: "google" },
   { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (Thinking)", provider: "google", thinking: true },
@@ -53,6 +56,9 @@ export async function getAIModel(modelId: string, thinking: boolean = false) {
   if (provider === "anthropic") {
     const anthropic = createAnthropic({ apiKey });
     return anthropic(modelId);
+  } else if (provider === "openai") {
+    const openai = createOpenAI({ apiKey });
+    return openai(modelId);
   } else {
     const google = createGoogleGenerativeAI({ apiKey });
     return google(modelId);

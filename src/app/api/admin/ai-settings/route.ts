@@ -18,6 +18,7 @@ export async function GET() {
   return NextResponse.json({
     anthropic: configured.includes("anthropic"),
     google: configured.includes("google"),
+    openai: configured.includes("openai"),
   });
 }
 
@@ -37,30 +38,37 @@ export async function PUT(req: Request) {
     );
   }
 
-  if (!["anthropic", "google"].includes(provider)) {
+  if (!["anthropic", "google", "openai"].includes(provider)) {
     return NextResponse.json(
-      { error: "provider must be anthropic or google" },
+      { error: "provider must be anthropic, google, or openai" },
       { status: 400 }
     );
   }
 
-  const encryptedKey = encrypt(apiKey);
+  try {
+    const encryptedKey = encrypt(apiKey);
 
-  const existing = await db.query.aiSettings.findFirst({
-    where: eq(aiSettings.id, provider),
-  });
-
-  if (existing) {
-    await db
-      .update(aiSettings)
-      .set({ apiKey: encryptedKey, updatedAt: new Date() })
-      .where(eq(aiSettings.id, provider));
-  } else {
-    await db.insert(aiSettings).values({
-      id: provider,
-      apiKey: encryptedKey,
-      updatedAt: new Date(),
+    const existing = await db.query.aiSettings.findFirst({
+      where: eq(aiSettings.id, provider),
     });
+
+    if (existing) {
+      await db
+        .update(aiSettings)
+        .set({ apiKey: encryptedKey, updatedAt: new Date() })
+        .where(eq(aiSettings.id, provider));
+    } else {
+      await db.insert(aiSettings).values({
+        id: provider,
+        apiKey: encryptedKey,
+        updatedAt: new Date(),
+      });
+    }
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Could not save API key" },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true });

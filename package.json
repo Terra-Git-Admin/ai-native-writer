@@ -11,6 +11,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.66",
     "@ai-sdk/google": "^3.0.57",
+    "@ai-sdk/openai": "^3.0.112",
     "@auth/drizzle-adapter": "^1.11.1",
     "@google-cloud/storage": "^7.19.0",
     "@tiptap/extension-bubble-menu": "^3.22.1",

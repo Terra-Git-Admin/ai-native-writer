@@ -182,7 +182,7 @@ export const prompts = sqliteTable("prompts", {
 });
 
 export const aiSettings = sqliteTable("ai_settings", {
-  id: text("id").primaryKey(), // "anthropic" or "google"
+  id: text("id").primaryKey(), // "anthropic", "google", or "openai"
   apiKey: text("api_key").notNull(), // encrypted
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
