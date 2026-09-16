@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 interface User {
@@ -25,6 +25,7 @@ interface Doc {
 interface AIConfig {
   anthropic: boolean;
   google: boolean;
+  openai: boolean;
 }
 
 export default function AdminPage() {
@@ -38,21 +39,15 @@ export default function AdminPage() {
   // AI settings form
   const [anthropicKey, setAnthropicKey] = useState("");
   const [googleKey, setGoogleKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
   const [aiSaving, setAiSaving] = useState<string | null>(null);
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null);
 
   // Transfer ownership
   const [transferDocId, setTransferDocId] = useState<string | null>(null);
   const [transferUserId, setTransferUserId] = useState("");
 
-  useEffect(() => {
-    if (session?.user?.role !== "admin") {
-      router.push("/");
-      return;
-    }
-    fetchData();
-  }, [session, router]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const [usersRes, docsRes, aiRes] = await Promise.all([
       fetch("/api/admin/users"),
       fetch("/api/documents"),
@@ -63,7 +58,17 @@ export default function AdminPage() {
     if (aiRes.ok) {
       setAiConfig(await aiRes.json());
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.role !== "admin") {
+      router.push("/");
+      return;
+    }
+    queueMicrotask(() => {
+      fetchData();
+    });
+  }, [session, router, fetchData]);
 
   const toggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === "admin" ? "user" : "admin";
@@ -99,15 +104,26 @@ export default function AdminPage() {
   const saveAIKey = async (provider: string, apiKey: string) => {
     if (!apiKey) return;
     setAiSaving(provider);
-    await fetch("/api/admin/ai-settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider, apiKey }),
-    });
-    if (provider === "anthropic") setAnthropicKey("");
-    else setGoogleKey("");
-    setAiSaving(null);
-    fetchData();
+    setAiSaveError(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Save failed with HTTP ${res.status}`);
+      }
+      if (provider === "anthropic") setAnthropicKey("");
+      else if (provider === "google") setGoogleKey("");
+      else setOpenaiKey("");
+      fetchData();
+    } catch (err) {
+      setAiSaveError(err instanceof Error ? err.message : "Could not save API key.");
+    } finally {
+      setAiSaving(null);
+    }
   };
 
   if (session?.user?.role !== "admin") return null;
@@ -286,8 +302,42 @@ export default function AdminPage() {
         {tab === "ai" && (
           <div className="max-w-lg space-y-6">
             <p className="text-sm text-muted-foreground">
-              Add API keys for one or both providers. Writers choose which model to use in the editor.
+              Add API keys for one or more providers. Writers choose which model to use in the editor.
             </p>
+
+            {aiSaveError && (
+              <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                {aiSaveError}
+              </div>
+            )}
+
+            {/* OpenAI */}
+            <div className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">OpenAI (GPT)</h4>
+                {aiConfig?.openai ? (
+                  <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full">Configured</span>
+                ) : (
+                  <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Not set</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={openaiKey}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
+                  placeholder={aiConfig?.openai ? "Enter new key to replace..." : "sk-..."}
+                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={() => saveAIKey("openai", openaiKey)}
+                  disabled={aiSaving !== null || !openaiKey}
+                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 disabled:opacity-50"
+                >
+                  {aiSaving === "openai" ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
 
             {/* Anthropic */}
             <div className="rounded-lg border border-border p-4 space-y-3">

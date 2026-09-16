@@ -19,7 +19,7 @@ interface Document {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,17 +33,43 @@ export default function Home() {
     lines: number;
   } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
     fetch("/api/documents")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (!r.ok) {
+          throw new Error(
+            data && typeof data === "object" && "error" in data
+              ? String(data.error)
+              : `HTTP ${r.status}`
+          );
+        }
+        return data;
+      })
       .then((data) => {
+        if (!Array.isArray(data)) {
+          throw new Error("Documents API returned an unexpected response.");
+        }
         setDocs(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch((err) => {
+        setDocs([]);
+        setLoadError(err instanceof Error ? err.message : "Could not load documents.");
+        setLoading(false);
+      });
+  }, [router, status]);
 
   const myDocs = docs.filter((d) => d.ownerId === session?.user?.id);
   const otherDocs = docs.filter((d) => d.ownerId !== session?.user?.id);
@@ -207,6 +233,12 @@ export default function Home() {
           <p className="text-muted-foreground">Loading...</p>
         ) : (
           <>
+            {loadError && (
+              <div className="mb-6 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+                Could not load documents. {loadError}
+              </div>
+            )}
+
             {/* Your Documents */}
             <section className="mb-10">
               <div className="mb-4 flex items-center justify-between">

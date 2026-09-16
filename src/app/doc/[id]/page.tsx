@@ -283,8 +283,12 @@ export default function DocumentPage() {
         if (Array.isArray(models) && models.length > 0) {
           const nonThinking = models.filter((m: { thinking?: boolean }) => !m.thinking);
           setAiModels(models);
-          if (nonThinking.length > 0 && !selectedModelId) {
-            setSelectedModelId(nonThinking[0].id);
+          if (nonThinking.length > 0) {
+            setSelectedModelId((current) =>
+              current && nonThinking.some((m: { id: string }) => m.id === current)
+                ? current
+                : nonThinking[0].id
+            );
           }
         }
       })
