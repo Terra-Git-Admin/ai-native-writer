@@ -384,6 +384,24 @@ export default function DocumentPage() {
     setEditorContentKey((k) => k + 1);
   }, [params.id]);
 
+  const handleAIJobApplied = useCallback(
+    async (landedTabId: string) => {
+      const list = await fetchTabs();
+      const landed = list.find((t) => t.id === landedTabId);
+      if (landed) {
+        setTabs(list);
+        if (landedTabId !== activeTabId) {
+          setActiveTabId(landedTabId);
+          const url = new URL(window.location.href);
+          url.searchParams.set("tab", landedTabId);
+          window.history.pushState({}, "", url.toString());
+        }
+      }
+      await handleForceTabRefresh(landedTabId);
+    },
+    [activeTabId, fetchTabs, handleForceTabRefresh]
+  );
+
   const handleTitleChange = useCallback(
     (newTitle: string) => {
       setTitle(newTitle);
@@ -404,7 +422,7 @@ export default function DocumentPage() {
   // (picks up unsaved edits); cross-tab uses the tab-content PUT endpoint
   // (durable, version-snapshotted). Falls back to workbook if origin tab
   // was deleted; returns reason="target_tab_missing" if no workbook either.
-  // Caller is the AIChatSidebar — see onApplyToTab in the JSX below.
+  // Caller is ResearchAgentPanel; AI job apply now goes through /api/ai/jobs/:id/apply.
   const applyToTab = useCallback(
     async (
       originTabId: string,
@@ -1003,7 +1021,7 @@ export default function DocumentPage() {
               modelId={selectedModelId}
               thinking={thinkingEnabled}
               aiJob={aiJob}
-              onApplyToTab={applyToTab}
+              onAIJobApplied={handleAIJobApplied}
               onFlushPendingSave={async () => {
                 await editorRef.current?.flushPendingSave?.();
               }}

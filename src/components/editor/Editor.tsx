@@ -993,6 +993,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
   // surfaced as a conflict banner — never silently applied.
   useEffect(() => {
     if (!editor) return;
+    let stopped = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let pollDelayMs = 5000;
+    let lastRateLimitTraceAt = 0;
+
     const poll = async () => {
       const reqId = newId();
       try {
@@ -1008,14 +1013,31 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           }
         );
         if (!res.ok) {
-          trace("client.poll.fail", {
-            reqId,
-            docId: documentId,
-            tabId: tabIdRef.current,
-            status: res.status,
-          });
+          if (res.status === 429) {
+            const now = Date.now();
+            pollDelayMs = Math.min(Math.max(pollDelayMs * 2, 10_000), 60_000);
+            if (now - lastRateLimitTraceAt > 30_000) {
+              lastRateLimitTraceAt = now;
+              trace("client.poll.rateLimited", {
+                reqId,
+                docId: documentId,
+                tabId: tabIdRef.current,
+                status: res.status,
+                nextPollMs: pollDelayMs,
+              });
+            }
+          } else {
+            pollDelayMs = 5000;
+            trace("client.poll.fail", {
+              reqId,
+              docId: documentId,
+              tabId: tabIdRef.current,
+              status: res.status,
+            });
+          }
           return;
         }
+        pollDelayMs = 5000;
         const data = await res.json();
         if (!data.content) return;
 
@@ -1138,15 +1160,24 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
           setConflictDetected(true);
         }
       } catch (err) {
+        pollDelayMs = Math.min(Math.max(pollDelayMs * 2, 10_000), 60_000);
         trace("client.poll.throw", {
           reqId,
           err: err instanceof Error ? err.message : String(err),
+          nextPollMs: pollDelayMs,
         });
+      } finally {
+        if (!stopped) {
+          timeout = setTimeout(poll, pollDelayMs);
+        }
       }
     };
 
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
+    timeout = setTimeout(poll, pollDelayMs);
+    return () => {
+      stopped = true;
+      if (timeout) clearTimeout(timeout);
+    };
   }, [editor, documentId, tabId, isOwner]);
 
   // Keyboard shortcut for manual save (Ctrl+S / Cmd+S). Cancels the pending
