@@ -5,17 +5,12 @@ import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, buildPipelineStepContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
-import type { ApplyToTabResult } from "@/app/doc/[id]/page";
 
 type AIJobController = ReturnType<typeof useJob>;
 
 const JOB_LABELS: Partial<Record<JobKind, string>> = {
   next_reference_episode: "Create Pre-defined Episode",
 };
-
-function applyModeForKind(kind: JobKind): "replace" | "append" {
-  return kind === "format_tab" ? "replace" : "append";
-}
 
 // ─── Types ───
 
@@ -75,8 +70,8 @@ interface AIChatSidebarProps {
   modelId: string;
   thinking: boolean;
   aiJob: AIJobController;
-  onApplyToTab: (originTabId: string, content: string, mode: "replace" | "append", opts?: { label?: string }) => Promise<ApplyToTabResult>;
   onFlushPendingSave: () => Promise<void>;
+  onAIJobApplied: (landedTabId: string) => Promise<void>;
   onSetModel: (modelId: string) => void;
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
@@ -91,8 +86,8 @@ export default function AIChatSidebar({
   modelId,
   thinking,
   aiJob,
-  onApplyToTab,
   onFlushPendingSave,
+  onAIJobApplied,
   onSetModel,
   onSetThinking,
   onClose,
@@ -125,6 +120,7 @@ export default function AIChatSidebar({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isApplyingJob, setIsApplyingJob] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(() => {
     try { return localStorage.getItem("ai-send-on-enter") === "true"; } catch { return false; }
   });
@@ -157,6 +153,7 @@ export default function AIChatSidebar({
 
   const persistedJobIdRef = useRef<string | null>(null);
   const lastJobEntryIdsRef = useRef<{ jobId: string; userId: string | null; assistantId: string | null } | null>(null);
+  const clientApplyIdRef = useRef<string | null>(null);
 
   const handleStartJob = useCallback(async () => {
     if (isAIBusy || isStreaming) return;
@@ -173,24 +170,47 @@ export default function AIChatSidebar({
   const handleApplyJob = useCallback(async () => {
     if (aiJob.state.status !== "completed" || !aiJob.state.output) return;
     if (!aiJob.state.kind || !aiJob.state.originTabId) return;
-    const mode = applyModeForKind(aiJob.state.kind);
-    const result = await onApplyToTab(
-      aiJob.state.originTabId,
-      aiJob.state.output,
-      mode,
-      { label: JOB_LABELS[aiJob.state.kind] ?? aiJob.state.kind }
-    );
-    if (!result.ok) {
-      setError(result.reason === "target_tab_missing"
-        ? "Couldn't apply — target tab missing. Copy from chat manually."
-        : `Apply failed (${result.reason ?? "unknown"}).`);
-      return;
+    if (!aiJob.state.jobId || isApplyingJob) return;
+
+    setIsApplyingJob(true);
+    setError(null);
+    try {
+      await onFlushPendingSave();
+      const clientApplyId =
+        clientApplyIdRef.current ??
+        (clientApplyIdRef.current =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      const res = await fetch(`/api/ai/jobs/${aiJob.state.jobId}/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientApplyId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        reason?: string;
+        landedTabId?: string;
+        fellBack?: boolean;
+      };
+      if (!res.ok || !data.ok || !data.landedTabId) {
+        setError(data.error ?? `Apply failed (${data.reason ?? res.status}).`);
+        return;
+      }
+      await onAIJobApplied(data.landedTabId);
+      if (data.fellBack) setError("Original tab missing; output landed in Workbook instead.");
+      clientApplyIdRef.current = null;
+      aiJob.reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Apply failed.");
+    } finally {
+      setIsApplyingJob(false);
     }
-    if (result.fellBack) setError("Original tab missing; output landed in Workbook instead.");
-    aiJob.reset();
-  }, [aiJob, onApplyToTab]);
+  }, [aiJob, isApplyingJob, onAIJobApplied, onFlushPendingSave]);
 
   const handleDiscardJob = useCallback(() => {
+    clientApplyIdRef.current = null;
     const tracked = lastJobEntryIdsRef.current;
     if (tracked && tracked.jobId === aiJob.state.jobId) {
       const { userId, assistantId } = tracked;
@@ -653,8 +673,12 @@ export default function AIChatSidebar({
                       <button onClick={handleDiscardJob} className="flex-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium text-foreground hover:bg-muted">
                         Discard
                       </button>
-                      <button onClick={handleApplyJob} className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700">
-                        Append to Workbook
+                      <button
+                        onClick={handleApplyJob}
+                        disabled={isApplyingJob}
+                        className="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isApplyingJob ? "Applying..." : "Append to Workbook"}
                       </button>
                     </>
                   )}

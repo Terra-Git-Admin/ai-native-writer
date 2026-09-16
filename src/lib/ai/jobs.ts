@@ -29,6 +29,7 @@ import { db, getDb } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { getAIModel } from "@/lib/ai/providers";
 import { getAction, resolveSystemPrompt } from "@/lib/ai/actions";
+import { validateJobOutput } from "@/lib/ai/job-output";
 import { logEvent } from "@/lib/saveTrace";
 
 export type PromptKind =
@@ -262,6 +263,14 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
     });
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });
+    logEvent("ai_job.context.ready", {
+      id,
+      promptKind: job.promptKind,
+      modelId: job.modelId,
+      thinking: job.thinking,
+      userMessageChars: userMessage.length,
+      systemPromptChars: systemPrompt.length,
+    });
 
     const model = await getAIModel(job.modelId, true);
 
@@ -274,6 +283,14 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
         anthropic: { thinking: { type: "enabled", budgetTokens: 10000 } },
         google: { thinkingConfig: { thinkingBudget: 10000 } },
       },
+      onError: ({ error }) => {
+        logEvent("ai_job.stream.provider_error", {
+          id,
+          promptKind: job.promptKind,
+          modelId: job.modelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
     };
 
     const result = streamText(streamOptions);
@@ -283,6 +300,28 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       runner.emitter.emit("token", chunk);
     }
 
+    const [finishReason, usage] = await Promise.all([
+      Promise.resolve(result.finishReason).catch((err) => `finish_reason_error:${err instanceof Error ? err.message : String(err)}`),
+      Promise.resolve(result.usage).catch((err) => ({
+        error: err instanceof Error ? err.message : String(err),
+      })),
+    ]);
+    logEvent("ai_job.run.finished", {
+      id,
+      promptKind: job.promptKind,
+      modelId: job.modelId,
+      thinking: job.thinking,
+      durationMs: Date.now() - startedAt.getTime(),
+      contentLength: runner.buffer.length,
+      finishReason,
+      usage,
+    });
+
+    const validation = validateJobOutput(job.promptKind, runner.buffer);
+    if (!validation.ok) {
+      throw new Error(validation.reason);
+    }
+
     // Stream completed without error.
     runner.status = "completed";
     const completedAt = new Date();
@@ -290,7 +329,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       .update(aiJobs)
       .set({
         status: "completed",
-        resultJson: JSON.stringify({ content: runner.buffer }),
+        resultJson: JSON.stringify({ content: runner.buffer, finishReason, usage }),
         contextSnapshot: JSON.stringify({ userMessage }),
         completedAt,
       })
@@ -304,6 +343,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       id,
       durationMs: completedAt.getTime() - startedAt.getTime(),
       contentLength: runner.buffer.length,
+      finishReason,
     });
   } catch (err) {
     if (runner.controller.signal.aborted) {
@@ -333,7 +373,13 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
         reason,
         completedAt: completedAt.toISOString(),
       });
-      logEvent("ai_job.run.failed", { id, reason });
+      logEvent("ai_job.run.failed", {
+        id,
+        promptKind: job.promptKind,
+        modelId: job.modelId,
+        contentLength: runner.buffer.length,
+        reason,
+      });
     }
   } finally {
     // Keep the entry in the map briefly so a reconnecting subscriber can
