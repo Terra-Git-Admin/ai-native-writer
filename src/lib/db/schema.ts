@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 
 export const users = sqliteTable("users", {
@@ -72,6 +72,38 @@ export const documents = sqliteTable("documents", {
     .$defaultFn(() => new Date()),
   canonicalTabsVersion: integer("canonical_tabs_version").notNull().default(0),
 });
+
+export const pitchWorkspaces = sqliteTable("pitch_workspaces", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  brief: text("brief").notNull().default(""),
+  adaptationStyle: text("adaptation_style", { enum: ["close", "loose"] }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (table) => [uniqueIndex("idx_pitch_workspaces_owner").on(table.ownerId)]);
+
+export const pitchSources = sqliteTable("pitch_sources", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => pitchWorkspaces.id, { onDelete: "cascade" }),
+  type: text("type", { enum: ["writer_doc", "pasted_text"] }).notNull(),
+  sourceDocumentId: text("source_document_id"),
+  sourceTabType: text("source_tab_type"),
+  title: text("title").notNull(),
+  textSnapshot: text("text_snapshot").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (table) => [index("idx_pitch_sources_workspace").on(table.workspaceId)]);
+
+export const pitchIdeas = sqliteTable("pitch_ideas", {
+  id: text("id").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => pitchWorkspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  ideaText: text("idea_text").notNull(),
+  status: text("status", { enum: ["generated", "shortlisted", "discarded", "promoted"] }).notNull().default("generated"),
+  position: integer("position").notNull().default(0),
+  promotedDocumentId: text("promoted_document_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+}, (table) => [index("idx_pitch_ideas_workspace_position").on(table.workspaceId, table.position)]);
 
 export const tabs = sqliteTable(
   "tabs",
