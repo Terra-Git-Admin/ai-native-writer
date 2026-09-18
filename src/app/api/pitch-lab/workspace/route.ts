@@ -3,9 +3,12 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchSources, pitchWorkspaces } from "@/lib/db/schema";
+import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
 
 export async function GET() {
   const session = await auth();
+  const accessError = requirePitchLabAdmin(session);
+  if (accessError) return accessError;
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
   if (!workspace) return NextResponse.json({ workspace: null, ideas: [], sources: [] });

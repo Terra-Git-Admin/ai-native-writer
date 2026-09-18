@@ -165,7 +165,7 @@ export default function Home() {
           <h1 className="text-xl font-bold">AI Writer</h1>
           <div className="flex items-center gap-4">
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">Home</Link>
-            <Link href="/pitch-lab" className="text-sm text-muted-foreground hover:text-foreground">Pitch Lab</Link>
+            {session?.user?.role === "admin" && <Link href="/pitch-lab" className="text-sm text-muted-foreground hover:text-foreground">Pitch Lab</Link>}
             <ThemeToggle />
             <button
               onClick={() => setPromptsOpen(!promptsOpen)}

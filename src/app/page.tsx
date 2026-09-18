@@ -18,6 +18,8 @@ export default function Home() {
     return <main className="mx-auto w-full max-w-5xl px-6 py-12 text-sm text-muted-foreground">Loading...</main>;
   }
 
+  const isAdmin = session.user.role === "admin";
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-border bg-card">
@@ -38,11 +40,13 @@ export default function Home() {
           <p className="mt-3 text-muted-foreground">Start with a new pilot idea or continue with a document.</p>
         </div>
         <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <Link href="/pitch-lab" className="group rounded-xl border border-border bg-card p-6 transition-colors hover:border-indigo-400">
-            <h2 className="text-lg font-semibold group-hover:text-indigo-600">Create new pilot ideas</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Generate plot ideas, shortlist the promising ones, and shape one into a new Writer document.</p>
-            <span className="mt-6 inline-flex text-sm font-medium text-indigo-600">Open Pitch Lab <span aria-hidden="true" className="ml-1">→</span></span>
-          </Link>
+          {isAdmin && (
+            <Link href="/pitch-lab" className="group rounded-xl border border-border bg-card p-6 transition-colors hover:border-indigo-400">
+              <h2 className="text-lg font-semibold group-hover:text-indigo-600">Create new pilot ideas</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Generate plot ideas, shortlist the promising ones, and shape one into a new Writer document.</p>
+              <span className="mt-6 inline-flex text-sm font-medium text-indigo-600">Open Pitch Lab <span aria-hidden="true" className="ml-1">→</span></span>
+            </Link>
+          )}
           <Link href="/docs" className="group rounded-xl border border-border bg-card p-6 transition-colors hover:border-indigo-400">
             <h2 className="text-lg font-semibold group-hover:text-indigo-600">View my docs</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">Open an existing project or create a blank Writer document.</p>
