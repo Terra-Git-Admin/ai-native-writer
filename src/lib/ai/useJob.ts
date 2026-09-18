@@ -10,7 +10,8 @@ export type JobKind =
   | "format_tab"
   | "series_skeleton"
   | "series_skeleton_predefined"
-  | "series_skeleton_auto";
+  | "series_skeleton_auto"
+  | "prepare_character_questionnaire";
 
 export type JobStatus =
   | "idle"
@@ -158,7 +159,7 @@ export function useJob(args: UseJobArgs) {
     async (
       kind: JobKind,
       opts?: { userGuidance?: string }
-    ): Promise<{ ok: boolean; error?: string }> => {
+    ): Promise<{ ok: boolean; error?: string; alreadyPrepared?: boolean }> => {
       // Reject if an active job already exists in this scope (block & toast).
       if (state.status === "starting" || state.status === "running") {
         return {
@@ -172,7 +173,7 @@ export function useJob(args: UseJobArgs) {
       // not change after it's been created.
       const originTabId = args.tabId;
       try {
-        const res = await fetch("/api/ai/jobs", {
+      const res = await fetch("/api/ai/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -193,8 +194,10 @@ export function useJob(args: UseJobArgs) {
             error: data.error ?? `Server returned ${res.status}`,
           };
         }
-        const data = (await res.json()) as { id: string };
-        subscribe(data.id, kind, originTabId);
+        const data = (await res.json()) as { id?: string; kind?: JobKind; tabId?: string; alreadyPrepared?: boolean };
+        if (data.alreadyPrepared) return { ok: true, alreadyPrepared: true };
+        if (!data.id) return { ok: false, error: "The assistant did not return a job id." };
+        subscribe(data.id, data.kind ?? kind, data.tabId ?? originTabId);
         return { ok: true };
       } catch (err) {
         return {
