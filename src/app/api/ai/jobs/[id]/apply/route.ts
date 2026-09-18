@@ -209,6 +209,8 @@ export async function POST(
   const label =
     job.promptKind === "next_reference_episode"
       ? "Create Pre-defined Episode"
+      : job.promptKind === "prepare_character_questionnaire"
+        ? "Prepare Character Questionnaire"
       : job.promptKind;
 
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);

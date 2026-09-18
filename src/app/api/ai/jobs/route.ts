@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { documents, tabs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createJob, JobBlockedError, type PromptKind } from "@/lib/ai/jobs";
+import { getCharacterQuestionnaireStatus } from "@/lib/ai/actions";
 
 const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "plot_chunks",
@@ -13,6 +14,11 @@ const VALID_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
   "series_skeleton",
   "series_skeleton_predefined",
   "series_skeleton_auto",
+  "prepare_character_questionnaire",
+]);
+
+const PERSONA_DEPENDENT_KINDS: ReadonlySet<PromptKind> = new Set<PromptKind>([
+  "next_reference_episode",
 ]);
 
 interface CreateJobBody {
@@ -98,17 +104,48 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  const effectiveKind = promptKind as PromptKind;
+  let effectiveTabId = tabId;
+  if (PERSONA_DEPENDENT_KINDS.has(effectiveKind)) {
+    const characterState = await getCharacterQuestionnaireStatus(documentId);
+    if (characterState.needsPreparation || characterState.incompleteCharacters.length > 0) {
+      const names = characterState.incompleteCharacters.join(", ");
+      return new Response(JSON.stringify({
+        error: names ? "Complete the Character Questionnaire for " + names + " before triggering other AI agents." : "Add named characters and complete their profiles before triggering other AI agents.",
+        code: "CHARACTER_QUESTIONNAIRE_INCOMPLETE",
+      }), { status: 409, headers: { "Content-Type": "application/json" } });
+    }
+  }
+
+  if (effectiveKind === "prepare_character_questionnaire") {
+    const characterState = await getCharacterQuestionnaireStatus(documentId);
+    if (!characterState.needsPreparation) {
+      return new Response(JSON.stringify({
+        error: "Character names are already present. Use the Character Questionnaire in the AI Assistant to complete profiles.",
+        code: "USE_CHARACTER_QUESTIONNAIRE",
+      }), { status: 409, headers: { "Content-Type": "application/json" } });
+    }
+    const rows = await db.query.tabs.findMany({ where: eq(tabs.documentId, documentId) });
+    const characters = rows.find((row) => row.type === "characters");
+    if (!characters) {
+      return new Response(JSON.stringify({ error: "Characters tab is missing from this document." }), {
+        status: 409, headers: { "Content-Type": "application/json" },
+      });
+    }
+    effectiveTabId = characters.id;
+  }
+
   try {
     const { id } = await createJob({
       documentId,
-      tabId,
-      promptKind: promptKind as PromptKind,
+      tabId: effectiveTabId,
+      promptKind: effectiveKind,
       modelId,
       thinking: Boolean(thinking),
       userId: session.user.id,
       userGuidance: typeof userGuidance === "string" ? userGuidance : undefined,
     });
-    return new Response(JSON.stringify({ id }), {
+    return new Response(JSON.stringify({ id, kind: effectiveKind, tabId: effectiveTabId }), {
       status: 202,
       headers: { "Content-Type": "application/json" },
     });

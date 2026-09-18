@@ -29,7 +29,12 @@ import { db, getDb } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { getAIModel } from "@/lib/ai/providers";
 import { getAction, resolveSystemPrompt } from "@/lib/ai/actions";
-import { validateJobOutput } from "@/lib/ai/job-output";
+import {
+  countSpokenDialogueLines,
+  dialogueCapForReferenceEpisode,
+  enforceReferenceEpisodeDialogueCap,
+  validateJobOutput,
+} from "@/lib/ai/job-output";
 import { logEvent } from "@/lib/saveTrace";
 
 export type PromptKind =
@@ -40,7 +45,8 @@ export type PromptKind =
   | "format_tab"
   | "series_skeleton"
   | "series_skeleton_predefined"
-  | "series_skeleton_auto";
+  | "series_skeleton_auto"
+  | "prepare_character_questionnaire";
 
 export type JobStatus =
   | "pending"
@@ -77,6 +83,56 @@ const activeJobs: Map<string, JobRunner> = (_g.__aiNativeWriter_activeJobs ??=
 // browser that reconnected just after completion replay from memory rather
 // than hitting the DB. 5 minutes covers reload-during-network-blip.
 const ACTIVE_JOB_TTL_MS = 5 * 60 * 1000;
+
+async function reviseReferenceEpisodeToDialogueCap(opts: {
+  id: string;
+  model: Parameters<typeof streamText>[0]["model"];
+  content: string;
+  cap: number;
+  modelId: string;
+  promptKind: string;
+}): Promise<string | null> {
+  const system = `You are a strict microdrama script editor.
+Revise the provided reference episode so it has no more than ${opts.cap} spoken dialogue lines total.
+Preserve the episode's plot beats, sequence order, visual beats, V.O. beats, character intent, and tagged format.
+Cut, merge, or move spoken lines into visual/V.O. beats where needed.
+Do not add commentary, explanations, checklists, or markdown.
+Return only the revised episode.`;
+
+  try {
+    const result = streamText({
+      model: opts.model,
+      system,
+      messages: [{ role: "user", content: opts.content }],
+      providerOptions: {
+        anthropic: { thinking: { type: "enabled", budgetTokens: 4000 } },
+        google: { thinkingConfig: { thinkingBudget: 4000 } },
+      },
+      onError: ({ error }) => {
+        logEvent("ai_job.dialogue_cap.revision_provider_error", {
+          id: opts.id,
+          promptKind: opts.promptKind,
+          modelId: opts.modelId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    });
+
+    let revised = "";
+    for await (const chunk of result.textStream) {
+      revised += chunk;
+    }
+    return revised.trim() || null;
+  } catch (err) {
+    logEvent("ai_job.dialogue_cap.revision_failed", {
+      id: opts.id,
+      promptKind: opts.promptKind,
+      modelId: opts.modelId,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
 
 export class JobBlockedError extends Error {
   constructor(public existingJobId: string) {
@@ -255,12 +311,18 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
 
   try {
     const action = getAction(job.promptKind as PromptKind);
-    const systemPrompt = await resolveSystemPrompt(action);
-    const userMessage = await action.loadContext({
+    const loadedContext = await action.loadContext({
       documentId: job.documentId,
       tabId: job.tabId,
       userGuidance: job.userGuidance ?? undefined,
     });
+    const userMessage = typeof loadedContext === "string"
+      ? loadedContext
+      : loadedContext.userMessage;
+    const systemPrompt = await resolveSystemPrompt(
+      action,
+      typeof loadedContext === "string" ? undefined : loadedContext
+    );
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });
     logEvent("ai_job.context.ready", {
@@ -316,6 +378,54 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       finishReason,
       usage,
     });
+
+    if (job.promptKind === "next_reference_episode") {
+      const cap = dialogueCapForReferenceEpisode(runner.buffer);
+      const generatedDialogueCount = countSpokenDialogueLines(runner.buffer);
+      if (generatedDialogueCount > cap) {
+        logEvent("ai_job.dialogue_cap.exceeded", {
+          id,
+          promptKind: job.promptKind,
+          modelId: job.modelId,
+          cap,
+          dialogueCount: generatedDialogueCount,
+        });
+
+        const revised = await reviseReferenceEpisodeToDialogueCap({
+          id,
+          model,
+          content: runner.buffer,
+          cap,
+          modelId: job.modelId,
+          promptKind: job.promptKind,
+        });
+        if (revised) {
+          const revisedDialogueCount = countSpokenDialogueLines(revised);
+          logEvent("ai_job.dialogue_cap.revised", {
+            id,
+            promptKind: job.promptKind,
+            modelId: job.modelId,
+            cap,
+            beforeCount: generatedDialogueCount,
+            afterCount: revisedDialogueCount,
+          });
+          runner.buffer = revised;
+        }
+
+        const enforced = enforceReferenceEpisodeDialogueCap(runner.buffer);
+        if (enforced.changed) {
+          runner.buffer = enforced.content;
+          logEvent("ai_job.dialogue_cap.enforced", {
+            id,
+            promptKind: job.promptKind,
+            modelId: job.modelId,
+            cap: enforced.cap,
+            beforeCount: enforced.beforeCount,
+            afterCount: enforced.afterCount,
+          });
+        }
+      }
+    }
 
     const validation = validateJobOutput(job.promptKind, runner.buffer);
     if (!validation.ok) {

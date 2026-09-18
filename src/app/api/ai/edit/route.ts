@@ -5,6 +5,7 @@ import { prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { logTrace } from "@/lib/saveTrace";
+import { getCharacterQuestionnaireStatus } from "@/lib/ai/actions";
 import {
   EDIT_SYSTEM_PROMPT,
   DRAFT_SYSTEM_PROMPT,
@@ -33,6 +34,13 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   pipe_plot_synth:  PLOT_SYNTH_SYSTEM_PROMPT,
 };
 
+const PERSONA_DEPENDENT_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "chat",
+  "draft",
+  "edit",
+  "feedback",
+]);
+
 async function getSystemPrompt(mode: Mode): Promise<string> {
   const row = await db.query.prompts.findFirst({
     where: eq(prompts.id, mode),
@@ -56,11 +64,13 @@ export async function POST(req: Request) {
     mode = "edit",
     modelId,
     thinking,
+    documentId,
   } = body as {
     messages: { role: "user" | "assistant"; content: string }[];
     mode?: Mode;
     modelId?: string;
     thinking?: boolean;
+    documentId?: string;
   };
 
   if (!messages || messages.length === 0) {
@@ -68,6 +78,19 @@ export async function POST(req: Request) {
       JSON.stringify({ error: "messages array is required" }),
       { status: 400 }
     );
+  }
+
+  if (PERSONA_DEPENDENT_MODES.has(mode) && !documentId) {
+    return new Response(JSON.stringify({ error: "documentId is required" }), { status: 400 });
+  }
+  if (PERSONA_DEPENDENT_MODES.has(mode) && documentId) {
+    const characterState = await getCharacterQuestionnaireStatus(documentId);
+    if (characterState.needsPreparation || characterState.incompleteCharacters.length > 0) {
+      return new Response(JSON.stringify({
+        error: "Complete the Character Questionnaire for every major character before triggering other AI agents.",
+        code: "CHARACTER_QUESTIONNAIRE_INCOMPLETE",
+      }), { status: 409 });
+    }
   }
 
   const systemPrompt = await getSystemPrompt(mode);

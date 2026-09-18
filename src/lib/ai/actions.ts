@@ -24,6 +24,8 @@ import {
   PLOT_CHUNKS_SYSTEM_PROMPT,
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
+  EARLY_REFERENCE_EPISODE_SYSTEM_PROMPT,
+  CHARACTER_QUESTIONNAIRE_PREP_SYSTEM_PROMPT,
   PILOT_EPISODE_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
   SERIES_SKELETON_SYSTEM_PROMPT,
@@ -37,13 +39,21 @@ export interface ActionInput {
   userGuidance?: string;
 }
 
+export interface LoadedActionContext {
+  userMessage: string;
+  systemPromptId?: string;
+  systemPromptFallback?: string;
+}
+
+export type ActionContext = string | LoadedActionContext;
+
 export interface Action {
   kind: PromptKind;
   // Overridable in DB via the prompts table (id matches kind). Falls back
   // to the system-prompt constant from prompts.ts.
   systemPromptId: string;
   systemPromptFallback: string;
-  loadContext(input: ActionInput): Promise<string>;
+  loadContext(input: ActionInput): Promise<ActionContext>;
 }
 
 // ─── Helpers ───
@@ -279,7 +289,7 @@ Task: Propose ONE microdrama plot for Episode ${nextEpisodeNumber}. This episode
 
 async function loadNextReferenceEpisodeContext(
   input: ActionInput
-): Promise<string> {
+): Promise<ActionContext> {
   const { documentId, userGuidance } = input;
   const docTabs = await loadDocumentTabs(documentId);
 
@@ -341,25 +351,94 @@ async function loadNextReferenceEpisodeContext(
     sections.push(`## Writer Guidance (HIGHEST PRIORITY — honour these instructions above all else)\n${userGuidance.trim()}`);
   }
 
-  // 2. Previous reference episodes — full chain, voice + continuity + character state reference.
-  sections.push(`## Previous Reference Episodes (all ${refSections.length} — mine these for: (1) each character's voice and register, (2) all events, revelations, and relationship shifts that have occurred so far, (3) what each character currently knows, wants, and feels — carry all of this forward into Episode ${targetN}. Your first beat picks up from the LAST beat of the most recent episode below)
-${
-  refSections.length > 0
-    ? refSections.map((s) => s.content).join("\n\n")
-    : "(none yet — this is the first reference episode; open with the scene the plot opens on)"
-}`);
+  const isEarlyEpisode = targetN <= 3;
 
-  // 3. Microdrama plot — the structural blueprint to expand.
+  // 2. Microdrama plot — the structural blueprint to expand.
   sections.push(`## Microdrama Plot for Episode ${targetN} (the structural blueprint — every beat in this plot must surface in the episode)
 ${targetPlot.content}`);
 
-  // 4. Characters — lowest priority, for voice consistency only.
-  sections.push(`## Characters (canonical voice profiles — use for dialogue consistency)
+  // 3. Characters — compact living profiles for voice, evolution, and relationships.
+  sections.push(`## Characters (${isEarlyEpisode ? "primary personality and dialogue-voice source for Episodes 1-3" : "canonical identity + current voice/evolution/relationship profiles — use as the authority for how characters speak and relate now"})
 ${charactersTagged || "(empty)"}`);
+
+  const refNewestFirst = refSections.slice().reverse();
+
+  // 4. Previous reference episodes — newest first so immediate continuity stays salient.
+  sections.push(`## Previous Reference Episodes (all ${refSections.length}, newest to oldest — ${isEarlyEpisode ? "continuity and fact context only; Characters above is the primary voice source" : `use for continuity, latest character state, and recent relationship shifts. The FIRST episode below is the immediate pickup source for Episode ${targetN}`}; older episodes are supporting history)
+${
+  refNewestFirst.length > 0
+    ? refNewestFirst.map((s) => s.content).join("\n\n")
+    : "(none yet — this is the first reference episode; open with the scene the plot opens on)"
+}`);
 
   sections.push(`Task: Expand the Microdrama Plot above into ONE full reference episode for Episode ${targetN} in the canonical Visual / Dialogue / V.O. beat format. Output exactly one [H3] Episode ${targetN} block. No preamble, no commentary, no alternatives.`);
 
+  const userMessage = sections.join("\n\n");
+  if (isEarlyEpisode) {
+    return {
+      userMessage,
+      systemPromptId: "early_reference_episode",
+      systemPromptFallback: EARLY_REFERENCE_EPISODE_SYSTEM_PROMPT,
+    };
+  }
+  return userMessage;
+}
+
+async function loadPrepareCharacterQuestionnaireContext(input: ActionInput): Promise<string> {
+  const docTabs = await loadDocumentTabs(input.documentId);
+  if (!docTabs.characters) throw new Error("Characters tab is missing.");
+
+  const plotSections = splitTabByH3(tiptapJsonToTagged(docTabs.microdramaPlots?.content ?? null));
+  const refSections = splitTabByH3(tiptapJsonToTagged(docTabs.predefinedEpisodes?.content ?? null));
+  const lastRefN = refSections.reduce((max, section) => {
+    const n = extractEpisodeNumber(section.title);
+    return n != null && n > max ? n : max;
+  }, 0) || refSections.filter((section) => section.content.replace(/\s/g, "").length > 100).length;
+  const targetN = lastRefN + 1;
+  const plot = plotSections.find((section) => extractEpisodeNumber(section.title) === targetN)
+    ?? plotSections[targetN - 1]
+    ?? plotSections[plotSections.length - 1];
+  if (!plot || plot.content.replace(/\s/g, "").length < 60) {
+    throw new Error(`Add a complete Microdrama Plot for Episode ${targetN} before preparing character profiles.`);
+  }
+
+  const characters = tiptapJsonToTagged(docTabs.characters.content ?? null);
+  const referencesNewestFirst = refSections.slice().reverse();
+  const sections = [
+    `## Existing Characters tab (preserve every real character name and established fact; ignore generic placeholders such as "Character Name")\n${characters || "[H1] Characters"}`,
+    `## Predefined Episodes (all ${referencesNewestFirst.length}, newest to oldest; source of existing cast names and established behavior)\n${referencesNewestFirst.length ? referencesNewestFirst.map((section) => section.content).join("\n\n") : "(none yet)"}`,
+    `## Microdrama Plot for Episode ${extractEpisodeNumber(plot.title) ?? targetN} (use for tentative starting points; if this is an earlier plot, do not imply it is the next episode)\n${plot.content}`,
+  ];
+  if (input.userGuidance?.trim()) sections.unshift(`## Writer guidance\n${input.userGuidance.trim()}`);
+  sections.push("Task: Identify the major named cast from the existing Characters tab and Predefined Episodes, as in character entity extraction. Use exact spellings; exclude locations and generic labels. Return a complete Characters tab with one [H2] per major character and one brief [P] Story starting point grounded in the plot and existing episodes. Do not add questionnaire questions, answer placeholders, sample dialogue, or speculative personality/voice claims. Do not omit an existing named major character. Do not add minor episode-only extras. Do not write or change any episode.");
   return sections.join("\n\n");
+}
+
+export async function getCharacterQuestionnaireStatus(documentId: string): Promise<{
+  needsPreparation: boolean;
+  incompleteCharacters: string[];
+}> {
+  const docTabs = await loadDocumentTabs(documentId);
+  const tagged = tiptapJsonToTagged(docTabs.characters?.content ?? null);
+  const matches = [...tagged.matchAll(/^\[H2\]\s*(.+?)\s*$/gim)];
+  const characters = matches.map((match, index) => ({
+    name: match[1].trim(),
+    body: tagged.slice(match.index! + match[0].length, matches[index + 1]?.index ?? tagged.length),
+  })).filter((entry) => entry.name.toLowerCase() !== "relationships" && entry.name.toLowerCase() !== "character name");
+
+  if (!characters.length) return { needsPreparation: true, incompleteCharacters: [] };
+  const required: string[][] = [["Personality"], ["Voice"], ["Sample Dialogue"], ["Emotional Dialogue", "Relationships"]];
+  const isSkipped = (body: string) =>
+    /^\[P\]\s*(?:Profile\s+)?Status:\s*Skipped\b/im.test(body);
+  const incompleteCharacters = characters.filter(({ body }) => required.some((labels) => {
+    if (isSkipped(body)) return false;
+    const line = labels.map((label) =>
+      body.match(new RegExp(`^\\[P\\]\\s*${label}:\\s*(.*)$`, "im"))?.[1]?.trim() ?? ""
+    ).find(Boolean) ?? "";
+    return !line || /^\[.*\]$/.test(line) || /your answer|write two short lines/i.test(line) || /^(?:what drives them|how do they speak|for each key person|for each major person|write two lines|personality q|voice q|relationship q)/i.test(line);
+  })).map(({ name }) => name);
+
+  return { needsPreparation: false, incompleteCharacters };
 }
 
 // ─── pilot_episode ───
@@ -634,6 +713,12 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptFallback: NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
     loadContext: loadNextReferenceEpisodeContext,
   },
+  prepare_character_questionnaire: {
+    kind: "prepare_character_questionnaire",
+    systemPromptId: "prepare_character_questionnaire",
+    systemPromptFallback: CHARACTER_QUESTIONNAIRE_PREP_SYSTEM_PROMPT,
+    loadContext: loadPrepareCharacterQuestionnaireContext,
+  },
   pilot_episode: {
     kind: "pilot_episode",
     systemPromptId: "pilot_episode",
@@ -680,9 +765,14 @@ export function getAction(kind: PromptKind): Action {
 
 // Resolve the system prompt for an action: tries the prompts table first
 // (admin-editable), falls back to the constant.
-export async function resolveSystemPrompt(action: Action): Promise<string> {
+export async function resolveSystemPrompt(
+  action: Action,
+  context?: LoadedActionContext
+): Promise<string> {
+  const promptId = context?.systemPromptId ?? action.systemPromptId;
+  const promptFallback = context?.systemPromptFallback ?? action.systemPromptFallback;
   const row = await db.query.prompts.findFirst({
-    where: eq(promptsTable.id, action.systemPromptId),
+    where: eq(promptsTable.id, promptId),
   });
-  return row?.content || action.systemPromptFallback;
+  return row?.content || promptFallback;
 }
