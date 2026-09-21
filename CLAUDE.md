@@ -2,7 +2,7 @@
 
 ## What this is
 
-An AI-native scriptwriting tool for a team producing vertical mobile microdramas. One writer owns a document, others review and comment. Built as a self-hosted Next.js app on Cloud Run. Supports multi-turn AI agents for series drafting, episode adaptation, research, quality evaluation, and pilot episode generation. Writers work with structured content (series overview, characters, episode plots, reference episodes, predefined episodes) inside a rich-text editor.
+An AI-native scriptwriting tool for a team producing vertical mobile microdramas. One writer owns a document, others review and comment. Built as a self-hosted Next.js 16 app deployed on a dedicated Linux VM and served via Cloudflare Tunnel at https://writer.plotpix.ai (GCP / Cloud Run is deprecated). Supports multi-turn AI agents for series drafting, episode adaptation, research, quality evaluation, and pilot episode generation. Writers work with structured content (series overview, characters, episode plots, reference episodes, predefined episodes) inside a rich-text editor.
 
 ## Stack
 
@@ -10,10 +10,10 @@ An AI-native scriptwriting tool for a team producing vertical mobile microdramas
 |---|---|
 | Framework | Next.js 16 (App Router, TypeScript, Tailwind v4) |
 | Editor | Tiptap v3 (ProseMirror-based, custom extensions) |
-| Database | SQLite via Drizzle ORM + better-sqlite3 (`data/writer.db`) |
+| Database | SQLite via Drizzle ORM + better-sqlite3 (Persistent on VM: `/home/plotpix/ai-native-writer/data/writer.db`) |
 | Auth | NextAuth.js v5 — Google OAuth only |
 | AI | Vercel AI SDK v6 (`ai`, `@ai-sdk/anthropic`, `@ai-sdk/google`) |
-| Deployment | Cloud Run (asia-south1), auto-deploy from `main` via Cloud Build |
+| Deployment | Linux VM (Ubuntu 24.04), PM2 (`ai-native-writer` on port 3004), Cloudflare Tunnel (`writer.plotpix.ai`). Auto-deploy on `git push origin main` via GitHub Webhook. GCP / Cloud Run is deprecated. |
 | Repo | `Terra-Git-Admin/ai-native-writer` |
 
 ## Running locally
@@ -43,10 +43,14 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 
 ## Active Work
 
-- **Prod URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
+- **Prod URL**: https://writer.plotpix.ai (Cloudflare Tunnel -> VM port 3004; GCP Cloud Run is deprecated)
+- **Database on VM**: `/home/plotpix/ai-native-writer/data/writer.db` (persistent host storage, SQLite WAL mode; ephemeral /tmp and GCS sync loops deprecated)
+- **CI/CD Auto-Deploy**: Pushes to `main` on `Terra-Git-Admin/ai-native-writer` trigger webhook `https://webhook.plotpix.ai/deploy` -> runs `/home/plotpix/deploy-ai-native-writer.sh` (git pull + npm install + deploy.sh + pm2 restart)
+- **PM2 Service**: `ai-native-writer` (port 3004). Controlled via `/home/plotpix/restart-services.sh writer` and master boot script `/home/plotpix/start-all-services.sh`
+- **Deprecated Cloud Run URL**: https://ai-native-writer-936494534526.asia-south1.run.app/
 - **Latest shipped**: PR #75 — Plot Arc Discipline (Foreshadow/Anticipation/Action/Reaction) + Next Episode Plot context reprioritized over skeleton (merged 1 Jul 2026)
 - **Total prompts in DB**: 25 (seeded from `prompts.ts` on restart)
-- **Cloud Run config**: `max-instances=1` (SQLite single-writer), `concurrency=50` (bumped 22 Jun 2026 from 20 — 429s under multi-user load)
+- **VM Runtime config**: Single-instance PM2 daemon (`ai-native-writer`), persistent host file access, zero cold starts, zero GCS sync latency
 
 ### Predefined Episode Format (as of PR #65 — 15 Jun 2026)
 
