@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+﻿import { generateText } from "ai";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -11,7 +11,6 @@ import { buildPitchLabSampleIdeas, isPitchLabSampleMode } from "@/lib/ai/pitch-l
 import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
-import { splitTabByH3, tiptapJsonToTagged, extractEpisodeNumber } from "@/lib/ai/context-engine";
 import {
   buildPitchLabGenerationPrompt,
   buildPitchLabGenerationSystemPrompt,
@@ -22,7 +21,6 @@ import {
 import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
 
 const SOURCE_LIMIT = 60_000;
-const WRITER_SOURCE_BLOCK_LIMIT = 20_000;
 
 function parseIdeas(text: string): { title: string; ideaText: string }[] {
   const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -91,121 +89,6 @@ function getTextFromHtml(html: string | null): string {
     .trim();
 }
 
-function extractFirstEpisodeBlock(content: string | null): string {
-  const tagged = tiptapJsonToTagged(content);
-  if (tagged.trim()) {
-    const sections = splitTabByH3(tagged);
-    const firstEpisode = sections.find((section) => extractEpisodeNumber(section.title) === 1);
-    const selected = firstEpisode ?? sections[0];
-    if (selected?.content.trim()) return selected.content.trim();
-    return tagged.trim();
-  }
-  return getTextFromHtml(content);
-}
-
-function buildWriterAdaptationSource(title: string, sourceTabs: { title: string; type: string; content: string | null }[]): string {
-  const byType = (type: string) => sourceTabs.find((tab) => tab.type === type);
-  const microdramaPlot = extractFirstEpisodeBlock(byType("microdrama_plots")?.content ?? null);
-  const predefinedPlot = extractFirstEpisodeBlock(byType("predefined_episodes")?.content ?? null);
-  const characters = (() => {
-    const content = byType("characters")?.content ?? null;
-    const tagged = tiptapJsonToTagged(content);
-    return tagged.trim() || getTextFromHtml(content);
-  })();
-
-  return [
-    `WRITER DOCUMENT ADAPTATION SOURCE: ${title}`,
-    "Only the three blocks below are intended as the adaptation base. Do not mine other episodes, later plot turns, or unrelated Writer tabs.",
-    `## MICRODRAMA PLOT #1\n${microdramaPlot || "(empty)"}`,
-    `## PREDEFINED PLOT #1\n${predefinedPlot || "(empty)"}`,
-    `## CHARACTER LIST\n${characters || "(empty)"}`,
-  ].join("\n\n").slice(0, WRITER_SOURCE_BLOCK_LIMIT);
-}
-
-function splitPlainTextIntoSections(text: string): { heading: string; content: string }[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const sections: { heading: string; content: string }[] = [];
-  let current: { heading: string; content: string[] } | null = null;
-  const headingPattern = /^(?:#+\s*|\[H[1-6]\]\s*)?(.{1,90})$/i;
-  const isLikelyHeading = (line: string) => {
-    const normalized = line.replace(/^#+\s*|^\[H[1-6]\]\s*/i, "").replace(/:$/, "").trim();
-    return normalized.length <= 90 && /(microdrama|predefined|reference episode|character|cast|episode\s*1|plot\s*#?\s*1|pilot)/i.test(normalized) && !/[.!?]$/.test(normalized);
-  };
-  const flush = () => {
-    if (current) sections.push({ heading: current.heading, content: current.content.join("\n").trim() });
-  };
-  for (const line of lines) {
-    const match = line.match(headingPattern);
-    if (match && isLikelyHeading(line)) {
-      flush();
-      current = { heading: match[1].replace(/:$/, "").trim(), content: [] };
-    } else if (current) {
-      current.content.push(line);
-    }
-  }
-  flush();
-  return sections.filter((section) => section.content);
-}
-
-function trimToFirstSourceUnit(text: string): string {
-  const lines = text.split(/\r?\n/);
-  const secondUnitIndex = lines.findIndex((line, index) => index > 0 && /(?:episode|plot)\s*(?:#\s*)?2\b/i.test(line));
-  return (secondUnitIndex > 0 ? lines.slice(0, secondUnitIndex) : lines).join("\n").trim();
-}
-
-function findExternalSection(sections: { heading: string; content: string }[], patterns: RegExp[]): string {
-  const section = sections.find((candidate) => patterns.some((pattern) => pattern.test(candidate.heading)));
-  return section ? trimToFirstSourceUnit(`${section.heading}\n${section.content}`) : "";
-}
-
-function classifyExternalSourceDetail(text: string, hasStructuredBlocks: boolean): "structured_blocks" | "first_episode_script" | "synopsis_or_plot_summary" {
-  if (hasStructuredBlocks) return "structured_blocks";
-  const scriptSignals = [
-    /\b(?:INT\.|EXT\.|FADE IN|CUT TO|V\.O\.|O\.S\.)\b/i,
-    /\b(?:visual|dialogue|voice\s*over|scene)\b/i,
-    /^\s*[A-Z][A-Z\s'.-]{2,}:\s+.+/m,
-  ].filter((pattern) => pattern.test(text)).length;
-  const dialogueLineCount = (text.match(/^\s*[A-Z][A-Z\s'.-]{2,}:\s+.+$/gm) ?? []).length;
-  return scriptSignals >= 2 || dialogueLineCount >= 4 ? "first_episode_script" : "synopsis_or_plot_summary";
-}
-
-function buildExternalAdaptationSource(title: string, url: string, text: string): string {
-  const sections = splitPlainTextIntoSections(text);
-  const microdramaPlot = findExternalSection(sections, [/microdrama/i, /plot\s*#?\s*1/i]);
-  const predefinedPlot = findExternalSection(sections, [/predefined/i, /reference episode/i, /episode\s*1/i, /pilot/i]);
-  const characters = findExternalSection(sections, [/characters?/i, /cast/i]);
-  const rawSource = text
-    .split(/\r?\n/)
-    .filter((line) => !/^Source URL:/i.test(line.trim()))
-    .join("\n")
-    .trim();
-  const hasStructuredBlocks = Boolean(microdramaPlot || predefinedPlot || characters);
-  const detailType = classifyExternalSourceDetail(rawSource, hasStructuredBlocks);
-  const usagePlan = detailType === "structured_blocks"
-    ? "Use the structured source blocks as the selected adaptation unit. Empty blocks mean unavailable evidence; do not invent them from unrelated page material."
-    : detailType === "first_episode_script"
-      ? "Use the script as the selected Episode 1 source. Extract the opening hook, visible pressure engine, lead character behavior, relationship shift, turn, and cliffhanger from the script evidence."
-      : "Use the synopsis or plot summary as the selected story source. Extract the central trap, relationship contradiction, protagonist pressure, major reveal or reversal, and any named character traits that are actually present.";
-
-  const detailBlock = detailType === "structured_blocks"
-    ? [
-        `## MICRODRAMA PLOT #1\n${microdramaPlot || "(empty)"}`,
-        `## PREDEFINED PLOT #1\n${predefinedPlot || "(empty)"}`,
-        `## CHARACTER LIST\n${characters || "(empty)"}`,
-      ].join("\n\n")
-    : detailType === "first_episode_script"
-      ? `## FIRST EPISODE SCRIPT\n${trimToFirstSourceUnit(rawSource) || "(empty)"}`
-      : `## SOURCE SYNOPSIS / PLOT SUMMARY\n${rawSource || "(empty)"}`;
-
-  return [
-    `EXTERNAL LINK ADAPTATION SOURCE: ${title}`,
-    `Source URL: ${url}`,
-    `SOURCE DETAIL TYPE: ${detailType.replace(/_/g, " ")}`,
-    usagePlan,
-    detailBlock,
-  ].join("\n\n").slice(0, WRITER_SOURCE_BLOCK_LIMIT);
-}
-
 export async function POST(req: Request) {
   const session = await auth();
   const accessError = requirePitchLabAdmin(session);
@@ -230,15 +113,15 @@ export async function POST(req: Request) {
     const [sourceDoc] = await db.select({ id: documents.id, title: documents.title })
       .from(documents).where(eq(documents.id, sourceDocumentId)).limit(1);
     if (!sourceDoc) return NextResponse.json({ error: "The selected Writer document was not found." }, { status: 404 });
-    const sourceTabs = await db.select({ title: tabs.title, type: tabs.type, content: tabs.content }).from(tabs)
+    const sourceTabs = await db.select({ title: tabs.title, content: tabs.content }).from(tabs)
       .where(eq(tabs.documentId, sourceDocumentId)).orderBy(tabs.position);
-    sources.push({ type: "writer_doc", sourceDocumentId, title: sourceDoc.title, text: buildWriterAdaptationSource(sourceDoc.title, sourceTabs) });
+    sources.push({ type: "writer_doc", sourceDocumentId, title: sourceDoc.title, text: `Writer document: ${sourceDoc.title}\n${sourceTabs.map((tab) => `${tab.title}\n${getTextFromHtml(tab.content)}`).join("\n\n")}` });
   }
   if (generationType === "adaptation" && pastedSource) sources.push({ type: "pasted_text", sourceDocumentId: null, title: "Pasted source material", text: `Pasted source material:\n${pastedSource}` });
   if (generationType === "adaptation" && sourceUrl) {
     try {
       const externalSource = await loadExternalStorySource(sourceUrl);
-      sources.push({ type: "pasted_text", sourceDocumentId: null, title: externalSource.title, text: buildExternalAdaptationSource(externalSource.title, externalSource.url, externalSource.text) });
+      sources.push({ type: "pasted_text", sourceDocumentId: null, title: externalSource.title, text: externalSource.text });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not read that story link.";
       return NextResponse.json({ error: message }, { status: 422 });

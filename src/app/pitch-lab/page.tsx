@@ -51,8 +51,6 @@ export default function PitchLabPage() {
   const [showDiscarded, setShowDiscarded] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [currentVersionNotice, setCurrentVersionNotice] = useState<string | null>(null);
-  const [isCurrentEditable, setIsCurrentEditable] = useState(false);
-  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const ideaTextRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -116,8 +114,6 @@ export default function PitchLabPage() {
     setIdeaInstructions("");
     setShowFinalizeConfirm(false);
     setCurrentVersionNotice(null);
-    setIsCurrentEditable(false);
-    setShowVersionHistory(false);
   }, [selectedIdea, selectedEnvelope]);
 
   useEffect(() => {
@@ -201,11 +197,10 @@ export default function PitchLabPage() {
         : idea));
       if (instruction) {
         setIdeaInstructions("");
-        setCurrentVersionNotice("New current version generated. Review it, then click Edit if you want to change it manually.");
-        setIsCurrentEditable(false);
+        setCurrentVersionNotice("Refined text updated below. This is now the Current version.");
+        requestAnimationFrame(() => ideaTextRef.current?.focus());
       } else {
         setCurrentVersionNotice("Manual edits saved to the Current version.");
-        setIsCurrentEditable(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update idea.");
@@ -233,8 +228,8 @@ export default function PitchLabPage() {
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id
         ? { ...idea, title: cleanTitle, ideaText: data.ideaText, isPlaceholder }
         : idea));
-      setCurrentVersionNotice("Restored text is now the Current version. Review it, then click Edit if you want to change it manually.");
-      setIsCurrentEditable(false);
+      setCurrentVersionNotice("Restored text is now the Current version.");
+      requestAnimationFrame(() => ideaTextRef.current?.focus());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not restore idea.");
     } finally {
@@ -467,19 +462,15 @@ export default function PitchLabPage() {
             <div className="rounded-xl border-2 border-indigo-500 bg-card p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Current version</p>
-                    {!isCurrentEditable && <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">Generated current</span>}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">Refined output replaces this Current version. Finalize creates a Writer doc from this version only.</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Current version</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Refined output replaces the text in this box. Finalize creates a Writer doc from this Current version only.</p>
                 </div>
-                {!isCurrentEditable && <button type="button" onClick={() => { setIsCurrentEditable(true); requestAnimationFrame(() => ideaTextRef.current?.focus()); }} className="min-h-10 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">Edit</button>}
               </div>
               {currentVersionNotice && <p className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">{currentVersionNotice}</p>}
               <label htmlFor="idea-title" className="mt-4 block text-sm font-medium">Title</label>
-              <input id="idea-title" value={ideaTitle} onChange={(event) => setIdeaTitle(event.target.value)} readOnly={!isCurrentEditable} className={`mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm ${isCurrentEditable ? "bg-background" : "bg-muted/40 text-muted-foreground"}`} />
+              <input id="idea-title" value={ideaTitle} onChange={(event) => setIdeaTitle(event.target.value)} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
               <label htmlFor="idea-edit" className="mt-4 block text-sm font-medium">Current idea text</label>
-              <textarea ref={ideaTextRef} id="idea-edit" value={ideaDraft} onChange={(event) => { setIdeaDraft(event.target.value); setCurrentVersionNotice(null); }} readOnly={!isCurrentEditable} rows={8} className={`mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring ${isCurrentEditable ? "bg-background" : "bg-muted/40 text-muted-foreground"}`} />
+              <textarea ref={ideaTextRef} id="idea-edit" value={ideaDraft} onChange={(event) => { setIdeaDraft(event.target.value); setCurrentVersionNotice(null); }} rows={8} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring" />
               <div className="mt-5 border-t border-border pt-5">
               <label htmlFor="idea-instructions" className="block text-sm font-medium">Refine the current text</label>
               <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Example: make the betrayal sharper and keep the ending as a cliffhanger." />
@@ -499,7 +490,7 @@ export default function PitchLabPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button onClick={() => saveIdea("")} disabled={loading || !hasUnsavedEdits} className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">{loading && !ideaInstructions.trim() ? "Saving..." : "Save edits"}</button>
-                  {hasUnsavedEdits && <button onClick={() => { setIdeaTitle(savedTitle); setIdeaDraft(savedText); setIsCurrentEditable(false); }} disabled={loading} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Discard edits</button>}
+                  {hasUnsavedEdits && <button onClick={() => { setIdeaTitle(savedTitle); setIdeaDraft(savedText); }} disabled={loading} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Discard edits</button>}
                   <button onClick={() => setIdeaStatus(selectedIdea.id, "discarded")} disabled={loading} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Reject</button>
                 </div>
               </div>
@@ -524,14 +515,9 @@ export default function PitchLabPage() {
             </div>
 
             <div className="rounded-xl border border-border bg-card/70 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold">Previous versions ({historyItems.length})</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">These are backups. Finalize ignores them unless you restore one first.</p>
-                </div>
-                <button type="button" onClick={() => setShowVersionHistory((show) => !show)} className="min-h-10 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500" aria-expanded={showVersionHistory}>{showVersionHistory ? "Hide versions" : "Show versions"}</button>
-              </div>
-              {showVersionHistory && <div className="mt-4 space-y-3">
+              <h2 className="text-sm font-semibold">Previous versions</h2>
+              <p className="mt-1 text-sm text-muted-foreground">These are only backups. Finalize ignores this section unless you restore one first.</p>
+              <div className="mt-4 space-y-3">
                 {historyItems.map((item) => {
                   const isCurrent = item.ideaText.trim() === savedText.trim();
                   return <article key={item.id} className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
@@ -545,7 +531,7 @@ export default function PitchLabPage() {
                     <p className="mt-3 whitespace-pre-wrap leading-6 text-muted-foreground">{item.ideaText}</p>
                   </article>;
                 })}
-              </div>}
+              </div>
             </div>
           </section> : <section className="rounded-xl border border-border bg-card p-6">
             <h2 className="font-semibold">No ideas shortlisted yet</h2>

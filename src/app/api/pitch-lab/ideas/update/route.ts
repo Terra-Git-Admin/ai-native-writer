@@ -13,18 +13,6 @@ import { buildPitchLabRefinementPrompt, buildPitchLabRefinementSystemPrompt, cle
 import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 
-function buildCompactPriorTurns(turns: ReturnType<typeof parsePitchIdeaEnvelope>["turns"]): string {
-  if (!turns.length) return "None.";
-  const recentTurns = turns.slice(-3);
-  const olderCount = Math.max(0, turns.length - recentTurns.length);
-  const olderNote = olderCount ? String(olderCount) + " older refinement turn" + (olderCount === 1 ? "" : "s") + " omitted from model context." : "";
-  const recentNote = recentTurns.map((turn, index) => {
-    const absoluteIndex = olderCount + index + 1;
-    const result = turn.ideaText.length > 700 ? turn.ideaText.slice(0, 700).trim() + "..." : turn.ideaText;
-    return "Turn " + absoluteIndex + " instruction: " + (turn.instruction || "Manual edit") + "\nTurn " + absoluteIndex + " result excerpt: " + result;
-  }).join("\n\n");
-  return [olderNote, recentNote].filter(Boolean).join("\n\n");
-}
 function parseRefinedIdea(raw: string, fallbackTitle: string): { title: string; ideaText: string } {
   const clean = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
@@ -75,7 +63,9 @@ export async function POST(req: Request) {
       let lastError: unknown = null;
       let refinedIdea: { title: string; ideaText: string } | null = null;
       const framework = await getActivePitchLabFramework();
-      const priorTurns = buildCompactPriorTurns(envelope.turns);
+      const priorTurns = envelope.turns.length
+        ? envelope.turns.map((turn, index) => `Turn ${index + 1} instruction: ${turn.instruction || "Manual edit"}\nTurn ${index + 1} result: ${turn.ideaText}`).join("\n\n")
+        : "None.";
       for (const candidate of candidates) {
         try {
           const result = await generateText({
