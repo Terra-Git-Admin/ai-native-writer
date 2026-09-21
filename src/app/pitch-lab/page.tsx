@@ -105,6 +105,15 @@ export default function PitchLabPage() {
         : sourceUrl.trim()
           ? "Adapt: public story link"
           : "Adapt: choose a source";
+  const shortlistSourceLabel = generationMode === "framework"
+    ? "New Story"
+    : selectedSource?.title
+      ? `Adapted from ${selectedSource.title}`
+      : pastedSource.trim()
+        ? "Adapted from pasted story material"
+        : sourceUrl.trim()
+          ? "Adapted from public story link"
+          : "Adapted from source";
   const savedTitle = selectedIdea ? displayTitle(selectedIdea.title) : "";
   const savedText = selectedEnvelope?.currentText ?? "";
   const hasUnsavedEdits = Boolean(selectedIdea && (ideaTitle.trim() !== savedTitle.trim() || ideaDraft.trim() !== savedText.trim()));
@@ -460,7 +469,7 @@ export default function PitchLabPage() {
               <span className="flex items-center justify-between gap-2">
                 <span className="font-medium">{displayTitle(idea.title)}</span>
               </span>
-              <span className="mt-1 block text-xs text-muted-foreground">Shortlisted idea</span>
+              <span className="mt-1 block text-xs text-muted-foreground">{shortlistSourceLabel}</span>
             </button>)}</div>
           </aside>
           {selectedIdea ? <section className="space-y-5">
