@@ -267,7 +267,7 @@ export default function DocumentPage() {
             .catch(() => {});
         }
       } catch {
-        if (!cancelled) router.push("/");
+        if (!cancelled) router.push("/docs");
       }
     })();
     return () => {
@@ -722,7 +722,7 @@ export default function DocumentPage() {
               } catch {
                 return;
               }
-              router.push("/");
+              router.push("/docs");
             }}
             className="text-sm text-muted-foreground hover:text-foreground"
           >

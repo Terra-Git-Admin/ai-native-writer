@@ -1,7 +1,10 @@
-﻿export const PITCH_LAB_SAMPLE_TITLE_PREFIX = "[Sample] ";
+export const PITCH_LAB_SAMPLE_TITLE_PREFIX = "[Sample] ";
 
 export function isPitchLabSampleMode(): boolean {
-  return process.env.NODE_ENV !== "production" && process.env.PITCH_LAB_USE_SAMPLES === "true";
+  if (process.env.NODE_ENV === "production") return false;
+  if (process.env.PITCH_LAB_USE_REAL_AI === "true") return false;
+  if (process.env.PITCH_LAB_USE_SAMPLES === "false") return false;
+  return true;
 }
 
 type SampleInput = {
