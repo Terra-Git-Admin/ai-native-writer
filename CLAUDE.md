@@ -41,6 +41,46 @@ DB auto-created at `data/writer.db` on first run. Gitignored.
 | `src/lib/auth.ts` | Lazy NextAuth init — **do not rewrite** (see Architecture) |
 | `src/lib/db/schema.ts` | Drizzle schema — run `npx drizzle-kit push` after changes |
 
+## Checking Database via SSH
+
+The production SQLite database is located at `/home/plotpix/ai-native-writer/data/writer.db` on the Linux VM.
+
+### Remote One-Liners (from local machine)
+
+```bash
+# Check database integrity
+ssh plotpix@ssh.plotpix.ai 'bash -lc "sqlite3 /home/plotpix/ai-native-writer/data/writer.db \"PRAGMA integrity_check;\""'
+
+# List all tables
+ssh plotpix@ssh.plotpix.ai 'bash -lc "sqlite3 /home/plotpix/ai-native-writer/data/writer.db \".tables\""'
+
+# Count records across key tables
+ssh plotpix@ssh.plotpix.ai 'bash -lc "sqlite3 /home/plotpix/ai-native-writer/data/writer.db \"SELECT 'documents', count(*) FROM documents UNION ALL SELECT 'users', count(*) FROM users UNION ALL SELECT 'tabs', count(*) FROM tabs UNION ALL SELECT 'versions', count(*) FROM document_versions;\""'
+
+# View 5 most recently updated documents
+ssh plotpix@ssh.plotpix.ai 'bash -lc "sqlite3 -header -column /home/plotpix/ai-native-writer/data/writer.db \"SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC LIMIT 5;\""'
+
+# Check database file and WAL sizes
+ssh plotpix@ssh.plotpix.ai "ls -lh /home/plotpix/ai-native-writer/data/"
+```
+
+### Interactive SQLite Shell (on the VM)
+
+```bash
+# 1. Connect to VM
+ssh plotpix@ssh.plotpix.ai
+
+# 2. Open database in sqlite3 CLI
+sqlite3 /home/plotpix/ai-native-writer/data/writer.db
+
+# 3. Inside sqlite3 prompt:
+.mode table
+.tables
+.schema documents
+SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC LIMIT 5;
+.quit
+```
+
 ## Active Work
 
 - **Prod URL**: https://writer.plotpix.ai (Cloudflare Tunnel -> VM port 3004; GCP Cloud Run is deprecated)
