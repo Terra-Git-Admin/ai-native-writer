@@ -94,7 +94,9 @@ function cleanHtml(html: string): { title: string; description: string; body: st
     .replace(/<(script|style|noscript|svg|nav|footer|header)[^>]*>[\s\S]*?<\/\1>/gi, " ")
     .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|section|article)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")).trim();
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/ *\n+ */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")).trim();
   const articleHtml = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1] ??
     html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1] ?? "";
   const body = toText(articleHtml);
