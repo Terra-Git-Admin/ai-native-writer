@@ -391,22 +391,12 @@ export function buildAIContext(args: BuildContextArgs): string {
 //   pipe_beat_gen     → world_state, workbook (if non-empty)
 //   pipe_causality    → beat_sequence, world_state, workbook (if non-empty)
 //   pipe_plot_synth   → story_logic, world_state, characters, workbook (if non-empty)
-//   pipe_continuation_state → world_state, characters, story_logic, microdrama_plots,
-//                              series_overview, workbook (if non-empty)
-//   pipe_continuation_beats → world_state, beat_sequence, microdrama_plots, workbook (if non-empty)
-//   pipe_continuation_logic → world_state, beat_sequence, microdrama_plots, workbook (if non-empty)
-//   pipe_continuation_synth → story_logic, world_state, characters, microdrama_plots,
-//                              workbook (if non-empty)
 
 type PipelineStepId =
   | "pipe_world_state"
   | "pipe_beat_gen"
   | "pipe_causality"
-  | "pipe_plot_synth"
-  | "pipe_continuation_state"
-  | "pipe_continuation_beats"
-  | "pipe_continuation_logic"
-  | "pipe_continuation_synth";
+  | "pipe_plot_synth";
 
 export function buildPipelineStepContext(
   stepId: PipelineStepId,
@@ -517,72 +507,8 @@ export function buildPipelineStepContext(
     );
   }
 
-
-
-  if (stepId === "pipe_continuation_state") {
-    const ws = render(tab("world_state"), "World State");
-    if (ws) parts.push(ws);
-    const chars = render(tab("characters"), "Characters");
-    if (chars) parts.push(chars);
-    const sl = render(tab("story_logic"), "Latest Story Logic");
-    if (sl) parts.push(sl);
-
-    windowed(
-      "microdrama_plots",
-      "Written Episode Plots (latest, full)",
-      "Earlier Episode Plots (titles only)",
-      8
-    );
-
-    const overview = render(tab("series_overview"), "Original Research");
-    if (overview) parts.push(overview);
-  }
-
-  if (stepId === "pipe_continuation_beats") {
-    const ws = render(tab("world_state"), "Continuation State / World State");
-    if (ws) parts.push(ws);
-    const beats = render(tab("beat_sequence"), "Prior Locked Beats");
-    if (beats) parts.push(beats);
-
-    windowed(
-      "microdrama_plots",
-      "Written Episode Plots (latest, full)",
-      "Earlier Episode Plots (titles only)",
-      5
-    );
-  }
-
-  if (stepId === "pipe_continuation_logic") {
-    const ws = render(tab("world_state"), "Continuation State / World State");
-    if (ws) parts.push(ws);
-    const beats = render(tab("beat_sequence"), "Continuation Beats");
-    if (beats) parts.push(beats);
-
-    windowed(
-      "microdrama_plots",
-      "Written Episode Plots (latest, full)",
-      "Earlier Episode Plots (titles only)",
-      5
-    );
-  }
-
-  if (stepId === "pipe_continuation_synth") {
-    const ws = render(tab("world_state"), "Continuation State / World State");
-    if (ws) parts.push(ws);
-    const chars = render(tab("characters"), "Characters");
-    if (chars) parts.push(chars);
-    const sl = render(tab("story_logic"), "Continuation Story Logic");
-    if (sl) parts.push(sl);
-
-    windowed(
-      "microdrama_plots",
-      "Written Episode Plots (latest, full)",
-      "Earlier Episode Plots (titles only)",
-      8
-    );
-  }
-  // Workbook draft — only Build World may use this draft context. Downstream pipeline steps use finalized tabs only.
-  if (hasWorkbook && stepId === "pipe_world_state") {
+  // Workbook draft — included by all steps when non-empty
+  if (hasWorkbook) {
     parts.push(`=== Current Working Draft (Workbook) ===\n${workbookTagged}`);
   }
 
