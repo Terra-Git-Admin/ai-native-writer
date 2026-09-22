@@ -16,11 +16,17 @@ import {
   BEAT_GEN_SYSTEM_PROMPT,
   CAUSALITY_SYSTEM_PROMPT,
   PLOT_SYNTH_SYSTEM_PROMPT,
+  CONTINUATION_STATE_SYSTEM_PROMPT,
+  CONTINUATION_BEAT_SYSTEM_PROMPT,
+  CONTINUATION_LOGIC_SYSTEM_PROMPT,
+  CONTINUATION_SYNTH_SYSTEM_PROMPT,
+
 } from "@/lib/ai/prompts";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
-  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth";
+  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
+  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -32,6 +38,11 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   pipe_beat_gen:    BEAT_GEN_SYSTEM_PROMPT,
   pipe_causality:   CAUSALITY_SYSTEM_PROMPT,
   pipe_plot_synth:  PLOT_SYNTH_SYSTEM_PROMPT,
+  pipe_continuation_state: CONTINUATION_STATE_SYSTEM_PROMPT,
+  pipe_continuation_beats: CONTINUATION_BEAT_SYSTEM_PROMPT,
+  pipe_continuation_logic: CONTINUATION_LOGIC_SYSTEM_PROMPT,
+  pipe_continuation_synth: CONTINUATION_SYNTH_SYSTEM_PROMPT,
+
 };
 
 const PERSONA_DEPENDENT_MODES: ReadonlySet<Mode> = new Set<Mode>([
