@@ -71,6 +71,13 @@
       "when": 1789650129648,
       "tag": "0009_pitch_lab",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1790035200000,
+      "tag": "0010_pitch_lab_reconcile",
+      "breakpoints": true
     }
   ]
 }

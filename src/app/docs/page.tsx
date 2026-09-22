@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PromptEditor from "@/components/settings/PromptEditor";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
 
 interface Document {
   id: string;
@@ -20,6 +21,7 @@ interface Document {
 
 export default function Home() {
   const { data: session, status } = useSession();
+  const pitchLabEnabled = isPitchLabEnabledForClient();
   const router = useRouter();
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,7 +167,7 @@ export default function Home() {
           <h1 className="text-xl font-bold">AI Writer</h1>
           <div className="flex items-center gap-4">
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">Home</Link>
-            {session?.user?.role === "admin" && <Link href="/pitch-lab" className="text-sm text-muted-foreground hover:text-foreground">Pitch Lab</Link>}
+            {session?.user?.role === "admin" && pitchLabEnabled && <Link href="/pitch-lab" className="text-sm text-muted-foreground hover:text-foreground">Pitch Lab</Link>}
             <ThemeToggle />
             <button
               onClick={() => setPromptsOpen(!promptsOpen)}

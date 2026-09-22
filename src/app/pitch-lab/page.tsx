@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
+import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
 
 const SAMPLE_TITLE_PREFIX = "[Sample] ";
 
@@ -54,9 +55,12 @@ export default function PitchLabPage() {
   const [isCurrentEditable, setIsCurrentEditable] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const ideaTextRef = useRef<HTMLTextAreaElement | null>(null);
+  const pitchLabEnabled = isPitchLabEnabledForClient();
+  const isAdmin = session?.user?.role === "admin";
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
+    if (!pitchLabEnabled || !isAdmin) return;
     if (status === "authenticated") {
       fetch("/api/pitch-lab/workspace").then((r) => r.ok ? r.json() : null).then((data) => {
         if (!data?.workspace) return;
@@ -78,7 +82,7 @@ export default function PitchLabPage() {
         if (Array.isArray(rows)) setDocs(rows.map((row) => ({ id: row.id, title: row.title, ownerName: row.ownerName ?? null })));
       }).catch(() => setDocs([])).finally(() => setDocsLoading(false));
     }
-  }, [router, status]);
+  }, [isAdmin, pitchLabEnabled, router, status]);
 
   const generated = useMemo(() => ideas.filter((idea) => idea.status === "generated"), [ideas]);
   const shortlisted = useMemo(() => ideas.filter((idea) => idea.status === "shortlisted"), [ideas]);
@@ -293,6 +297,14 @@ export default function PitchLabPage() {
 
   if (status === "loading" || !session?.user) return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-muted-foreground">Loading...</main>;
 
+  if (!pitchLabEnabled || !isAdmin) {
+    return (
+      <main className="mx-auto max-w-5xl px-6 py-12">
+        <p className="text-sm font-medium text-muted-foreground">Pitch Lab is disabled in this environment while the Writer portal and database migration are being verified.</p>
+      </main>
+    );
+  }
+
   if (session.user.role !== "admin") {
     return (
       <div className="min-h-screen">
@@ -493,9 +505,8 @@ export default function PitchLabPage() {
               <label htmlFor="idea-instructions" className="block text-sm font-medium">Refine the current text</label>
               <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Example: make the betrayal sharper and keep the ending as a cliffhanger." />
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button onClick={() => saveIdea(ideaInstructions)} disabled={loading || !ideaInstructions.trim() || hasUnsavedEdits} className="min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50">{loading && ideaInstructions.trim() ? "Refining..." : "Refine"}</button>
-                {hasUnsavedEdits && <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Save or discard manual edits before refining.</span>}
-                {!hasUnsavedEdits && <span className="text-sm text-muted-foreground">The result will replace Current idea text above.</span>}
+                <button onClick={() => saveIdea(ideaInstructions)} disabled={loading || !ideaInstructions.trim()} className="min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50">{loading && ideaInstructions.trim() ? "Refining..." : "Refine"}</button>
+                <span className="text-sm text-muted-foreground">Refine uses the current text above, including unsaved edits, and replaces it with the new version.</span>
               </div>
               </div>
             </div>

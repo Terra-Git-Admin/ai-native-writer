@@ -1,4 +1,4 @@
-CREATE TABLE `pitch_ideas` (
+CREATE TABLE IF NOT EXISTS `pitch_ideas` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`title` text NOT NULL,
@@ -11,8 +11,8 @@ CREATE TABLE `pitch_ideas` (
 	FOREIGN KEY (`workspace_id`) REFERENCES `pitch_workspaces`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_pitch_ideas_workspace_position` ON `pitch_ideas` (`workspace_id`,`position`);--> statement-breakpoint
-CREATE TABLE `pitch_sources` (
+CREATE INDEX IF NOT EXISTS `idx_pitch_ideas_workspace_position` ON `pitch_ideas` (`workspace_id`,`position`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `pitch_sources` (
 	`id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`type` text NOT NULL,
@@ -24,8 +24,8 @@ CREATE TABLE `pitch_sources` (
 	FOREIGN KEY (`workspace_id`) REFERENCES `pitch_workspaces`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_pitch_sources_workspace` ON `pitch_sources` (`workspace_id`);--> statement-breakpoint
-CREATE TABLE `pitch_workspaces` (
+CREATE INDEX IF NOT EXISTS `idx_pitch_sources_workspace` ON `pitch_sources` (`workspace_id`);--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS `pitch_workspaces` (
 	`id` text PRIMARY KEY NOT NULL,
 	`owner_id` text NOT NULL,
 	`brief` text DEFAULT '' NOT NULL,
@@ -35,4 +35,4 @@ CREATE TABLE `pitch_workspaces` (
 	FOREIGN KEY (`owner_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `idx_pitch_workspaces_owner` ON `pitch_workspaces` (`owner_id`);
+CREATE UNIQUE INDEX IF NOT EXISTS `idx_pitch_workspaces_owner` ON `pitch_workspaces` (`owner_id`);
