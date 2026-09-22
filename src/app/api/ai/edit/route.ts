@@ -16,11 +16,16 @@ import {
   BEAT_GEN_SYSTEM_PROMPT,
   CAUSALITY_SYSTEM_PROMPT,
   PLOT_SYNTH_SYSTEM_PROMPT,
+  CONTINUATION_STATE_SYSTEM_PROMPT,
+  CONTINUATION_BEAT_SYSTEM_PROMPT,
+  CONTINUATION_LOGIC_SYSTEM_PROMPT,
+  CONTINUATION_SYNTH_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
-  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth";
+  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
+  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -32,8 +37,11 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   pipe_beat_gen:    BEAT_GEN_SYSTEM_PROMPT,
   pipe_causality:   CAUSALITY_SYSTEM_PROMPT,
   pipe_plot_synth:  PLOT_SYNTH_SYSTEM_PROMPT,
+  pipe_continuation_state: CONTINUATION_STATE_SYSTEM_PROMPT,
+  pipe_continuation_beats: CONTINUATION_BEAT_SYSTEM_PROMPT,
+  pipe_continuation_logic: CONTINUATION_LOGIC_SYSTEM_PROMPT,
+  pipe_continuation_synth: CONTINUATION_SYNTH_SYSTEM_PROMPT,
 };
-
 const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "edit",
   "draft",
@@ -44,8 +52,18 @@ const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "pipe_beat_gen",
   "pipe_causality",
   "pipe_plot_synth",
+  "pipe_continuation_state",
+  "pipe_continuation_beats",
+  "pipe_continuation_logic",
+  "pipe_continuation_synth",
 ]);
 
+const ADMIN_ONLY_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "pipe_continuation_state",
+  "pipe_continuation_beats",
+  "pipe_continuation_logic",
+  "pipe_continuation_synth",
+]);
 const PERSONA_DEPENDENT_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "chat",
   "draft",
@@ -79,7 +97,7 @@ export async function POST(req: Request) {
     documentId,
   } = body as {
     messages: { role: "user" | "assistant"; content: string }[];
-    mode?: Mode;
+    mode?: string;
     modelId?: string;
     thinking?: boolean;
     documentId?: string;
@@ -92,14 +110,20 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!VALID_MODES.has(mode)) {
+  const resolvedMode = typeof mode === "string" ? mode : "edit";
+  if (!VALID_MODES.has(resolvedMode)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+  }
+  const safeMode = resolvedMode as Mode;
+  const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
+  if (ADMIN_ONLY_MODES.has(safeMode) && !isAdmin) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
 
-  if (PERSONA_DEPENDENT_MODES.has(mode) && !documentId) {
+  if (PERSONA_DEPENDENT_MODES.has(safeMode) && !documentId) {
     return new Response(JSON.stringify({ error: "documentId is required" }), { status: 400 });
   }
-  if (PERSONA_DEPENDENT_MODES.has(mode) && documentId) {
+  if (PERSONA_DEPENDENT_MODES.has(safeMode) && documentId) {
     const characterState = await getCharacterQuestionnaireStatus(documentId);
     if (characterState.needsPreparation || characterState.incompleteCharacters.length > 0) {
       return new Response(JSON.stringify({
@@ -109,7 +133,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const systemPrompt = await getSystemPrompt(mode);
+  const systemPrompt = await getSystemPrompt(safeMode);
 
   try {
     const model = await getAIModel(
