@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, RefObject } from "re
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, buildPipelineStepContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { parseCharacterProfiles, normalizeCharacterName } from "@/lib/ai/characters";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
 
 type AIJobController = ReturnType<typeof useJob>;
@@ -123,16 +124,6 @@ const CHARACTER_QUESTIONS: {
   },
 ];
 
-function parseCharacterProfiles(tagged: string): { name: string; start: number; bodyStart: number; end: number; body: string }[] {
-  const headings = [...tagged.matchAll(/^\[H2\]\s*(.+?)\s*$/gim)];
-  return headings.map((match, index) => ({
-    name: match[1].trim(),
-    start: match.index!,
-    bodyStart: match.index! + match[0].length,
-    end: headings[index + 1]?.index ?? tagged.length,
-    body: tagged.slice(match.index! + match[0].length, headings[index + 1]?.index ?? tagged.length),
-  })).filter(({ name }) => !/^(?:Relationships|Character Name)$/i.test(name));
-}
 
 function readCharacterDraft(body: string): CharacterDraft {
   const read = (label: string) => {
@@ -540,6 +531,41 @@ export default function AIChatSidebar({
   const lastAssistantTabTypeRef = useRef<string | null>(null);
   const suppressAssistantHistoryRef = useRef(false);
 
+  const handleAddCharacterHeading = useCallback(async () => {
+    if (activeTab.type !== "characters") {
+      setError("Open the Characters tab before adding a character.");
+      return;
+    }
+    const rawName = window.prompt("Character name");
+    const name = rawName?.replace(/\s+/g, " ").trim();
+    if (!name) return;
+
+    const liveTagged = normalizeCharacterTab(
+      tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? null)
+    );
+    const existing = parseCharacterProfiles(liveTagged);
+    const key = normalizeCharacterName(name);
+    const existingProfile = existing.find((profile) => profile.key === key);
+    if (existingProfile) {
+      setQuestionnaireCharacter(existingProfile.name);
+      setQuestionnaireStep(0);
+      setQuestionnaireOpen(true);
+      setNotice(`${name} is already in Characters.`);
+      setError(null);
+      return;
+    }
+
+    const base = liveTagged.trim() || "[H1] Characters";
+    const updated = `${base}\n\n[H2] ${name}`;
+    editorRef.current?.setFullContent(updated);
+    setQuestionnaireCharacter(name);
+    setQuestionnaireStep(0);
+    setQuestionnaireOpen(true);
+    setNotice(`${name} added. Complete or skip the profile before using persona-dependent agents.`);
+    setError(null);
+    await onFlushPendingSave();
+  }, [activeTab.type, editorRef, onFlushPendingSave]);
+
   const handleOpenQuestionnaire = useCallback(async () => {
     if (activeTab.type !== "characters") {
       setError("Open the Characters tab to interview the cast.");
@@ -573,7 +599,8 @@ export default function AIChatSidebar({
     const liveTagged = normalizeCharacterTab(
       tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? null)
     );
-    const profile = parseCharacterProfiles(liveTagged).find(({ name }) => name === questionnaireCharacter);
+    const targetKey = normalizeCharacterName(questionnaireCharacter);
+    const profile = parseCharacterProfiles(liveTagged).find(({ key }) => key === targetKey);
     if (!profile) {
       setError(`Could not find ${questionnaireCharacter} in the Characters tab.`);
       return;
@@ -602,7 +629,8 @@ export default function AIChatSidebar({
     const liveTagged = normalizeCharacterTab(
       tiptapJsonToTagged(editorRef.current?.getContentJSON() ?? null)
     );
-    const profile = parseCharacterProfiles(liveTagged).find(({ name }) => name === questionnaireCharacter);
+    const targetKey = normalizeCharacterName(questionnaireCharacter);
+    const profile = parseCharacterProfiles(liveTagged).find(({ key }) => key === targetKey);
     if (!profile) {
       setError(`Could not find ${questionnaireCharacter} in the Characters tab.`);
       return;
@@ -1137,19 +1165,29 @@ export default function AIChatSidebar({
           </div>
         )}
         {activeTab.type === "characters" && (
-          <button
-            type="button"
-            onClick={() => void handleOpenQuestionnaire()}
-            disabled={isStreaming || isAIBusy || characterProfiles.length === 0}
-            className="mt-1.5 w-full rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
-          >
-            {characterProfilesComplete ? "Review Character Profiles" : "Build Character Profiles"}
-            {characterProfiles.length > 0 && (
-              <span className="ml-2 font-normal">
-                {readyCharacterCount}/{characterProfiles.length} ready{skippedCharacterCount > 0 ? `, ${skippedCharacterCount} skipped` : ""}
-              </span>
-            )}
-          </button>
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() => void handleAddCharacterHeading()}
+              disabled={isStreaming || isAIBusy}
+              className="rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-card border border-border text-foreground hover:bg-muted disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+            >
+              Add Character
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleOpenQuestionnaire()}
+              disabled={isStreaming || isAIBusy}
+              className="rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
+            >
+              {characterProfilesComplete ? "Review Profiles" : "Build Profiles"}
+              {characterProfiles.length > 0 && (
+                <span className="ml-2 font-normal">
+                  {readyCharacterCount}/{characterProfiles.length} ready{skippedCharacterCount > 0 ? `, ${skippedCharacterCount} skipped` : ""}
+                </span>
+              )}
+            </button>
+          </div>
         )}
         {(activeTab.type !== "characters" || characterProfilesComplete) && (
           <div className="mt-1.5 border-t border-border pt-1.5">

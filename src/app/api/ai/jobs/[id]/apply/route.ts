@@ -10,6 +10,7 @@ import {
   validateJobOutput,
 } from "@/lib/ai/job-output";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { mergeMissingCharacterProfiles } from "@/lib/ai/characters";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 import { contentHash, logEvent } from "@/lib/saveTrace";
 
@@ -227,11 +228,13 @@ export async function POST(
     jsonString = page.content;
   } else {
     let outgoing = result.content;
+    const existingTagged = tiptapJsonToTagged(target.content ?? null);
     if (mode === "append") {
-      const existingTagged = tiptapJsonToTagged(target.content ?? null);
       outgoing = existingTagged.trim()
         ? `${existingTagged.trim()}\n\n${result.content.trim()}`
         : result.content.trim();
+    } else if (job.promptKind === "prepare_character_questionnaire") {
+      outgoing = mergeMissingCharacterProfiles(existingTagged, outgoing);
     }
     jsonString = JSON.stringify(taggedTextToTiptapDoc(outgoing));
 
