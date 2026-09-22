@@ -18,8 +18,7 @@ const JOB_LABELS: Partial<Record<JobKind, string>> = {
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
-  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
-  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth";
+  | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -39,11 +38,7 @@ const MODE_LABELS: Record<Mode, string> = {
   pipe_world_state: "Build World",
   pipe_beat_gen: "Suggest Beats",
   pipe_causality: "Connect the Story",
-  pipe_plot_synth: "Write Monetization Plot",
-  pipe_continuation_state: "Build Continuation State",
-  pipe_continuation_beats: "Suggest Continuation Beats",
-  pipe_continuation_logic: "Connect Continuation Story",
-  pipe_continuation_synth: "Write Continuation Pack",
+  pipe_plot_synth: "Write Plots",
 };
 
 // Strip structural tags ([H1] [P] [UL] etc.) and [CHANGE] scaffolding for
@@ -400,7 +395,6 @@ function normalizeCharacterTab(tagged: string): string {
 
 // ─── Props ───
 
-type PipelineBranch = "monetization" | "regular";
 
 interface AIChatSidebarProps {
   documentId: string;
@@ -410,7 +404,6 @@ interface AIChatSidebarProps {
   editorIsEmpty: boolean;
   modelId: string;
   thinking: boolean;
-  pipelineBranch: PipelineBranch;
   aiJob: AIJobController;
   onFlushPendingSave: () => Promise<void>;
   onAIJobApplied: (landedTabId: string) => Promise<void>;
@@ -427,7 +420,6 @@ export default function AIChatSidebar({
   editorRef,
   modelId,
   thinking,
-  pipelineBranch,
   aiJob,
   onFlushPendingSave,
   onAIJobApplied,
@@ -439,32 +431,21 @@ export default function AIChatSidebar({
     | "pipe_world_state"
     | "pipe_beat_gen"
     | "pipe_causality"
-    | "pipe_plot_synth"
-    | "pipe_continuation_state"
-    | "pipe_continuation_beats"
-    | "pipe_continuation_logic"
-    | "pipe_continuation_synth";
+    | "pipe_plot_synth";
 
-  type PipelineGroup = "Monetization Runway" | "Beyond Monetization";
 
   const PIPELINE_STEPS: {
     id: PipelineStepId;
     label: string;
-    group: PipelineGroup;
     enabledWhenTabType: string;
     requiredTabLabel: string;
   }[] = [
-    { id: "pipe_world_state", label: "Build World", group: "Monetization Runway", enabledWhenTabType: "series_overview", requiredTabLabel: "Series Overview" },
-    { id: "pipe_beat_gen", label: "Suggest Beats", group: "Monetization Runway", enabledWhenTabType: "world_state", requiredTabLabel: "World State" },
-    { id: "pipe_causality", label: "Connect Story", group: "Monetization Runway", enabledWhenTabType: "beat_sequence", requiredTabLabel: "Beats" },
-    { id: "pipe_plot_synth", label: "Write Monetization Plot", group: "Monetization Runway", enabledWhenTabType: "story_logic", requiredTabLabel: "Story Logic" },
-    { id: "pipe_continuation_state", label: "Build Continuation State", group: "Beyond Monetization", enabledWhenTabType: "microdrama_plots", requiredTabLabel: "Microdrama Plots" },
-    { id: "pipe_continuation_beats", label: "Suggest Continuation Beats", group: "Beyond Monetization", enabledWhenTabType: "world_state", requiredTabLabel: "World State" },
-    { id: "pipe_continuation_logic", label: "Connect Continuation Story", group: "Beyond Monetization", enabledWhenTabType: "beat_sequence", requiredTabLabel: "Beats" },
-    { id: "pipe_continuation_synth", label: "Write Continuation Pack", group: "Beyond Monetization", enabledWhenTabType: "story_logic", requiredTabLabel: "Story Logic" },
+    { id: "pipe_world_state", label: "Build World",       enabledWhenTabType: "series_overview", requiredTabLabel: "Series Overview" },
+    { id: "pipe_beat_gen",    label: "Suggest Beats",     enabledWhenTabType: "world_state",     requiredTabLabel: "World State" },
+    { id: "pipe_causality",   label: "Connect the Story", enabledWhenTabType: "beat_sequence",   requiredTabLabel: "Beats" },
+    { id: "pipe_plot_synth",  label: "Write Plots",       enabledWhenTabType: "story_logic",     requiredTabLabel: "Story Logic" },
   ];
   const [activeStep, setActiveStep] = useState<PipelineStepId | null>(null);
-  const selectedPipelineGroup: PipelineGroup = pipelineBranch === "regular" ? "Beyond Monetization" : "Monetization Runway";
   const mode: Mode = activeStep ?? "chat";
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -992,11 +973,6 @@ export default function AIChatSidebar({
 
   // ─── Pipeline step helpers ───
 
-  useEffect(() => {
-    if (!activeStep) return;
-    const activeGroup = PIPELINE_STEPS.find((step) => step.id === activeStep)?.group;
-    if (activeGroup && activeGroup !== selectedPipelineGroup) setActiveStep(null);
-  }, [activeStep, selectedPipelineGroup]);
   const isTabNonEmpty = useCallback((tabType: string): boolean => {
     const t = tabs.find((tab) => tab.type === tabType);
     if (!t?.content) return false;
@@ -1018,7 +994,7 @@ export default function AIChatSidebar({
       const stepLabel = PIPELINE_STEPS.find((s) => s.id === stepId)?.label ?? stepId;
       if (history.length > 0 || messages.length > 0) {
         const confirmed = window.confirm(
-          `Run "${stepLabel}"?\n\nThis will clear the current chat history and start fresh. Confirm the relevant tabs are updated before continuing.`
+          `Run "${stepLabel}"?\n\nThis will clear the current chat history and start fresh.`
         );
         if (!confirmed) return;
       }
@@ -1108,7 +1084,7 @@ export default function AIChatSidebar({
         </div>
       </div>
 
-      {/* ─── Actions (pipeline steps) ─── */}
+      {/* ─── Actions (pipeline steps) — compact 2×2 grid ─── */}
       <div className="flex-shrink-0 border-b border-border px-3 py-2">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</span>
@@ -1123,45 +1099,35 @@ export default function AIChatSidebar({
           )}
         </div>
         {activeTab.type !== "characters" && (
-          <div className="space-y-2">
-
-            <div>
-              <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {selectedPipelineGroup === "Monetization Runway"
-                  ? "EP1 to monetization"
-                  : "Post-monetization continuation"}
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                {PIPELINE_STEPS.filter((step) => step.group === selectedPipelineGroup).map((step) => {
-                  const tabFilled = isTabNonEmpty(step.enabledWhenTabType);
-                  const enabled = tabFilled && !isStreaming && !isAIBusy;
-                  const isActive = activeStep === step.id;
-                  return (
-                    <button
-                      key={step.id}
-                      type="button"
-                      onClick={() => handleStepClick(step.id)}
-                      disabled={!enabled}
-                      title={!tabFilled ? "Fill " + step.requiredTabLabel + " tab first" : undefined}
-                      className={`rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors
-                        ${isActive
-                          ? "bg-indigo-600 text-white"
-                          : enabled
-                          ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
-                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                        }`}
-                    >
-                      <span className="block">{step.label}</span>
-                      {!tabFilled && (
-                        <span className="block text-[9px] font-normal text-muted-foreground leading-tight mt-0.5">
-                          Fill {step.requiredTabLabel}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-1">
+            {PIPELINE_STEPS.map((step) => {
+              const tabFilled = isTabNonEmpty(step.enabledWhenTabType);
+              const enabled = tabFilled && !isStreaming && !isAIBusy;
+              const isActive = activeStep === step.id;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => handleStepClick(step.id)}
+                  disabled={!enabled}
+                  title={!tabFilled ? "Fill " + step.requiredTabLabel + " tab first" : undefined}
+                  className={`rounded px-2 py-1.5 text-left text-[11px] font-medium leading-tight transition-colors
+                    ${isActive
+                      ? "bg-indigo-600 text-white"
+                      : enabled
+                      ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                    }`}
+                >
+                  <span className="block">{step.label}</span>
+                  {!tabFilled && (
+                    <span className="block text-[9px] font-normal text-muted-foreground leading-tight mt-0.5">
+                      Fill {step.requiredTabLabel}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
         {activeTab.type === "characters" && (
@@ -1189,6 +1155,7 @@ export default function AIChatSidebar({
             </button>
           </div>
         )}
+        {/* Pre-defined episode creator — separate from the pipeline steps */}
         {(activeTab.type !== "characters" || characterProfilesComplete) && (
           <div className="mt-1.5 border-t border-border pt-1.5">
             <button

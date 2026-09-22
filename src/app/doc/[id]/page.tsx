@@ -31,8 +31,6 @@ export type ApplyToTabResult = {
   fellBack?: boolean;
 };
 
-type PipelineBranch = "monetization" | "regular";
-
 interface DocumentData {
   id: string;
   title: string;
@@ -102,7 +100,6 @@ export default function DocumentPage() {
     useState<NodeJS.Timeout | null>(null);
 
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
-  const [pipelineBranch, setPipelineBranch] = useState<PipelineBranch>("monetization");
 
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
@@ -958,8 +955,6 @@ export default function DocumentPage() {
             documentId={doc.id}
             modelId={selectedModelId}
             thinking={thinkingEnabled}
-            pipelineBranch={pipelineBranch}
-            onPipelineBranchChange={setPipelineBranch}
             onTabsChange={handleTabsChange}
           />
         ) : (
@@ -1029,7 +1024,6 @@ export default function DocumentPage() {
               editorIsEmpty={editorRef.current?.isEmpty() ?? !activeTabContent}
               modelId={selectedModelId}
               thinking={thinkingEnabled}
-              pipelineBranch={pipelineBranch}
               aiJob={aiJob}
               onAIJobApplied={handleAIJobApplied}
               onFlushPendingSave={async () => {
