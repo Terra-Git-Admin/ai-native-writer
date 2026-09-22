@@ -20,6 +20,7 @@ import {
   extractEpisodeNumber,
   type H3Section,
 } from "@/lib/ai/context-engine";
+import { parseCharacterProfiles } from "@/lib/ai/characters";
 import {
   PLOT_CHUNKS_SYSTEM_PROMPT,
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
@@ -420,11 +421,7 @@ export async function getCharacterQuestionnaireStatus(documentId: string): Promi
 }> {
   const docTabs = await loadDocumentTabs(documentId);
   const tagged = tiptapJsonToTagged(docTabs.characters?.content ?? null);
-  const matches = [...tagged.matchAll(/^\[H2\]\s*(.+?)\s*$/gim)];
-  const characters = matches.map((match, index) => ({
-    name: match[1].trim(),
-    body: tagged.slice(match.index! + match[0].length, matches[index + 1]?.index ?? tagged.length),
-  })).filter((entry) => entry.name.toLowerCase() !== "relationships" && entry.name.toLowerCase() !== "character name");
+  const characters = parseCharacterProfiles(tagged);
 
   if (!characters.length) return { needsPreparation: true, incompleteCharacters: [] };
   const required: string[][] = [["Personality"], ["Voice"], ["Sample Dialogue"], ["Emotional Dialogue", "Relationships"]];

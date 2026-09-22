@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { ENTITY_EXTRACTION_SYSTEM_PROMPT } from "@/lib/ai/prompts";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { normalizeCharacterName } from "@/lib/ai/characters";
 
 interface TiptapNode {
   type?: string;
@@ -25,9 +26,8 @@ function extractExistingNames(content: string | null): Set<string> {
         const text = (node.content ?? [])
           .map((n) => n.text ?? "")
           .join("")
-          .trim()
-          .toLowerCase();
-        if (text) names.add(text);
+          .trim();
+        if (text) names.add(normalizeCharacterName(text));
       }
     }
   } catch {
@@ -155,7 +155,7 @@ export async function POST(
   const extracted = parseExtractionOutput(text);
 
   const newEntries = extracted.filter(
-    (e) => e.name && !existing.has(e.name.toLowerCase().trim())
+    (e) => e.name && !existing.has(normalizeCharacterName(e.name))
   );
 
   if (newEntries.length === 0) {

@@ -11,7 +11,6 @@ import PlaygroundBeatsBlock from "./PlaygroundBeatsBlock";
 import {
   type PlaygroundBeat,
   parseBeatsFromTiptap,
-  renderLockedBeatsTagged,
   renderAllBeatsTagged,
   preserveLockState,
   BEAT_LINE_RE,
@@ -33,8 +32,6 @@ interface PlaygroundData {
     story_logic: PlaygroundBlockData | null;
   };
 }
-
-type BlockKey = "world_state" | "beat_sequence" | "story_logic";
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -190,12 +187,16 @@ function tabContentToTiptapJson(tab: { content: string | null } | undefined): st
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
+type PipelineBranch = "monetization" | "regular";
+
 interface PipelinePlaygroundProps {
   tab: TabRow;
   tabs: TabRow[];
   documentId: string;
   modelId: string;
   thinking: boolean;
+  pipelineBranch: PipelineBranch;
+  onPipelineBranchChange: (branch: PipelineBranch) => void;
   onTabsChange: (tabs: TabRow[]) => void;
 }
 
@@ -207,6 +208,8 @@ export default function PipelinePlayground({
   documentId,
   modelId,
   thinking,
+  pipelineBranch,
+  onPipelineBranchChange,
   onTabsChange,
 }: PipelinePlaygroundProps) {
   const data = useMemo(() => parsePlaygroundData(tab.content), [tab.content]);
@@ -418,12 +421,13 @@ export default function PipelinePlayground({
   // ─── Connect Story ─────────────────────────────────────────────────────────
 
   const runConnectStory = useCallback(async () => {
-    const locked = state.beats.filter((b) => b.locked);
-    if (!state.worldContent || locked.length === 0) return;
+    const finalizedWorldContent = worldStateTab?.content ?? null;
+    const finalizedBeatsContent = beatSeqTab?.content ?? null;
+    if (!finalizedWorldContent || !finalizedBeatsContent) return;
     dispatch({ type: "START_STREAMING" });
 
-    const worldTagged = tiptapJsonToTagged(state.worldContent);
-    const beatsTagged = renderLockedBeatsTagged(locked);
+    const worldTagged = tiptapJsonToTagged(finalizedWorldContent);
+    const beatsTagged = tiptapJsonToTagged(finalizedBeatsContent);
     const plotsTagged = plotsTab?.content ? tiptapJsonToTagged(plotsTab.content) : "";
     const instr = state.instructions.trim();
     const instrBlock = instr ? `INSTRUCTIONS:\n${instr}\n\n` : "";
@@ -441,7 +445,7 @@ export default function PipelinePlayground({
       const res = await fetch("/api/ai/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, mode: "pipe_causality", modelId, thinking }),
+        body: JSON.stringify({ messages, mode: pipelineBranch === "regular" ? "pipe_continuation_logic" : "pipe_causality", modelId, thinking }),
       });
 
       if (!res.ok) {
@@ -469,7 +473,7 @@ export default function PipelinePlayground({
     } catch {
       dispatch({ type: "ABORT_STREAMING" });
     }
-  }, [state.worldContent, state.beats, state.instructions, plotsTab, modelId, thinking, scheduleFlush]);
+  }, [worldStateTab, beatSeqTab, state.instructions, plotsTab, modelId, thinking, pipelineBranch, scheduleFlush]);
 
   const handleConnectStoryClick = useCallback(() => {
     if (state.storyContent) {
@@ -484,8 +488,21 @@ export default function PipelinePlayground({
   const worldEmpty = !state.worldContent;
   const beatsEmpty = state.beats.length === 0;
   const bothEmpty = worldEmpty && beatsEmpty;
-  const lockedCount = state.beats.filter((b) => b.locked).length;
-  const zeroLocked = !beatsEmpty && lockedCount === 0;
+  const finalizedWorldReady = Boolean(worldStateTab?.content);
+  const finalizedBeatsReady = Boolean(beatSeqTab?.content);
+  const branchCopy = pipelineBranch === "regular"
+    ? {
+        label: "Post-Monetization / Regular",
+        empty: <>Run <b>Build Continuation State</b> and <b>Suggest Continuation Beats</b> from the assistant, then use this page to choose the beats for the post-monetization path.</>,
+        storyPlaceholder: "Run Connect Continuation Story to generate the causal post-monetization path from your World State and Beats.",
+        connectLabel: "Connect Continuation Story",
+      }
+    : {
+        label: "EP1 to Monetization",
+        empty: <>Run <b>Build World</b> and <b>Suggest Beats</b> from the assistant, then use this page to choose the beats for the EP1-to-monetization path.</>,
+        storyPlaceholder: "Run Connect Story to generate the causal EP1-to-monetization path from your World State and Beats.",
+        connectLabel: "Connect Story",
+      };
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -493,12 +510,30 @@ export default function PipelinePlayground({
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 py-4">
         {/* Toolbar */}
-        <div className="flex items-center justify-between px-4 py-2 mb-4 border border-border rounded-lg bg-card">
-          <span className="text-sm font-semibold text-foreground">Playground</span>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 mb-4 border border-border rounded-lg bg-card">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-sm font-semibold text-foreground">Playground</span>
+            <span className="text-xs text-muted-foreground">{branchCopy.label}</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <label htmlFor="playground-pipeline-branch" className="text-xs font-medium text-muted-foreground">
+              Episode package
+            </label>
+            <select
+              id="playground-pipeline-branch"
+              value={pipelineBranch}
+              onChange={(e) => onPipelineBranchChange(e.target.value as PipelineBranch)}
+              disabled={state.isStreaming}
+              className="min-h-[44px] rounded border border-border bg-background px-3 py-2 text-sm text-foreground
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
+                disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <option value="monetization">EP1 to Monetization</option>
+              <option value="regular">Post-Monetization / Regular</option>
+            </select>
             <span aria-live="polite" className="text-xs text-muted-foreground">
               {state.saveStatus === "saving"
-                ? "Saving…"
+                ? "Saving..."
                 : state.saveStatus === "unsaved"
                 ? "Unsaved changes"
                 : "Saved"}
@@ -518,11 +553,10 @@ export default function PipelinePlayground({
             </button>
           </div>
         </div>
-
         {bothEmpty ? (
           <div className="rounded-lg border border-dashed border-border bg-muted px-4 py-8 text-center">
             <p className="text-sm text-muted-foreground">
-              Run <b>Build World</b> and <b>Suggest Beats</b> from the sidebar first, then return here to curate and connect the story.
+              {branchCopy.empty}
             </p>
           </div>
         ) : (
@@ -625,7 +659,7 @@ export default function PipelinePlayground({
                 onChange={(e) => dispatch({ type: "SET_INSTRUCTIONS", value: e.target.value })}
                 disabled={state.isStreaming}
                 rows={3}
-                placeholder="Specific guidance for Connect Story — e.g. keep the forgery unresolved, focus on Ha-eun's arc, aim for 3 episodes. Clears when you leave the tab."
+                placeholder="Specific guidance for Connect Story — e.g. aim the episode 7-8 monetization hook at the secret reveal, keep the forgery unresolved, protect character behavior. Clears when you leave the tab."
                 className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm
                   text-foreground placeholder:text-muted-foreground
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500
@@ -635,11 +669,6 @@ export default function PipelinePlayground({
 
             {/* Connect Story button */}
             <div className="my-4">
-              {zeroLocked && (
-                <p className="mb-2 text-xs text-amber-600 dark:text-amber-400 text-center">
-                  Lock at least one beat to generate
-                </p>
-              )}
               {state.confirmConnectStory && (
                 <div
                   role="alertdialog"
@@ -666,7 +695,7 @@ export default function PipelinePlayground({
                 </div>
               )}
               <button
-                disabled={worldEmpty || lockedCount === 0 || state.isStreaming}
+                disabled={!finalizedWorldReady || !finalizedBeatsReady || state.isStreaming}
                 onClick={handleConnectStoryClick}
                 className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white
                   hover:bg-indigo-700 transition-colors duration-200 min-h-[44px]
@@ -682,7 +711,7 @@ export default function PipelinePlayground({
                     Connecting…
                   </span>
                 ) : (
-                  "Connect Story"
+                  branchCopy.connectLabel
                 )}
               </button>
             </div>
@@ -717,7 +746,7 @@ export default function PipelinePlayground({
                 <PlaygroundBlock
                   label="Story Logic"
                   content={state.storyContent}
-                  placeholder="Run Connect Story to generate the causal narrative from your World State and Beats."
+                  placeholder={branchCopy.storyPlaceholder}
                   isStreaming={state.isStreaming}
                   streamingText={state.streamingText}
                   onContentChange={handleStoryChange}

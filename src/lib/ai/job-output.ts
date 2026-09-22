@@ -1,3 +1,4 @@
+import { parseCharacterProfiles } from "@/lib/ai/characters";
 import type { PromptKind } from "@/lib/ai/jobs";
 
 export interface JobResultJson {
@@ -123,9 +124,7 @@ export function validateJobOutput(
 
   if (kind === "prepare_character_questionnaire") {
     const hasCharactersHeading = /^\[H1\]\s*Characters\s*$/im.test(trimmed);
-    const headings = [...trimmed.matchAll(/^\[H2\]\s*(.+?)\s*$/gim)]
-      .map((match) => match[1].trim())
-      .filter((name) => !/^(?:Relationships|Character Name)$/i.test(name));
+    const headings = parseCharacterProfiles(trimmed).map((profile) => profile.name);
     const hasQuestionnaireText = /Personality Q:|Voice Q:|Personality answer:|Voice answer:|Sample dialogue answer:|Relationship Q|Your answer/i.test(trimmed);
     if (trimmed.length < 40 || !hasCharactersHeading || headings.length === 0 || hasQuestionnaireText) {
       return { ok: false, reason: "Character cast preparation was incomplete. Nothing was replaced." };
