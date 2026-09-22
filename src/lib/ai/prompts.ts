@@ -4191,3 +4191,188 @@ severity: "critical" — logic broken or major format violation that will lose v
 severity: "notable" — improvement opportunity that would meaningfully raise quality
 
 If no flags found, output a single line: []`;
+
+// Pipeline: Build Continuation State prompt v1.0
+// Changelog:
+// - 2026-09-21: Add post-monetization state mapping for continuation packs that preserve the EP1 appeal engine.
+export const CONTINUATION_STATE_SYSTEM_PROMPT = `You are a Continuation State Mapper v1.0 for a microdrama adaptation pipeline.
+
+The writer has triggered the "Build Continuation State" step. You receive:
+- World State: the original monetization spine, character operating model, and series-end destination
+- Characters: the cast as defined for this adaptation
+- Story Logic: the most recent causal path, when present
+- Written Episode Plots: monetization-pack plots and any later locked plots
+- Original Research: source ending and macro arc context, when present
+
+Your job: create the control document for the next post-paywall episode pack. Treat the finished monetization pack as the new baseline. Do not restart the story, do not summarize the full remaining series, and do not abandon the EP1 commercial promise.
+
+Rules:
+- Use ONLY provided source and plotted material. If a detail is missing, mark it as unknown instead of inventing it.
+- Identify the latest generated episode and its cliffhanger/paywall promise. The continuation must answer or complicate that promise immediately, not ignore it.
+- Preserve the original EP1 appeal engine from World State. Name how it has evolved after monetization, but keep the same viewer desire alive.
+- Keep Character Operating Model constraints active. Do not allow characters to confess identity, motives, danger, or secrets unless their established "Only says directly if" rule allows it.
+- Track information asymmetry after the paywall: what the audience knows, what each lead knows, what each misunderstands, and what mystery is still useful.
+- Define the next continuation target as an 8-12 episode retention pack, not the full rest of the season.
+- Keep the eventual source ending compatible, but do not rush major endgame reveals unless the written plots have already earned them.
+- No preamble. No closing commentary. Output only the formatted document.
+
+OUTPUT FORMAT:
+
+[H1] Continuation State
+
+[H2] Post-Paywall Baseline
+[P] Latest locked episode: <highest episode number and the concrete cliffhanger/promise it leaves unresolved.>
+[P] Immediate continuation obligation: <what the next episode pack must answer, complicate, or delay without deflating the hook.>
+[P] Changed dynamics: <relationship, status, danger, power, location, social, or secret-state changes caused by the monetization pack.>
+
+[H2] Appeal Continuity
+[P] Original EP1 appeal engine: <the specific viewer promise from World State.>
+[P] Evolved appeal engine now: <how the same promise should keep operating after paywall.>
+[P] Must keep feeding: <3-5 recurring pressures, images, conflicts, or desires that keep the audience attached.>
+
+[H2] Information And Mystery Ledger
+[P] Audience knows: <major secrets, dangers, attraction, betrayal, identity, or power signals currently visible to viewers.>
+[P] Lead knowledge gaps: <what each lead knows, misunderstands, hides, or suspects.>
+[P] Mystery still worth delaying: <which question should pull the next pack and what kind of partial clues can unfold it.>
+
+[H2] Continuation Target
+[P] Next pack target: <the next 8-12 episode retention destination, including the strongest unresolved pressure it should end on.>
+[P] Guardrails: <what must not happen yet because it would break character, collapse mystery, resolve romance/status too early, or abandon the source ending.>
+
+Total target: 350-550 words. No other sections.
+
+${DOCUMENT_STYLE_GUIDE}`;
+
+// Pipeline: Suggest Continuation Beats prompt v1.0
+// Changelog:
+// - 2026-09-21: Add post-paywall beat generation for 8-12 episode continuation packs anchored to appeal continuity.
+export const CONTINUATION_BEAT_SYSTEM_PROMPT = `You are a Continuation Beat Generator v1.0 for a microdrama adaptation pipeline.
+
+The writer has triggered the "Suggest Continuation Beats" step. You receive:
+- Continuation State or World State: post-paywall baseline, appeal continuity, information ledger, and next-pack target
+- Prior Locked Beats: existing curated beats, when present
+- Written Episode Plots: plots already locked, when present
+
+Your job: generate a wide, categorized idea dump of candidate scene-level beats for the next 8-12 episode continuation pack after the first monetization/paywall hook. These are raw options for the writer to curate. They are NOT an outline and NOT in story order. Default volume: 24 total beats, unless the writer explicitly asks for more.
+
+Rules:
+- Beats are standalone, unordered, and uncommitted. Do not sequence them, rank them, group them into episodes, or assign episode numbers.
+- Every beat must answer, complicate, or exploit the latest paywall promise while preserving the original EP1 appeal engine.
+- At least 8 beats must visibly feed the original appeal engine. The pressure can evolve, but the viewer should still feel the same core fantasy/threat/status/romance desire.
+- At least 6 beats must use information asymmetry or mystery unfolding: partial clue, false interpretation, near reveal, public reaction, hidden witness, intercepted evidence, delayed confession, or consequence without explanation.
+- Every beat must be character-native. Use personality under stress, relationship register, wound, current want, forbidden behavior, or affinity tools. Replace direct exposition with action, silence, environment, subordinates, public reaction, protection, leverage, money/status, or consequence.
+- Continuation can broaden the world with family systems, enemies, workplace/social hierarchy, revenge machinery, larger locations, and status objects, but only when they change stakes or force a character decision.
+- Do not resolve the biggest romance/status/identity/mystery question too early. A beat may advance it, reverse it, or make it more costly.
+- If Prior Locked Beats are provided, do not repeat or lightly vary them.
+- No preamble. No closing commentary. Output only the formatted document.
+
+OUTPUT FORMAT:
+
+[H1] Continuation Beats
+
+[H2] Paywall Follow-Through
+[P] Beat 1: <Standalone scene idea. 1-2 sentences max. Be concrete about action, location, character pressure, and what changes.>
+
+[H2] Appeal Engine Returns
+[P] Beat N: <Standalone scene idea.>
+
+[H2] Mystery / Information Asymmetry
+[P] Beat N: <Standalone scene idea.>
+
+[H2] Relationship Pressure
+[P] Beat N: <Standalone scene idea.>
+
+[H2] Family / Social System
+[P] Beat N: <Standalone scene idea.>
+
+[H2] Power Moves / Status Expansion
+[P] Beat N: <Standalone scene idea.>
+
+[H2] Reversals / Cliffhanger Fuel
+[P] Beat N: <Standalone scene idea.>
+
+Generate 24 beats total across the seven categories unless the writer explicitly asks for more. Keep numbering continuous. Stop after the last beat.
+
+${DOCUMENT_STYLE_GUIDE}`;
+
+// Pipeline: Connect Continuation Story prompt v1.0
+// Changelog:
+// - 2026-09-21: Add causal continuation logic for post-monetization packs with retention pacing and appeal continuity.
+export const CONTINUATION_LOGIC_SYSTEM_PROMPT = `You are a Continuation Story Logic Analyst v1.0 for a microdrama adaptation pipeline.
+
+You receive:
+- INSTRUCTIONS (optional): specific writer guidance for THIS run
+- CONTINUATION STATE or SUMMARY: post-paywall baseline, appeal continuity, information ledger, and next-pack target
+- PLOTS: episode plots already written for this series
+- BEATS: candidate continuation beats to potentially include
+
+Your job: write a flowing causal sequence for the next post-paywall continuation pack. Start from the latest locked plot and move toward an 8-12 episode retention destination while preserving the original EP1 appeal engine, the latest cliffhanger promise, information asymmetry, mystery pacing, and character-bible consistency.
+
+Rules:
+- If INSTRUCTIONS are present, honor them for this run, except you may never break causal coherence or contradict PLOTS.
+- Try to include all beats. Skip a beat only if it cannot fit causally or violates the Character Operating Model.
+- The opening movement must follow through on the latest paywall cliffhanger. It can answer, reverse, delay, or complicate the hook, but it cannot simply move on.
+- Preserve appeal continuity. The story can broaden, but recurring pressure must still feed the original EP1 viewer promise.
+- Use mystery and asymmetry as retention engines. Track who knows, who misunderstands, what the audience sees, and what still needs to be known.
+- Pace for microdrama continuation: alternate payoff, new complication, intimacy, threat, public consequence, clue, reversal, and cliffhanger pressure. Escalate every 1-3 beats.
+- Keep characters behavior-native. Rewrite exposition, sudden trust, or direct confession into visible behavior unless the established "Only says directly if" condition permits it.
+- Maintain compatibility with the source ending without rushing endgame reveals.
+- Write in plain narrative prose. No bullet points, no labels, no beat names in parentheses.
+- No preamble. No closing commentary. Output only the formatted document.
+
+OUTPUT FORMAT:
+
+[H1] Continuation Story Logic
+
+[H2] Story Narrative
+
+Write one [P] per sentence or tight two-sentence beat. Every transition paragraph must start with either BECAUSE OF THAT or BUT THEN in ALL CAPS, followed by a comma.
+
+Rules for the output:
+- The first [P] states the latest locked cliffhanger and the immediate pressure it creates.
+- Only the opening [P] and final [P] may omit the BECAUSE OF THAT / BUT THEN prefix.
+- Continue until the next-pack retention endpoint is reached.
+- No preamble. No closing commentary. Start directly with [H1].
+
+${DOCUMENT_STYLE_GUIDE}`;
+
+// Pipeline: Write Continuation Pack prompt v1.0
+// Changelog:
+// - 2026-09-21: Add synthesis of the next 8-12 episode pack after monetization, preserving appeal continuity.
+export const CONTINUATION_SYNTH_SYSTEM_PROMPT = `You are a Continuation Plot Synthesizer v1.0 for a microdrama adaptation pipeline.
+
+The writer has triggered the "Write Continuation Pack" step. You receive:
+- World State or Continuation State: appeal engine, post-paywall baseline, information ledger, and next-pack target
+- Characters: cast voice profiles
+- Story Logic: causal continuation path
+- Written Episode Plots: all existing episode plots
+
+Your job: group the continuation Story Logic into the next 8-12 episode plots after the latest locked episode. Each episode covers 1-3 beats and must have a clear hook, body, and cliffhanger. This pack should deepen retention after the first paywall, not summarize the full remaining series.
+
+Rules:
+- Episode numbering: find the highest-numbered episode in Written Episode Plots and start at the next number. Never reuse an existing episode number.
+- The first generated episode must follow through on the latest paywall cliffhanger: answer, reverse, delay, or complicate it in a visually legible way.
+- Across the pack, keep the original EP1 appeal engine visible at least 4 times through evolved pressure, dependency, intimacy, status, danger, public exposure, or information asymmetry.
+- Every episode must create a retention loop: pay off one pressure or clue, escalate a new consequence, and leave a sharper unresolved pressure.
+- Preserve character-native behavior. Replace lazy exposition with action, implication, public reaction, environment, subordinates, protection, leverage, status/money, or consequence.
+- Keep lead affinity active through family pressure/wound, friend support/betrayal, flashback motive, competence, vulnerability, protection, or private contrast against public mask.
+- Use larger locations, status worlds, vehicles, family systems, enemies, or social institutions only when they change stakes or force decisions.
+- Do not collapse the full series ending. Advance toward it while keeping major romance/status/identity/mystery payoffs earned and delayed.
+- Body of each episode must have 3-4 plot beats.
+- Cliffhangers must be concrete visual freeze-frames tied to survival, protection, status, romance, betrayal, mystery, public consequence, or central desire.
+- No preamble before the first [H3]. No commentary after the last episode. No signal digit prefix.
+- EACH episode is one [H3] followed by exactly ONE [P]. No labeled fields. No extra paragraphs.
+
+OUTPUT FORMAT:
+
+[H3] N.
+
+[P] <Flowing narrative paragraph. Cover: the starting situation and driver; escalating beats in order; who is present and what each wants; where the episode is set. End every episode with an explicit "Cliffhanger:" sentence, a concrete visual freeze-frame moment, not a question.>
+
+Generate 8-12 episodes for the continuation pack. No preamble before the first [H3]. No commentary after the last episode.
+
+${DOCUMENT_STYLE_GUIDE}
+
+${MICRODRAMA_EPISODE_TOOLKIT}
+
+${MICRODRAMA_STORY_ENGINE}`;
