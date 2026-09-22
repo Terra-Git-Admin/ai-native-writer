@@ -347,3 +347,21 @@ Decision log and session summaries. Read at every session start.
   1. Fix 429 on `/api/admin/prune-versions` (planning model's fix) → run prune → delete route
   2. 429/rate-limit fix on AI calls (GA model, Thinking toggle, onError)
   3. Imagen 3 Vertex AI fix
+
+
+## Session - 2026-09-18 (Pitch Lab flow correction)
+
+- **Workflow:** Pitch Lab has two destinations: Create ideas and Shortlisted ideas. The Create ideas section holds the current unsorted ideas; it has no batch navigation or history. Shortlisting moves an idea out of the unsorted list. Regeneration replaces generated ideas and keeps shortlisted and discarded ideas. Discarded ideas remain a low-priority link at the bottom.
+- **Local testing:** Development defaults to 20 labeled sample ideas for framework, close adaptation, and loose adaptation runs. Sample refinement works without a provider. No AI request is sent unless PITCH_LAB_USE_REAL_AI=true is explicitly set for local development.
+- **Verification:** Targeted ESLint and npm run build passed. Local /pitch-lab and workspace API responded HTTP 200 on port 3001. Interactive browser QA remains for the user to run.
+
+## Prompt changelog - 2026-09-18
+- Pitch Lab generation prompt v1.1: require every framework or adaptation idea title to be one or two words, centered on a powerful, specific noun or verb; avoid generic or numbered labels. Local placeholders now use concise titles under the same rule.
+
+
+## Session - 2026-09-22 (Pitch Lab live release prep)
+
+- Rebuilt Pitch Lab release work on latest `origin/main` after VM/Cloudflare cutover and monetization/admin playground commits.
+- Pitch Lab remains admin-only and is additionally gated by `PITCH_LAB_ENABLED` and `NEXT_PUBLIC_PITCH_LAB_ENABLED`; direct `/pitch-lab` page access is blocked when disabled or non-admin.
+- RCA release path: use VM DB read-only inspection before enablement, keep `0010_pitch_lab_reconcile` as the forward-only reconcile migration, and prefer flag disable over rollback for Pitch Lab issues.
+- Local verification: focused Pitch Lab ESLint passed with docs `<img>` warnings only; `npm run build` passed. Full repo lint still has unrelated existing React compiler/typing errors.

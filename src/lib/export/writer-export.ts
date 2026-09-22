@@ -123,7 +123,7 @@ export async function buildExport(
   const baseUrl =
     requestBaseUrl ??
     process.env.NEXT_PUBLIC_APP_URL ??
-    "https://ai-native-writer-936494534526.asia-south1.run.app";
+    "https://writer.plotpix.ai";
 
   return {
     exportId,
