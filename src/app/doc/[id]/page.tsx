@@ -18,6 +18,7 @@ import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
+import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -116,6 +117,8 @@ export default function DocumentPage() {
 
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const [predefinedLabOpen, setPredefinedLabOpen] = useState(false);
+  const [predefinedLabMounted, setPredefinedLabMounted] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityPanelRequest, setQualityPanelRequest] = useState<{
     episodeTabId: string;
@@ -349,6 +352,7 @@ export default function DocumentPage() {
       // 3. Swap the active tab. Editor remount now reads the freshly-fetched
       // activeTabContent derived from updated tabs state.
       setActiveTabId(tabId);
+      setPredefinedLabOpen(false);
       // KEEP the AI sidebar open across tab switches — the writer expects
       // the assistant to follow them as they navigate. The sidebar component
       // re-scopes its state to the new (documentId, activeTabId) on its own.
@@ -390,6 +394,15 @@ export default function DocumentPage() {
     } catch { /* fall back to cached content */ }
     setEditorContentKey((k) => k + 1);
   }, [params.id]);
+
+  const handlePredefinedLabRefreshTabs = useCallback(async (): Promise<TabRow[]> => {
+    try {
+      await editorRef.current?.flushPendingSave?.();
+    } catch {
+      /* best-effort refresh; fetchTabs still gives the lab the latest saved snapshot */
+    }
+    return fetchTabs();
+  }, [fetchTabs]);
 
   const handleAIJobApplied = useCallback(
     async (landedTabId: string) => {
@@ -701,7 +714,7 @@ export default function DocumentPage() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
-  const canExportToProduction = doc.isOwner || isAdmin;
+  const canExport = doc.isOwner || isAdmin;
   const exportFromNumber = Number(exportFromEpisode);
   const exportToNumber = Number(exportToEpisode);
   const exportRangeReady =
@@ -780,6 +793,7 @@ export default function DocumentPage() {
                 setAiSidebarOpen(false);
                 setVersionHistoryOpen(false);
                 setPromptsOpen(false);
+                setPredefinedLabOpen(false);
               }
             }}
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -804,6 +818,7 @@ export default function DocumentPage() {
                     setAiSidebarOpen(false);
                     setCommentSidebarOpen(false);
                     setPromptsOpen(false);
+                    setPredefinedLabOpen(false);
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -821,6 +836,7 @@ export default function DocumentPage() {
                     setCommentSidebarOpen(false);
                     setVersionHistoryOpen(false);
                     setPromptsOpen(false);
+                    setPredefinedLabOpen(false);
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -831,9 +847,30 @@ export default function DocumentPage() {
               >
                 AI Assistant
               </button>
+              <button
+                onClick={async () => {
+                  const nextOpen = !predefinedLabOpen;
+                  if (nextOpen) {
+                    setPredefinedLabMounted(true);
+                    setAiSidebarOpen(false);
+                    setCommentSidebarOpen(false);
+                    setVersionHistoryOpen(false);
+                    setPromptsOpen(false);
+                    await handlePredefinedLabRefreshTabs();
+                  }
+                  setPredefinedLabOpen(nextOpen);
+                }}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  predefinedLabOpen
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                Labs
+              </button>
             </>
           )}
-          {canExportToProduction && (
+          {canExport && (
             <button
               onClick={() => {
                 setExportModalOpen(true);
@@ -842,9 +879,13 @@ export default function DocumentPage() {
                 setCopyStatus("idle");
               }}
               disabled={exportLoading}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-slate-300"
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                exportModalOpen
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
             >
-              Export to Production
+              Export
             </button>
           )}
           {doc?.isOwner && activeTab?.type === "workbook" && (
@@ -888,36 +929,6 @@ export default function DocumentPage() {
                 </button>
               </>
             )}
-          {isAdmin &&
-            activeTab?.type === "microdrama_plots" && (
-              <button
-                onClick={() => setPlotScanOpen((o) => !o)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  plotScanOpen
-                    ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                    : "bg-violet-600 text-white hover:bg-violet-700"
-                }`}
-              >
-                Plot Scan
-              </button>
-            )}
-          <button
-            onClick={() => {
-              setPromptsOpen(!promptsOpen);
-              if (!promptsOpen) {
-                setAiSidebarOpen(false);
-                setCommentSidebarOpen(false);
-                setVersionHistoryOpen(false);
-              }
-            }}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              promptsOpen
-                ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            Prompts
-          </button>
           {session?.user?.name && (
             <div className="ml-2 flex items-center gap-2">
               {session.user.image && (
@@ -950,7 +961,19 @@ export default function DocumentPage() {
           onForceTabRefresh={handleForceTabRefresh}
         />
 
-        {activeTab?.type === "pipeline_playground" ? (
+        {predefinedLabMounted && (
+          <div className={predefinedLabOpen ? "contents" : "hidden"}>
+            <PredefinedLabStageWorkspace
+              documentId={doc.id}
+              tabs={tabs}
+              modelId={selectedModelId}
+              thinking={thinkingEnabled}
+              onRefreshTabs={handlePredefinedLabRefreshTabs}
+            />
+          </div>
+        )}
+
+        {!predefinedLabOpen && activeTab?.type === "pipeline_playground" ? (
           <PipelinePlayground
             key={activeTabId}
             tab={activeTab}
@@ -963,7 +986,7 @@ export default function DocumentPage() {
             onPipelineBranchChange={setPipelineBranch}
             onTabsChange={handleTabsChange}
           />
-        ) : (
+        ) : !predefinedLabOpen ? (
           <Editor
             key={`${activeTabId}-${editorContentKey}`}
             ref={editorRef}
@@ -979,7 +1002,7 @@ export default function DocumentPage() {
             onHeadingsChange={setActiveTabHeadings}
             onCommentMarkPositions={setCommentMarkPositions}
           />
-        )}
+        ) : null}
 
         {commentSidebarOpen && (
           <div className="w-80 border-l border-border bg-muted">
@@ -1165,7 +1188,7 @@ export default function DocumentPage() {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
-                  Export to Production
+                  Export
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Share this link with Comics Dash to import the last saved Writer snapshot.
