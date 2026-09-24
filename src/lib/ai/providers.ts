@@ -51,7 +51,14 @@ export async function getAIModel(modelId: string, thinking: boolean = false) {
     );
   }
 
-  const apiKey = decrypt(settings.apiKey);
+  let apiKey: string;
+  try {
+    apiKey = decrypt(settings.apiKey);
+  } catch {
+    throw new Error(
+      `The saved ${provider} API key cannot be decrypted in this local environment. Re-enter it in Admin > AI Settings.`
+    );
+  }
 
   if (provider === "anthropic") {
     const anthropic = createAnthropic({ apiKey });

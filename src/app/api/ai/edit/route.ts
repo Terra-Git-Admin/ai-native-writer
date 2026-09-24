@@ -20,12 +20,18 @@ import {
   CONTINUATION_BEAT_SYSTEM_PROMPT,
   CONTINUATION_LOGIC_SYSTEM_PROMPT,
   CONTINUATION_SYNTH_SYSTEM_PROMPT,
+  PREDEFINED_LAB_BEATS_PROMPT,
+  PREDEFINED_LAB_DRAFT_PROMPT,
+  PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
+  PREDEFINED_LAB_ITERATE_PROMPT,
 } from "@/lib/ai/prompts";
+import { getActivePredefinedLabDialogueGuide } from "@/lib/ai/predefined-lab-dialogue-guide";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
   | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
-  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth";
+  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth"
+  | "predef_lab_beats" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -41,6 +47,10 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   pipe_continuation_beats: CONTINUATION_BEAT_SYSTEM_PROMPT,
   pipe_continuation_logic: CONTINUATION_LOGIC_SYSTEM_PROMPT,
   pipe_continuation_synth: CONTINUATION_SYNTH_SYSTEM_PROMPT,
+  predef_lab_beats: PREDEFINED_LAB_BEATS_PROMPT,
+  predef_lab_draft: PREDEFINED_LAB_DRAFT_PROMPT,
+  predef_lab_iterate: PREDEFINED_LAB_ITERATE_PROMPT,
+  predef_lab_dialogue_pass: PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
 };
 const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "edit",
@@ -56,6 +66,10 @@ const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "pipe_continuation_beats",
   "pipe_continuation_logic",
   "pipe_continuation_synth",
+  "predef_lab_beats",
+  "predef_lab_draft",
+  "predef_lab_iterate",
+  "predef_lab_dialogue_pass",
 ]);
 
 const ADMIN_ONLY_MODES: ReadonlySet<Mode> = new Set<Mode>([
@@ -133,13 +147,31 @@ export async function POST(req: Request) {
     }
   }
 
-  const systemPrompt = await getSystemPrompt(safeMode);
+  const baseSystemPrompt = await getSystemPrompt(safeMode);
+  const dialogueGuide =
+    safeMode === "predef_lab_dialogue_pass"
+      ? await getActivePredefinedLabDialogueGuide()
+      : "";
+  const systemPrompt =
+    safeMode === "predef_lab_dialogue_pass"
+      ? `${baseSystemPrompt}\n\n## Dialogue Quality Guide\n${dialogueGuide}`
+      : baseSystemPrompt;
 
   try {
+    const requestedModelId =
+      safeMode === "predef_lab_dialogue_pass"
+        ? "gemini-3.1-pro-preview"
+        : modelId || "claude-sonnet-4-20250514";
     const model = await getAIModel(
-      modelId || "claude-sonnet-4-20250514",
+      requestedModelId,
       true
     );
+    logTrace("ai.edit.model_resolved", {
+      mode: safeMode,
+      requestedModelId: modelId || null,
+      modelId: requestedModelId,
+      forcedProvider: safeMode === "predef_lab_dialogue_pass" ? "google" : null,
+    });
 
     const streamOptions: Parameters<typeof streamText>[0] = {
       model,
