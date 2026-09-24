@@ -8,7 +8,7 @@ import { nanoid } from "nanoid";
 import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import { buildPitchLabSampleIdeas, isPitchLabSampleMode } from "@/lib/ai/pitch-lab-samples";
-import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
+import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { splitTabByH3, tiptapJsonToTagged, extractEpisodeNumber } from "@/lib/ai/context-engine";
@@ -23,6 +23,31 @@ import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
 
 const SOURCE_LIMIT = 60_000;
 const WRITER_SOURCE_BLOCK_LIMIT = 20_000;
+
+function logPitchLabGenerationOutput(input: {
+  workspaceId: string;
+  generationType: "framework" | "adaptation";
+  adaptationStyle: "close" | "loose";
+  isPlaceholder: boolean;
+  sourceCount: number;
+  ideas: { id: string; title: string; ideaText: string }[];
+}) {
+  console.info("[pitch-lab] generation.output", {
+    workspaceId: input.workspaceId,
+    generationType: input.generationType,
+    adaptationStyle: input.adaptationStyle,
+    isPlaceholder: input.isPlaceholder,
+    sourceCount: input.sourceCount,
+    ideaCount: input.ideas.length,
+    ideas: input.ideas.map((idea, index) => ({
+      index,
+      ideaId: idea.id,
+      title: idea.title,
+      ideaText: idea.ideaText,
+      wordCount: idea.ideaText.split(/\s+/).filter(Boolean).length,
+    })),
+  });
+}
 
 function parseIdeas(text: string): { title: string; ideaText: string }[] {
   const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
@@ -208,7 +233,7 @@ function buildExternalAdaptationSource(title: string, url: string, text: string)
 
 export async function POST(req: Request) {
   const session = await auth();
-  const accessError = requirePitchLabAdmin(session);
+  const accessError = requirePitchLabAccess(session);
   if (accessError) return accessError;
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await ensurePitchLabOwner(session);
@@ -258,7 +283,7 @@ export async function POST(req: Request) {
       isPlaceholder = true;
     } else {
       const providers = await getConfiguredProviders();
-      const framework = await getActivePitchLabFramework();
+      const tasteBrief = await getActivePitchLabFramework();
       const candidates = getPitchLabModelCandidates(providers);
       if (!candidates.length) return NextResponse.json({ error: "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
 
@@ -267,7 +292,7 @@ export async function POST(req: Request) {
         try {
           const result = await generateText({
             model: await getAIModel(candidate.modelId),
-            system: buildPitchLabGenerationSystemPrompt(framework),
+            system: buildPitchLabGenerationSystemPrompt(tasteBrief),
             prompt: buildPitchLabGenerationPrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial }),
             maxOutputTokens: 14000,
             maxRetries: 0,
@@ -323,6 +348,14 @@ export async function POST(req: Request) {
       }));
       tx.insert(pitchIdeas).values(generated).run();
       return { workspaceId, ideas: generated };
+    });
+    logPitchLabGenerationOutput({
+      workspaceId: saved.workspaceId,
+      generationType,
+      adaptationStyle,
+      isPlaceholder,
+      sourceCount: sources.length,
+      ideas: saved.ideas,
     });
     return NextResponse.json({ ...saved, isPlaceholder });
   } catch (err) {

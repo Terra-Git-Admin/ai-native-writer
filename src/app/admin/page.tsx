@@ -28,13 +28,20 @@ interface AIConfig {
   openai: boolean;
 }
 
+interface PitchLabTasteBrief {
+  content: string;
+  source: "db" | "default";
+  updatedAt: string | null;
+}
+
 export default function AdminPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [aiConfig, setAiConfig] = useState<AIConfig | null>(null);
-  const [tab, setTab] = useState<"users" | "docs" | "ai">("users");
+  const [tasteBrief, setTasteBrief] = useState<PitchLabTasteBrief | null>(null);
+  const [tab, setTab] = useState<"users" | "docs" | "pitch" | "ai">("users");
 
   // AI settings form
   const [anthropicKey, setAnthropicKey] = useState("");
@@ -42,21 +49,31 @@ export default function AdminPage() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [aiSaving, setAiSaving] = useState<string | null>(null);
   const [aiSaveError, setAiSaveError] = useState<string | null>(null);
+  const [tasteDraft, setTasteDraft] = useState("");
+  const [tasteSaving, setTasteSaving] = useState(false);
+  const [tasteSaved, setTasteSaved] = useState(false);
+  const [tasteSaveError, setTasteSaveError] = useState<string | null>(null);
 
   // Transfer ownership
   const [transferDocId, setTransferDocId] = useState<string | null>(null);
   const [transferUserId, setTransferUserId] = useState("");
 
   const fetchData = useCallback(async () => {
-    const [usersRes, docsRes, aiRes] = await Promise.all([
+    const [usersRes, docsRes, aiRes, tasteRes] = await Promise.all([
       fetch("/api/admin/users"),
       fetch("/api/documents"),
       fetch("/api/admin/ai-settings"),
+      fetch("/api/admin/pitch-lab/taste-brief"),
     ]);
     if (usersRes.ok) setUsers(await usersRes.json());
     if (docsRes.ok) setDocs(await docsRes.json());
     if (aiRes.ok) {
       setAiConfig(await aiRes.json());
+    }
+    if (tasteRes.ok) {
+      const data = (await tasteRes.json()) as PitchLabTasteBrief;
+      setTasteBrief(data);
+      setTasteDraft(data.content);
     }
   }, []);
 
@@ -126,6 +143,35 @@ export default function AdminPage() {
     }
   };
 
+  const saveTasteBrief = async () => {
+    const content = tasteDraft.trim();
+    if (!content) {
+      setTasteSaveError("Taste brief cannot be empty.");
+      return;
+    }
+    setTasteSaving(true);
+    setTasteSaved(false);
+    setTasteSaveError(null);
+    try {
+      const res = await fetch("/api/admin/pitch-lab/taste-brief", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? `Save failed with HTTP ${res.status}`);
+      }
+      setTasteSaved(true);
+      await fetchData();
+      window.setTimeout(() => setTasteSaved(false), 2000);
+    } catch (err) {
+      setTasteSaveError(err instanceof Error ? err.message : "Could not save Taste Brief.");
+    } finally {
+      setTasteSaving(false);
+    }
+  };
+
   if (session?.user?.role !== "admin") return null;
 
   const ownerName = (ownerId: string) => {
@@ -149,7 +195,7 @@ export default function AdminPage() {
       <main className="mx-auto max-w-5xl px-6 py-6">
         {/* Tabs */}
         <div className="mb-6 flex gap-1 border-b border-border">
-          {(["users", "docs", "ai"] as const).map((t) => (
+          {(["users", "docs", "pitch", "ai"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -159,7 +205,7 @@ export default function AdminPage() {
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t === "users" ? "Users" : t === "docs" ? "Documents" : "AI Settings"}
+              {t === "users" ? "Users" : t === "docs" ? "Documents" : t === "pitch" ? "Pitch Lab" : "AI Settings"}
             </button>
           ))}
         </div>
@@ -295,6 +341,62 @@ export default function AdminPage() {
                 No documents yet
               </p>
             )}
+          </div>
+        )}
+
+        {/* Pitch Lab Tab */}
+        {tab === "pitch" && (
+          <div className="max-w-3xl space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Pitch Lab Taste Brief</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                Hidden creative calibration used by Pitch Lab generation and refinement. Writers see only story ideas, not this framework text.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <label htmlFor="pitch-lab-taste-brief" className="text-sm font-medium">
+                  Active hidden taste brief
+                </label>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full bg-muted px-2 py-0.5">
+                    {tasteBrief?.source === "db" ? "Saved override" : "Default"}
+                  </span>
+                  {tasteSaved && <span className="font-medium text-green-600">Saved</span>}
+                </div>
+              </div>
+
+              {tasteSaveError && (
+                <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                  {tasteSaveError}
+                </div>
+              )}
+
+              <textarea
+                id="pitch-lab-taste-brief"
+                value={tasteDraft}
+                onChange={(e) => {
+                  setTasteDraft(e.target.value);
+                  setTasteSaved(false);
+                }}
+                rows={18}
+                className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm leading-6 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-950"
+              />
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Keep this story-first: taste direction, positive/negative examples, and calibration notes. Avoid credentials or private source data.
+                </p>
+                <button
+                  onClick={saveTasteBrief}
+                  disabled={tasteSaving || !tasteDraft.trim()}
+                  className="min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {tasteSaving ? "Saving..." : "Save Taste Brief"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

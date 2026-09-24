@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { buildCanonicalTabRows, CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
 import { documents, pitchIdeas, pitchWorkspaces, tabs } from "@/lib/db/schema";
 import { parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
-import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
+import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
 
@@ -21,9 +21,31 @@ function paragraphDoc(title: string, ideaText: string) {
   });
 }
 
+function logPitchLabFinalizedOutput(input: {
+  workspaceId: string;
+  ideaId: string;
+  documentId: string;
+  title: string;
+  originalText: string;
+  finalText: string;
+  refinementCount: number;
+}) {
+  console.info("[pitch-lab] finalize.output", {
+    workspaceId: input.workspaceId,
+    ideaId: input.ideaId,
+    documentId: input.documentId,
+    title: input.title,
+    refinementCount: input.refinementCount,
+    originalWordCount: input.originalText.split(/\s+/).filter(Boolean).length,
+    finalWordCount: input.finalText.split(/\s+/).filter(Boolean).length,
+    originalText: input.originalText,
+    finalText: input.finalText,
+  });
+}
+
 export async function POST(req: Request) {
   const session = await auth();
-  const accessError = requirePitchLabAdmin(session);
+  const accessError = requirePitchLabAccess(session);
   if (accessError) return accessError;
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await ensurePitchLabOwner(session);
@@ -36,12 +58,23 @@ export async function POST(req: Request) {
   if (!workspace) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
 
   try {
-    const documentId = db.transaction((tx) => {
+    const promoted = db.transaction((tx) => {
       const idea = tx.select().from(pitchIdeas).where(eq(pitchIdeas.id, ideaId)).get();
       if (!idea || idea.workspaceId !== workspace.id) throw new Error("Idea not found.");
-      if (idea.status === "promoted" && idea.promotedDocumentId) return idea.promotedDocumentId;
+      const envelope = parsePitchIdeaEnvelope(idea.ideaText);
+      if (idea.status === "promoted" && idea.promotedDocumentId) {
+        return {
+          documentId: idea.promotedDocumentId,
+          ideaId: idea.id,
+          title: idea.title,
+          originalText: envelope.originalText.trim(),
+          finalText: envelope.currentText.trim(),
+          refinementCount: envelope.turns.length,
+          alreadyPromoted: true,
+        };
+      }
       if (idea.status !== "shortlisted") throw new Error("Shortlist this idea before finalizing it.");
-      const currentText = parsePitchIdeaEnvelope(idea.ideaText).currentText.trim();
+      const currentText = envelope.currentText.trim();
       if (!currentText) throw new Error("Idea plot is required.");
 
       const id = nanoid(12);
@@ -58,9 +91,28 @@ export async function POST(req: Request) {
       tx.update(pitchIdeas).set({
         title, status: "promoted", promotedDocumentId: id, updatedAt: now,
       }).where(eq(pitchIdeas.id, ideaId)).run();
-      return id;
+      return {
+        documentId: id,
+        ideaId: idea.id,
+        title,
+        originalText: envelope.originalText.trim(),
+        finalText: currentText,
+        refinementCount: envelope.turns.length,
+        alreadyPromoted: false,
+      };
     });
-    return NextResponse.json({ id: documentId });
+    if (!promoted.alreadyPromoted) {
+      logPitchLabFinalizedOutput({
+        workspaceId: workspace.id,
+        ideaId: promoted.ideaId,
+        documentId: promoted.documentId,
+        title: promoted.title,
+        originalText: promoted.originalText,
+        finalText: promoted.finalText,
+        refinementCount: promoted.refinementCount,
+      });
+    }
+    return NextResponse.json({ id: promoted.documentId });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not promote this idea.";
     const status = message === "Idea not found." ? 404 : 400;

@@ -10,7 +10,7 @@ import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import { buildPitchLabRefinementPrompt, buildPitchLabRefinementSystemPrompt, cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
-import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
+import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 
 function buildCompactPriorTurns(turns: ReturnType<typeof parsePitchIdeaEnvelope>["turns"]): string {
@@ -43,7 +43,7 @@ function parseRefinedIdea(raw: string, fallbackTitle: string): { title: string; 
 
 export async function POST(req: Request) {
   const session = await auth();
-  const accessError = requirePitchLabAdmin(session);
+  const accessError = requirePitchLabAccess(session);
   if (accessError) return accessError;
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await ensurePitchLabOwner(session);
@@ -74,13 +74,13 @@ export async function POST(req: Request) {
       if (!candidates.length) return NextResponse.json({ error: "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
       let lastError: unknown = null;
       let refinedIdea: { title: string; ideaText: string } | null = null;
-      const framework = await getActivePitchLabFramework();
+      const tasteBrief = await getActivePitchLabFramework();
       const priorTurns = buildCompactPriorTurns(envelope.turns);
       for (const candidate of candidates) {
         try {
           const result = await generateText({
             model: await getAIModel(candidate.modelId),
-            system: buildPitchLabRefinementSystemPrompt(framework),
+            system: buildPitchLabRefinementSystemPrompt(tasteBrief),
             prompt: buildPitchLabRefinementPrompt({ currentTitle: updatedTitle, currentText: ideaText, originalText: envelope.originalText, priorTurns, instruction }),
             maxOutputTokens: 1800,
             maxRetries: 0,
