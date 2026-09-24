@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchWorkspaces } from "@/lib/db/schema";
-import { requirePitchLabAdmin } from "@/lib/pitch-lab-access";
+import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
-  const accessError = requirePitchLabAdmin(session);
+  const accessError = requirePitchLabAccess(session);
   if (accessError) return accessError;
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;

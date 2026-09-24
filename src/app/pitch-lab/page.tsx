@@ -13,6 +13,42 @@ const SAMPLE_TITLE_PREFIX = "[Sample] ";
 type Idea = { id: string; title: string; ideaText: string; status: "generated" | "shortlisted" | "discarded" | "promoted"; promotedDocumentId?: string | null; isPlaceholder?: boolean };
 type WriterDoc = { id: string; title: string; ownerName?: string | null };
 type GenerationMode = "framework" | "adaptation";
+type OperationKind = "generate" | "regenerate" | "refine" | "save" | "restore" | "finalize";
+type OperationState = { kind: OperationKind; startedAt: number };
+type Notice = { tone: "success" | "info"; title: string; body?: string };
+
+const OPERATION_COPY: Record<OperationKind, { label: string; stages: string[]; slowHint: string }> = {
+  generate: {
+    label: "Generating pilot ideas",
+    stages: ["Reading source and Taste Brief", "Drafting 4 pitch plots", "Checking titles and JSON", "Saving ideas to Pitch Lab"],
+    slowHint: "Real AI generation can take 45-90 seconds with larger source material.",
+  },
+  regenerate: {
+    label: "Regenerating ideas",
+    stages: ["Reading your new direction", "Drafting replacement ideas", "Checking titles and JSON", "Saving the new set"],
+    slowHint: "Regeneration waits for the full model response before replacing ideas.",
+  },
+  refine: {
+    label: "Refining current idea",
+    stages: ["Reading current version", "Applying refinement direction", "Validating title and plot", "Saving version history"],
+    slowHint: "Refine uses the AI model when real-AI mode is enabled, so it can take a minute.",
+  },
+  save: {
+    label: "Saving manual edits",
+    stages: ["Reading edits", "Updating current version", "Saving version state"],
+    slowHint: "This is usually quick; if it waits, the local database may be busy.",
+  },
+  restore: {
+    label: "Restoring version",
+    stages: ["Loading selected version", "Replacing current version", "Saving restored text"],
+    slowHint: "This is usually quick; if it waits, the local database may be busy.",
+  },
+  finalize: {
+    label: "Creating Writer doc",
+    stages: ["Preparing current version", "Creating canonical Writer tabs", "Copying plot into Microdrama Plots", "Opening the document"],
+    slowHint: "Finalize creates a local Writer document and then opens it.",
+  },
+};
 
 function displayTitle(title: string) {
   return title.startsWith(SAMPLE_TITLE_PREFIX) ? title.slice(SAMPLE_TITLE_PREFIX.length) : title;
@@ -24,6 +60,20 @@ function markSampleIdea(idea: Idea): Idea {
 
 function currentIdeaText(idea: Idea) {
   return parsePitchIdeaEnvelope(idea.ideaText).currentText;
+}
+
+function formatElapsed(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return minutes ? `${minutes}:${String(remainder).padStart(2, "0")}` : `${remainder}s`;
+}
+
+function stageIndexForElapsed(seconds: number, stageCount: number) {
+  if (stageCount <= 1) return 0;
+  if (seconds < 8) return 0;
+  if (seconds < 25) return Math.min(1, stageCount - 1);
+  if (seconds < 55) return Math.min(2, stageCount - 1);
+  return stageCount - 1;
 }
 
 export default function PitchLabPage() {
@@ -45,8 +95,10 @@ export default function PitchLabPage() {
   const [ideaDraft, setIdeaDraft] = useState("");
   const [ideaTitle, setIdeaTitle] = useState("");
   const [ideaInstructions, setIdeaInstructions] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [operation, setOperation] = useState<OperationState | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [view, setView] = useState<"create" | "shortlist">("create");
   const [showGenerator, setShowGenerator] = useState(true);
   const [showDiscarded, setShowDiscarded] = useState(false);
@@ -56,11 +108,40 @@ export default function PitchLabPage() {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const ideaTextRef = useRef<HTMLTextAreaElement | null>(null);
   const pitchLabEnabled = isPitchLabEnabledForClient();
-  const isAdmin = session?.user?.role === "admin";
+  const isBusy = Boolean(operation);
+
+  useEffect(() => {
+    if (!operation) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const updateElapsed = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - operation.startedAt) / 1000)));
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [operation]);
+
+  function startOperation(kind: OperationKind) {
+    setOperation({ kind, startedAt: Date.now() });
+    setElapsedSeconds(0);
+    setError(null);
+    setNotice(null);
+  }
+
+  function finishOperation(noticeValue?: Notice) {
+    setOperation(null);
+    if (noticeValue) setNotice(noticeValue);
+  }
+
+  function failOperation(message: string) {
+    setOperation(null);
+    setNotice(null);
+    setError(message);
+  }
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
-    if (!pitchLabEnabled || !isAdmin) return;
+    if (!pitchLabEnabled) return;
     if (status === "authenticated") {
       fetch("/api/pitch-lab/workspace").then((r) => r.ok ? r.json() : null).then((data) => {
         if (!data?.workspace) return;
@@ -82,7 +163,7 @@ export default function PitchLabPage() {
         if (Array.isArray(rows)) setDocs(rows.map((row) => ({ id: row.id, title: row.title, ownerName: row.ownerName ?? null })));
       }).catch(() => setDocs([])).finally(() => setDocsLoading(false));
     }
-  }, [isAdmin, pitchLabEnabled, router, status]);
+  }, [pitchLabEnabled, router, status]);
 
   const generated = useMemo(() => ideas.filter((idea) => idea.status === "generated"), [ideas]);
   const shortlisted = useMemo(() => ideas.filter((idea) => idea.status === "shortlisted"), [ideas]);
@@ -121,6 +202,8 @@ export default function PitchLabPage() {
   const savedTitle = selectedIdea ? displayTitle(selectedIdea.title) : "";
   const savedText = selectedEnvelope?.currentText ?? "";
   const hasUnsavedEdits = Boolean(selectedIdea && (ideaTitle.trim() !== savedTitle.trim() || ideaDraft.trim() !== savedText.trim()));
+  const operationCopy = operation ? OPERATION_COPY[operation.kind] : null;
+  const currentStageIndex = operationCopy ? stageIndexForElapsed(elapsedSeconds, operationCopy.stages.length) : 0;
 
   useEffect(() => {
     setSelectedIdeaId(selectedIdea?.id ?? null);
@@ -141,8 +224,7 @@ export default function PitchLabPage() {
   }, [generated.length, shortlisted.length, view]);
 
   async function generate(regenerate = false) {
-    setLoading(true);
-    setError(null);
+    startOperation(regenerate ? "regenerate" : "generate");
     try {
       const response = await fetch("/api/pitch-lab/generate", {
         method: "POST",
@@ -168,10 +250,13 @@ export default function PitchLabPage() {
       setShowGenerator(false);
       setShowDiscarded(false);
       setInstructions("");
+      finishOperation({
+        tone: "success",
+        title: regenerate ? "New ideas are ready" : `${newIdeas.length} pilot ideas are ready`,
+        body: "Review the cards below and shortlist the strongest candidates.",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate ideas.");
-    } finally {
-      setLoading(false);
+      failOperation(err instanceof Error ? err.message : "Could not generate ideas.");
     }
   }
 
@@ -195,8 +280,7 @@ export default function PitchLabPage() {
   async function saveIdea(instructionOverride = ideaInstructions) {
     if (!selectedIdea) return;
     const instruction = instructionOverride.trim();
-    setLoading(true);
-    setError(null);
+    startOperation(instruction ? "refine" : "save");
     try {
       const response = await fetch("/api/pitch-lab/ideas/update", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -216,21 +300,28 @@ export default function PitchLabPage() {
         setIdeaInstructions("");
         setCurrentVersionNotice("New current version generated. Review it, then click Edit if you want to change it manually.");
         setIsCurrentEditable(false);
+        finishOperation({
+          tone: "success",
+          title: "Refined version is ready",
+          body: "The Current version has been replaced. Review the highlighted Current version before finalizing.",
+        });
       } else {
         setCurrentVersionNotice("Manual edits saved to the Current version.");
         setIsCurrentEditable(false);
+        finishOperation({
+          tone: "success",
+          title: "Manual edits saved",
+          body: "The Current version now includes your edits.",
+        });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update idea.");
-    } finally {
-      setLoading(false);
+      failOperation(err instanceof Error ? err.message : "Could not update idea.");
     }
   }
 
   async function restoreSnapshot(ideaText: string) {
     if (!selectedIdea) return;
-    setLoading(true);
-    setError(null);
+    startOperation("restore");
     try {
       const response = await fetch("/api/pitch-lab/ideas/update", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -248,10 +339,13 @@ export default function PitchLabPage() {
         : idea));
       setCurrentVersionNotice("Restored text is now the Current version. Review it, then click Edit if you want to change it manually.");
       setIsCurrentEditable(false);
+      finishOperation({
+        tone: "success",
+        title: "Version restored",
+        body: "The restored text is now the Current version.",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not restore idea.");
-    } finally {
-      setLoading(false);
+      failOperation(err instanceof Error ? err.message : "Could not restore idea.");
     }
   }
 
@@ -259,11 +353,11 @@ export default function PitchLabPage() {
     if (!selectedIdea) return;
     if (hasUnsavedEdits) {
       setError("Save or discard edits before finalizing.");
+      setNotice(null);
       setShowFinalizeConfirm(false);
       return;
     }
-    setLoading(true);
-    setError(null);
+    startOperation("finalize");
     try {
       const response = await fetch("/api/pitch-lab/promote", {
         method: "POST",
@@ -272,21 +366,30 @@ export default function PitchLabPage() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Could not create Writer document.");
+      finishOperation({
+        tone: "success",
+        title: "Writer doc created",
+        body: "Opening the finalized document now.",
+      });
       router.push(`/doc/${data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create Writer document.");
-    } finally {
-      setLoading(false);
+      failOperation(err instanceof Error ? err.message : "Could not create Writer document.");
     }
   }
 
   function requestFinalize() {
     if (hasUnsavedEdits) {
       setError("Save or discard edits before finalizing.");
+      setNotice(null);
       setShowFinalizeConfirm(false);
       return;
     }
     setError(null);
+    setNotice({
+      tone: "info",
+      title: "Ready to finalize",
+      body: "Confirm below to create a Writer document from the Current version.",
+    });
     setShowFinalizeConfirm(true);
   }
 
@@ -297,36 +400,11 @@ export default function PitchLabPage() {
 
   if (status === "loading" || !session?.user) return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-muted-foreground">Loading...</main>;
 
-  if (!pitchLabEnabled || !isAdmin) {
+  if (!pitchLabEnabled) {
     return (
       <main className="mx-auto max-w-5xl px-6 py-12">
         <p className="text-sm font-medium text-muted-foreground">Pitch Lab is disabled in this environment while the Writer portal and database migration are being verified.</p>
       </main>
-    );
-  }
-
-  if (session.user.role !== "admin") {
-    return (
-      <div className="min-h-screen">
-        <header className="border-b border-border bg-card">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-xl font-bold">AI Writer</Link>
-            <div className="flex items-center gap-4">
-              <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">Home</Link>
-              <Link href="/docs" className="text-sm text-muted-foreground hover:text-foreground">View docs</Link>
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
-        <main className="mx-auto max-w-3xl px-6 py-12">
-          <section className="rounded-xl border border-border bg-card p-6">
-            <p className="text-sm font-medium text-indigo-600">Pitch Lab</p>
-            <h1 className="mt-2 text-2xl font-semibold">Admin testing only</h1>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">Pitch Lab is currently limited to admins while we test the prompt flow in production.</p>
-            <Link href="/docs" className="mt-5 inline-flex min-h-11 items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Back to docs</Link>
-          </section>
-        </main>
-      </div>
     );
   }
 
@@ -354,6 +432,31 @@ export default function PitchLabPage() {
             <button onClick={() => { if (shortlisted.length > 0) { setSelectedIdeaId(shortlisted[0].id); setView("shortlist"); } }} disabled={shortlisted.length === 0} aria-current={view === "shortlist" ? "page" : undefined} className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${view === "shortlist" ? "bg-indigo-600 text-white" : "border border-border text-muted-foreground hover:bg-muted"}`}>Shortlisted ideas ({shortlisted.length})</button>
           </nav>
         </div>
+
+        {operation && operationCopy && <div role="status" aria-live="polite" aria-busy="true" className="mb-5 rounded-xl border border-indigo-300 bg-indigo-50 p-4 text-indigo-950 shadow-sm dark:border-indigo-900 dark:bg-indigo-950/30 dark:text-indigo-100">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">{operationCopy.label}</p>
+              <p className="mt-1 text-sm text-indigo-800 dark:text-indigo-200">Elapsed {formatElapsed(elapsedSeconds)}. {elapsedSeconds >= 45 ? operationCopy.slowHint : "The page will update when the result is saved."}</p>
+            </div>
+            <span className="rounded-full border border-indigo-300 bg-white px-3 py-1 text-xs font-semibold text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950 dark:text-indigo-100">{formatElapsed(elapsedSeconds)}</span>
+          </div>
+          <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {operationCopy.stages.map((stage, index) => {
+              const isCurrent = index === currentStageIndex;
+              const isDone = index < currentStageIndex;
+              return <li key={stage} className={`rounded-lg border px-3 py-2 text-xs font-medium ${isCurrent ? "border-indigo-500 bg-white text-indigo-950 dark:bg-indigo-950 dark:text-indigo-100" : isDone ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100" : "border-indigo-200 bg-indigo-100/50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/20 dark:text-indigo-300"}`}>
+                <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px]">{isDone ? "OK" : index + 1}</span>
+                {stage}
+              </li>;
+            })}
+          </ol>
+        </div>}
+
+        {notice && !operation && <div role="status" aria-live="polite" className={`mb-5 rounded-xl border px-4 py-3 text-sm shadow-sm ${notice.tone === "success" ? "border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100" : "border-sky-300 bg-sky-50 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100"}`}>
+          <p className="font-semibold">{notice.title}</p>
+          {notice.body && <p className="mt-1">{notice.body}</p>}
+        </div>}
 
         {error && <div role="alert" className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">{error}</div>}
 
@@ -424,7 +527,7 @@ export default function PitchLabPage() {
 
               <p className="mt-5 text-sm text-muted-foreground">{generationMode === "framework" ? "The active plot framework guides the ideas without being shown here." : "Choose at least one source before generating adapted ideas."}</p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button onClick={() => generate()} disabled={loading || (generationMode === "adaptation" && !hasSource)} className="min-h-11 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Generating..." : "Generate"}</button>
+                <button onClick={() => generate()} disabled={isBusy || (generationMode === "adaptation" && !hasSource)} className="min-h-11 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "generate" ? "Generating..." : "Generate"}</button>
                 {generated.length > 0 && <button onClick={() => setShowGenerator(false)} className="min-h-11 px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>}
               </div>
             </>}
@@ -458,7 +561,7 @@ export default function PitchLabPage() {
               <label htmlFor="regeneration-instructions" className="block text-sm font-medium">Optional instructions for the next ideas</label>
               <textarea id="regeneration-instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Add a direction for the next ideas, or leave this blank." />
               <p className="mt-2 text-sm text-muted-foreground">Regenerating replaces ideas that have not been shortlisted. Your shortlist and discarded ideas stay available.</p>
-              <button onClick={() => generate(true)} disabled={loading || (generationMode === "adaptation" && !hasSource)} className="mt-3 min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50">{loading ? "Generating..." : "Regenerate"}</button>
+              <button onClick={() => generate(true)} disabled={isBusy || (generationMode === "adaptation" && !hasSource)} className="mt-3 min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50">{operation?.kind === "regenerate" ? "Regenerating..." : "Regenerate"}</button>
             </div>}
             {discarded.length > 0 && <button onClick={() => setShowDiscarded((show) => !show)} className="mt-5 min-h-11 px-1 text-xs text-muted-foreground underline decoration-muted-foreground/40 underline-offset-4 hover:text-foreground">{showDiscarded ? "Hide discarded ideas" : `View discarded ideas (${discarded.length})`}</button>}
           </section>
@@ -505,7 +608,7 @@ export default function PitchLabPage() {
               <label htmlFor="idea-instructions" className="block text-sm font-medium">Refine the current text</label>
               <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Example: make the betrayal sharper and keep the ending as a cliffhanger." />
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button onClick={() => saveIdea(ideaInstructions)} disabled={loading || !ideaInstructions.trim()} className="min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50">{loading && ideaInstructions.trim() ? "Refining..." : "Refine"}</button>
+                <button onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className="min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "refine" ? "Refining..." : "Refine"}</button>
                 <span className="text-sm text-muted-foreground">Refine uses the current text above, including unsaved edits, and replaces it with the new version.</span>
               </div>
               </div>
@@ -518,9 +621,9 @@ export default function PitchLabPage() {
                   <p className="mt-1 text-sm text-muted-foreground">Use these only after the Current version reads the way you want.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <button onClick={() => saveIdea("")} disabled={loading || !hasUnsavedEdits} className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">{loading && !ideaInstructions.trim() ? "Saving..." : "Save edits"}</button>
-                  {hasUnsavedEdits && <button onClick={() => { setIdeaTitle(savedTitle); setIdeaDraft(savedText); setIsCurrentEditable(false); }} disabled={loading} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Discard edits</button>}
-                  <button onClick={() => setIdeaStatus(selectedIdea.id, "discarded")} disabled={loading} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Reject</button>
+                  <button onClick={() => saveIdea("")} disabled={isBusy || !hasUnsavedEdits} className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "save" ? "Saving..." : "Save edits"}</button>
+                  {hasUnsavedEdits && <button onClick={() => { setIdeaTitle(savedTitle); setIdeaDraft(savedText); setIsCurrentEditable(false); }} disabled={isBusy} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Discard edits</button>}
+                  <button onClick={() => setIdeaStatus(selectedIdea.id, "discarded")} disabled={isBusy} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">Reject</button>
                 </div>
               </div>
               <div className="mt-4 rounded-lg border border-border bg-background p-4">
@@ -530,14 +633,14 @@ export default function PitchLabPage() {
                     <p className="mt-1 text-xs text-muted-foreground">Finalize creates a Writer doc from Current version only. Iteration history is not copied.</p>
                     {hasUnsavedEdits && <p className="mt-2 text-sm font-medium text-amber-700 dark:text-amber-300">Save or discard edits before finalizing.</p>}
                   </div>
-                  <button onClick={requestFinalize} disabled={loading || hasUnsavedEdits} className="min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Finalize</button>
+                  <button onClick={requestFinalize} disabled={isBusy || hasUnsavedEdits} className="min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">Finalize</button>
                 </div>
-                {showFinalizeConfirm && <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
-                  <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Confirm final version</p>
-                  <p className="mt-1 text-sm text-amber-900 dark:text-amber-200">This will create a Writer doc titled <span className="font-medium">{ideaTitle || savedTitle}</span> using only the Current version text above. No iteration history or older turns will be included.</p>
+                {showFinalizeConfirm && <div className="mt-4 rounded-lg border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                  <p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">Confirm Writer doc creation</p>
+                  <p className="mt-1 text-sm text-emerald-900 dark:text-emerald-200">This will create a Writer doc titled <span className="font-medium">{ideaTitle || savedTitle}</span> using only the Current version text above. No iteration history or older turns will be included.</p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <button onClick={promoteIdea} disabled={loading} className="min-h-11 rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{loading ? "Creating doc..." : "Yes, create Writer doc"}</button>
-                    <button onClick={() => setShowFinalizeConfirm(false)} disabled={loading} className="min-h-11 rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800 dark:text-amber-100 dark:hover:bg-amber-950/60">Cancel</button>
+                    <button onClick={promoteIdea} disabled={isBusy} className="min-h-11 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "finalize" ? "Creating doc..." : "Yes, create Writer doc"}</button>
+                    <button onClick={() => setShowFinalizeConfirm(false)} disabled={isBusy} className="min-h-11 rounded-lg border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-950 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-950/60">Cancel</button>
                   </div>
                 </div>}
               </div>
@@ -560,7 +663,7 @@ export default function PitchLabPage() {
                         <p className="font-medium text-muted-foreground">{item.label}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{item.instruction}</p>
                       </div>
-                      <button onClick={() => restoreSnapshot(item.ideaText)} disabled={loading || isCurrent} className="min-h-9 rounded-md border border-border px-3 py-1 text-xs font-medium hover:bg-background disabled:cursor-not-allowed disabled:opacity-50">{isCurrent ? "Current" : "Restore"}</button>
+                      <button onClick={() => restoreSnapshot(item.ideaText)} disabled={isBusy || isCurrent} className="min-h-9 rounded-md border border-border px-3 py-1 text-xs font-medium hover:bg-background disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "restore" && !isCurrent ? "Restoring..." : isCurrent ? "Current" : "Restore"}</button>
                     </div>
                     <p className="mt-3 whitespace-pre-wrap leading-6 text-muted-foreground">{item.ideaText}</p>
                   </article>;

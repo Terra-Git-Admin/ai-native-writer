@@ -4,6 +4,15 @@ import { db } from "@/lib/db";
 import { prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { seedPromptsFromCode } from "@/lib/ai/seed-prompts";
+import { PITCH_LAB_TASTE_BRIEF_PROMPT_ID } from "@/lib/ai/pitch-lab-framework";
+
+function visiblePromptsForSession<T extends { id: string }>(
+  rows: T[],
+  session: { user?: { role?: string } } | null
+): T[] {
+  if (session?.user?.role === "admin") return rows;
+  return rows.filter((row) => row.id !== PITCH_LAB_TASTE_BRIEF_PROMPT_ID);
+}
 
 // GET /api/prompts — list all prompts (readable by everyone)
 export async function GET() {
@@ -19,10 +28,10 @@ export async function GET() {
   if (all.length === 0) {
     await seedPromptsFromCode();
     const reseeded = await db.select().from(prompts);
-    return NextResponse.json(reseeded);
+    return NextResponse.json(visiblePromptsForSession(reseeded, session));
   }
 
-  return NextResponse.json(all);
+  return NextResponse.json(visiblePromptsForSession(all, session));
 }
 
 // PUT /api/prompts — update a prompt (admin only)
