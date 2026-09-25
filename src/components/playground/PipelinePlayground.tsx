@@ -6,6 +6,7 @@ import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { taggedToTiptapJson } from "@/lib/ai/tagged-tiptap";
 import { stripTagsForDisplay } from "@/components/ai/AIChatSidebar";
 import { usePlaygroundAutosave } from "@/lib/ai/usePlaygroundAutosave";
+import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
 import PlaygroundBlock from "./PlaygroundBlock";
 import PlaygroundBeatsBlock from "./PlaygroundBeatsBlock";
 import {
@@ -664,6 +665,7 @@ export default function PipelinePlayground({
                 id="playground-instructions"
                 value={state.instructions}
                 onChange={(e) => dispatch({ type: "SET_INSTRUCTIONS", value: e.target.value })}
+                onKeyDown={handleTextareaLineMoveKeyDown}
                 disabled={state.isStreaming}
                 rows={3}
                 placeholder="Specific guidance for Connect Story — e.g. aim the episode 7-8 monetization hook at the secret reveal, keep the forgery unresolved, protect character behavior. Clears when you leave the tab."

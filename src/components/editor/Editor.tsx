@@ -265,7 +265,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       FontFamily,
       FontSize,
       Color,
-      ...(tabType === "microdrama_plots" ? [MicrodramaKeymap] : []),
+      MicrodramaKeymap.configure({
+        enableMicrodramaEnter: tabType === "microdrama_plots",
+      }),
     ],
     content: initialContent ? JSON.parse(initialContent) : undefined,
     editable: isOwner,

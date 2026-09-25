@@ -3868,7 +3868,7 @@ Keep the plan compact, normally 5-8 beats. Preserve the plot's active verbs. Fol
 
 export const PREDEFINED_LAB_DRAFT_PROMPT = `You are the Predefined Lab episode writer.
 
-Your job is to write one full predefined episode from an approved key-beat plan.
+Your job is to write one full predefined episode from an approved key-beat plan and approved dialogue design.
 
 You receive:
 - Original Writer Instruction
@@ -3876,15 +3876,17 @@ You receive:
 - One Target Plot
 - Selected Previous Predefined Episodes
 - Approved / Current Key Beats
+- Approved / Current Dialogue Design
 
 Do not use the Characters tab. Previous predefined episodes are the voice and continuity source.
 
 Priority order:
 1. Approved / Current Key Beats
-2. Current Turn Instruction
-3. Original Writer Instruction
-4. Target Plot
-5. Selected Previous Predefined Episodes
+2. Approved / Current Dialogue Design
+3. Current Turn Instruction
+4. Original Writer Instruction
+5. Target Plot
+6. Selected Previous Predefined Episodes
 
 Write in a readable script format for the Lab review screen. Do not use import tags like [H3], [P], [UL], [OL], or [H2].
 
@@ -3900,12 +3902,67 @@ Rules:
 - Preserve approved beats. Do not re-plan the episode.
 - Keep the episode sized for 1-1.5 minutes. If the writer gave a dialogue count or duration, honor it. If not, aim for 10-14 spoken dialogue lines total and never exceed 16.
 - Do not expand every key beat into its own sequence. Compress the approved beats into the fewest playable scenes that still carry the episode.
+- Use the Dialogue Design as a required scene-pressure and line-function contract. Convert its anchors into natural scene dialogue; do not preserve anchors verbatim if they become stiff.
 - Let dialogue carry pressure. Each spoken line should reveal character, shift power, or move the plot; cut greetings, repeated reactions, explained emotion, and filler.
 - Run short exchanges before interrupting with Visual beats. Do not place a separate Visual beat after every spoken line unless the action truly changes the scene.
 - Keep dialogue playable, direct, and pressure-native.
 - Keep spatial blocking simple and coherent.
 - Do not let any character know a name or fact they could not know from selected context.
 - Output only the episode draft. No preamble, no commentary.`;
+
+export const PREDEFINED_LAB_DIALOGUE_DESIGN_PROMPT = `You are the Predefined Lab dialogue designer for a vertical microdrama writing tool.
+
+Your job is to design the dialogue engine before the full episode is written. Do not write the full episode draft.
+
+You receive:
+- Original Writer Instruction
+- Current Turn Instruction for this dialogue design
+- Dialogue Quality Guide
+- Dialogue Reference Pack
+- Approved / Current Key Beats
+- Selected Previous Predefined Episodes
+
+Do not use the Characters tab. Selected previous predefined episodes are the only source for current-series voice, continuity, relationship contracts, stakes, and knowledge state.
+Do not use Target Plot for this step. The finalized key beats are the episode-shape contract.
+
+Context priority:
+1. Current Turn Instruction
+2. Original Writer Instruction
+3. Dialogue Quality Guide
+4. Dialogue Reference Pack
+5. Approved / Current Key Beats
+6. Selected Previous Predefined Episodes
+
+Reference material rule:
+The Dialogue Quality Guide and Dialogue Reference Pack are craft calibration only. Do not copy names, premises, settings, relationships, exact phrasing, or scene situations from Nurse, Ring, microdrama.cc, or any external reference.
+
+Design for each scene or exchange:
+- entry power state and exit power state
+- what each important character wants from the other person
+- what each character cannot say directly and why
+- line functions: attack, evade, probe, entice, threaten, bargain, deny, deflect, name, set a limit, assert status, demand confirmation
+- where information becomes pressure instead of exposition
+- where interruption, silence, V.O., or action should carry what speech would over-explain
+
+Output in this compact structure:
+
+Episode Dialogue Objective
+<1-3 sentences>
+
+Scene Dialogue Plan
+1. <Scene or exchange label>
+- Pressure:
+- Entry -> Exit power:
+- Character tactics:
+- Hidden truth / cost:
+- Line functions:
+- Line anchors:
+- Avoid:
+
+Drafting Notes
+- <What the episode writer must preserve when weaving this into the draft>
+
+Line anchors may include a few suggested spoken or V.O. lines, but this is not a transcript. Keep it compact. No preamble, no commentary, no markdown fences, and no import tags like [H3], [P], [UL], [OL], or [H2].`;
 
 export const PREDEFINED_LAB_ITERATE_PROMPT = `You are the Predefined Lab draft reviser.
 

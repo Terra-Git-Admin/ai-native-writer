@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import type { PlaygroundBeat } from "@/lib/ai/playground-beats";
+import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
 
 // ─── Lock icons ───────────────────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ function BeatRow({ beat, onTextChange, onToggleLock, disabled }: BeatRowProps) {
         ref={textareaRef}
         value={beat.text}
         onChange={handleInput}
+        onKeyDown={handleTextareaLineMoveKeyDown}
         disabled={disabled}
         rows={1}
         className="flex-1 resize-none overflow-hidden bg-transparent text-sm leading-relaxed outline-none text-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed"

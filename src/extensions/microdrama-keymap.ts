@@ -1,5 +1,51 @@
-import { Extension } from "@tiptap/core";
+import { Editor, Extension } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
+
+function moveTopLevelBlocks(editor: Editor, direction: "up" | "down") {
+  const { state, view } = editor;
+  const { doc, selection } = state;
+  const from = selection.from;
+  const to = selection.to;
+  const blocks: Array<{ index: number; start: number; end: number; nodeSize: number }> = [];
+
+  doc.forEach((node, offset, index) => {
+    const start = offset;
+    const end = offset + node.nodeSize;
+    if (end >= from && start <= to) {
+      blocks.push({ index, start, end, nodeSize: node.nodeSize });
+    }
+  });
+
+  if (blocks.length === 0) return false;
+  const first = blocks[0];
+  const last = blocks[blocks.length - 1];
+  if (direction === "up" && first.index === 0) return false;
+  if (direction === "down" && last.index >= doc.childCount - 1) return false;
+
+  const rangeFrom = first.start;
+  const rangeTo = last.end;
+  const slice = doc.slice(rangeFrom, rangeTo);
+
+  if (direction === "up") {
+    const previous = doc.child(first.index - 1);
+    const previousStart = rangeFrom - previous.nodeSize;
+    const tr = state.tr.delete(rangeFrom, rangeTo).insert(previousStart, slice.content);
+    const delta = previous.nodeSize;
+    tr.setSelection(TextSelection.create(tr.doc, Math.max(1, selection.from - delta), Math.max(1, selection.to - delta)));
+    tr.scrollIntoView();
+    view.dispatch(tr);
+    return true;
+  }
+
+  const next = doc.child(last.index + 1);
+  const insertAt = rangeTo + next.nodeSize;
+  const tr = state.tr.delete(rangeFrom, rangeTo).insert(insertAt - (rangeTo - rangeFrom), slice.content);
+  const delta = next.nodeSize;
+  tr.setSelection(TextSelection.create(tr.doc, selection.from + delta, selection.to + delta));
+  tr.scrollIntoView();
+  view.dispatch(tr);
+  return true;
+}
 
 // Enter in a paragraph on the microdrama_plots tab:
 // Split at cursor → keep first half as paragraph → insert empty H3 →
@@ -13,9 +59,18 @@ import { TextSelection } from "@tiptap/pm/state";
 export const MicrodramaKeymap = Extension.create({
   name: "microdramaKeymap",
 
+  addOptions() {
+    return {
+      enableMicrodramaEnter: false,
+    };
+  },
+
   addKeyboardShortcuts() {
     return {
+      "Alt-ArrowUp": ({ editor }) => moveTopLevelBlocks(editor, "up"),
+      "Alt-ArrowDown": ({ editor }) => moveTopLevelBlocks(editor, "down"),
       Enter: ({ editor }) => {
+        if (!this.options.enableMicrodramaEnter) return false;
         const { state } = editor;
         const { selection } = state;
         const { $from, empty } = selection;

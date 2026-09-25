@@ -107,7 +107,7 @@ export default function DocumentPage() {
 
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [openCommentCount, setOpenCommentCount] = useState(0);
+  const [, setOpenCommentCount] = useState(0);
   const [pendingComment, setPendingComment] = useState<{
     markId: string;
     quotedText: string;
@@ -785,30 +785,6 @@ export default function DocumentPage() {
             </>
           )}
           <ThemeToggle />
-
-          <button
-            onClick={() => {
-              setCommentSidebarOpen(!commentSidebarOpen);
-              if (!commentSidebarOpen) {
-                setAiSidebarOpen(false);
-                setVersionHistoryOpen(false);
-                setPromptsOpen(false);
-                setPredefinedLabOpen(false);
-              }
-            }}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              commentSidebarOpen
-                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300"
-                : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            Comments
-            {openCommentCount > 0 && (
-              <span className="inline-flex items-center justify-center rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-bold text-white leading-none">
-                {openCommentCount}
-              </span>
-            )}
-          </button>
           {doc.isOwner && (
             <>
               <button
@@ -847,28 +823,64 @@ export default function DocumentPage() {
               >
                 AI Assistant
               </button>
-              <button
-                onClick={async () => {
-                  const nextOpen = !predefinedLabOpen;
-                  if (nextOpen) {
-                    setPredefinedLabMounted(true);
-                    setAiSidebarOpen(false);
-                    setCommentSidebarOpen(false);
-                    setVersionHistoryOpen(false);
-                    setPromptsOpen(false);
-                    await handlePredefinedLabRefreshTabs();
-                  }
-                  setPredefinedLabOpen(nextOpen);
-                }}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+            </>
+          )}
+          {doc.isOwner && (
+            <details className="relative">
+              <summary
+                className={`cursor-pointer list-none rounded-lg px-3 py-1.5 text-sm font-medium transition-colors marker:hidden ${
                   predefinedLabOpen
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    ? "bg-muted text-foreground"
                     : "text-muted-foreground hover:bg-muted"
                 }`}
               >
                 Labs
-              </button>
-            </>
+              </summary>
+              <div className="absolute right-0 z-30 mt-2 w-44 rounded-md border border-border bg-card p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={async (event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    const nextOpen = !predefinedLabOpen;
+                    if (nextOpen) {
+                      setPredefinedLabMounted(true);
+                      await handlePredefinedLabRefreshTabs();
+                    }
+                    setPredefinedLabOpen(nextOpen);
+                    setAiSidebarOpen(false);
+                    setCommentSidebarOpen(false);
+                    setVersionHistoryOpen(false);
+                    setPromptsOpen(false);
+                    setResearchAgentOpen(false);
+                    setOutsidersPanelRequest(null);
+                    setQualityPanelRequest(null);
+                    setNarrativeScanOpen(false);
+                    setPlotScanOpen(false);
+                  }}
+                  className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                    predefinedLabOpen
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  Predefined
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  className="w-full cursor-not-allowed rounded px-3 py-2 text-left text-sm text-muted-foreground opacity-60"
+                >
+                  Pitch Lab
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  className="w-full cursor-not-allowed rounded px-3 py-2 text-left text-sm text-muted-foreground opacity-60"
+                >
+                  Plot Lab
+                </button>
+              </div>
+            </details>
           )}
           {canExport && (
             <button
@@ -888,47 +900,111 @@ export default function DocumentPage() {
               Export
             </button>
           )}
-          {doc?.isOwner && activeTab?.type === "workbook" && (
-            <button
-              onClick={() => setResearchAgentOpen((o) => !o)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                researchAgentOpen
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-              }`}
-            >
-              Research Agent
-            </button>
-          )}
-          {activeTab?.type === "predefined_episodes" && (
-            <button
-              onClick={() => setOutsidersModalOpen(true)}
-              className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700 transition-colors"
-            >
-              Outsiders View
-            </button>
-          )}
-          {isAdmin &&
-            activeTab?.type === "predefined_episodes" && (
-              <>
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors marker:hidden hover:bg-muted">
+              Admin
+            </summary>
+            <div className="absolute right-0 z-30 mt-2 w-52 rounded-md border border-border bg-card p-1 shadow-lg">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  setPromptsOpen(!promptsOpen);
+                  if (!promptsOpen) {
+                    setAiSidebarOpen(false);
+                    setCommentSidebarOpen(false);
+                    setVersionHistoryOpen(false);
+                    setPredefinedLabOpen(false);
+                  }
+                }}
+                className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                  promptsOpen ? "bg-muted text-foreground" : "hover:bg-muted"
+                }`}
+              >
+                Prompts
+              </button>
+              {doc?.isOwner && activeTab?.type === "workbook" && (
                 <button
-                  onClick={() => setQualityModalOpen(true)}
-                  className="rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-                >
-                  Quality Agent
-                </button>
-                <button
-                  onClick={() => setNarrativeScanOpen((o) => !o)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                    narrativeScanOpen
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-                      : "bg-rose-600 text-white hover:bg-rose-700"
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    setResearchAgentOpen((open) => !open);
+                    setPredefinedLabOpen(false);
+                  }}
+                  className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                    researchAgentOpen
+                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : "hover:bg-muted"
                   }`}
                 >
-                  Story Scan
+                  Research Agent
                 </button>
-              </>
-            )}
+              )}
+              {activeTab?.type === "predefined_episodes" && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    setOutsidersModalOpen(true);
+                  }}
+                  className="w-full rounded px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                >
+                  Outsiders View
+                </button>
+              )}
+              {isAdmin && activeTab?.type === "predefined_episodes" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      setQualityModalOpen(true);
+                    }}
+                    className="w-full rounded px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                  >
+                    Quality Agent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      setNarrativeScanOpen((open) => !open);
+                    }}
+                    className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                      narrativeScanOpen
+                        ? "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    Story Scan
+                  </button>
+                </>
+              )}
+              {isAdmin && activeTab?.type === "microdrama_plots" && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    setPlotScanOpen((open) => !open);
+                  }}
+                  className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                    plotScanOpen
+                      ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  Plot Scan
+                </button>
+              )}
+              {!(doc?.isOwner && activeTab?.type === "workbook") &&
+                activeTab?.type !== "predefined_episodes" &&
+                !(isAdmin && activeTab?.type === "microdrama_plots") && (
+                  <div className="border-t border-border px-3 py-2 text-sm text-muted-foreground">
+                    No tab tools here
+                  </div>
+                )}
+            </div>
+          </details>
           {session?.user?.name && (
             <div className="ml-2 flex items-center gap-2">
               {session.user.image && (

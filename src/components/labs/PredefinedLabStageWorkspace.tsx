@@ -4,11 +4,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import { splitTabByH3, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { clientTrace } from "@/lib/clientTrace";
+import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
 
-type LabMode = "predef_lab_beats" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass";
-type LabStage = "inputs" | "beats" | "draft";
-type TurnStage = "beats" | "draft";
+type LabMode =
+  | "predef_lab_beats"
+  | "predef_lab_dialogue_design"
+  | "predef_lab_draft"
+  | "predef_lab_iterate"
+  | "predef_lab_dialogue_pass";
+type LabStage = "inputs" | "beats" | "dialogue" | "draft";
+type TurnStage = "beats" | "dialogue" | "draft";
 type TurnStatus = "running" | "complete" | "failed";
+type AutoPipelineStep = "idle" | "beats" | "dialogue" | "draft" | "complete" | "failed";
 
 interface SectionOption {
   id: string;
@@ -32,6 +39,11 @@ interface LabTurn {
 
 interface FinalizedArtifacts {
   beats?: {
+    output: string;
+    version: number;
+    finalizedAt: number;
+  };
+  dialogue?: {
     output: string;
     version: number;
     finalizedAt: number;
@@ -108,20 +120,44 @@ function countDialogueLines(text: string): number {
 }
 
 function buildContext({
+  mode,
   selectedPlot,
   selectedPredefs,
   originalInstruction,
   turnInstruction,
   beatPlan,
+  dialogueDesign,
   draft,
 }: {
+  mode: LabMode;
   selectedPlot: SectionOption;
   selectedPredefs: SectionOption[];
   originalInstruction: string;
   turnInstruction: string;
   beatPlan: string;
+  dialogueDesign: string;
   draft: string;
 }): string {
+  if (mode === "predef_lab_dialogue_design") {
+    return `## Original Writer Instruction
+${originalInstruction.trim() || "(none)"}
+
+## Current Turn Instruction
+${turnInstruction.trim() || "(none)"}
+
+## Approved / Current Key Beats
+${beatPlan.trim() || "(none yet)"}
+
+## Selected Previous Predefined Episodes
+${selectedPredefs.length > 0 ? selectedPredefs.map((s) => s.content).join("\n\n") : "(none selected)"}
+
+## Approved / Current Dialogue Design
+${dialogueDesign.trim() || "(none yet)"}
+
+## Important Context Rule
+The Characters tab and Target Plot are intentionally excluded. Use finalized beats for episode shape and selected previous predefined episodes for voice, continuity, and knowledge state.`;
+  }
+
   return `## Original Writer Instruction
 ${originalInstruction.trim() || "(none)"}
 
@@ -136,6 +172,9 @@ ${selectedPredefs.length > 0 ? selectedPredefs.map((s) => s.content).join("\n\n"
 
 ## Approved / Current Key Beats
 ${beatPlan.trim() || "(none yet)"}
+
+## Approved / Current Dialogue Design
+${dialogueDesign.trim() || "(none yet)"}
 
 ## Current Draft
 ${draft.trim() || "(none yet)"}
@@ -159,16 +198,20 @@ export default function PredefinedLabStageWorkspace({
   const [selectedPredefIds, setSelectedPredefIds] = useState<string[]>([]);
   const [predefManuallyChanged, setPredefManuallyChanged] = useState(false);
   const [instruction, setInstruction] = useState("");
+  const [autoRunToDraft, setAutoRunToDraft] = useState(false);
+  const [autoPipelineStep, setAutoPipelineStep] = useState<AutoPipelineStep>("idle");
+  const [autoPipelineStartedAt, setAutoPipelineStartedAt] = useState<number | null>(null);
   const [composerText, setComposerText] = useState("");
   const [stage, setStage] = useState<LabStage>("inputs");
   const [turns, setTurns] = useState<LabTurn[]>([]);
   const [finalized, setFinalized] = useState<FinalizedArtifacts>({});
   const [isStreaming, setIsStreaming] = useState(false);
   const [runningLabel, setRunningLabel] = useState("");
+  const [loadingDotCount, setLoadingDotCount] = useState(1);
   const [copyTarget, setCopyTarget] = useState<string | null>(null);
+  const [editingTurnId, setEditingTurnId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
   const [predefPickerOpen, setPredefPickerOpen] = useState(false);
-  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
-  const [finalizeDraftInstruction, setFinalizeDraftInstruction] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const predefPickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -232,8 +275,8 @@ export default function PredefinedLabStageWorkspace({
   }, [predefPickerOpen]);
 
   const selectedPlot = plotOptions.find((p) => p.id === selectedPlotId) ?? null;
-  const selectedPredefs = predefOptions.filter((p) => selectedPredefIds.includes(p.id));
   const latestBeat = latestCompleteTurn(turns, "beats");
+  const latestDialogue = latestCompleteTurn(turns, "dialogue");
   const latestDraft = latestCompleteTurn(turns, "draft");
   const visibleTurns = turns.filter((turn) => turn.stage === stage);
   const existingPredefForPlot =
@@ -253,6 +296,23 @@ export default function PredefinedLabStageWorkspace({
   function nextVersion(turnStage: TurnStage) {
     return turns.filter((turn) => turn.stage === turnStage && turn.status === "complete").length + 1;
   }
+
+  useEffect(() => {
+    if (!copyTarget) return;
+    const timeout = window.setTimeout(() => setCopyTarget(null), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [copyTarget]);
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setLoadingDotCount(1);
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setLoadingDotCount((count) => (count >= 3 ? 1 : count + 1));
+    }, 450);
+    return () => window.clearInterval(interval);
+  }, [isStreaming]);
 
   async function copyText(text: string, target: string) {
     if (!text) return;
@@ -282,6 +342,8 @@ export default function PredefinedLabStageWorkspace({
     userInstruction,
     retryTurnId,
     beatPlanOverride,
+    dialogueDesignOverride,
+    visibleStage,
     skipInputWarnings = false,
   }: {
     turnStage: TurnStage;
@@ -289,12 +351,14 @@ export default function PredefinedLabStageWorkspace({
     userInstruction: string;
     retryTurnId?: string;
     beatPlanOverride?: string;
+    dialogueDesignOverride?: string;
+    visibleStage?: LabStage;
     skipInputWarnings?: boolean;
-  }) {
-    if (isStreaming) return;
+  }): Promise<LabTurn | null> {
+    if (isStreaming) return null;
     const { activeSelectedPlot, activeSelectedPredefs, activePredefOptions } =
       await resolveFreshSelection();
-    if (!activeSelectedPlot) return;
+    if (!activeSelectedPlot) return null;
 
     if (turnStage === "beats" && stage === "inputs" && !skipInputWarnings) {
       const activeExistingPredefForPlot =
@@ -314,22 +378,28 @@ export default function PredefinedLabStageWorkspace({
               userInstruction,
               retryTurnId,
               beatPlanOverride,
+              dialogueDesignOverride,
+              visibleStage,
               skipInputWarnings: true,
             });
           },
         });
-        return;
+        return null;
       }
     }
 
     const priorBeatPlan = beatPlanOverride ?? finalized.beats?.output ?? latestBeat?.output ?? "";
+    const priorDialogueDesign =
+      dialogueDesignOverride ?? finalized.dialogue?.output ?? latestDialogue?.output ?? "";
     const priorDraft = latestDraft?.output ?? "";
     const context = buildContext({
+      mode,
       selectedPlot: activeSelectedPlot,
       selectedPredefs: activeSelectedPredefs,
       originalInstruction: instruction,
       turnInstruction: userInstruction,
       beatPlan: priorBeatPlan,
+      dialogueDesign: priorDialogueDesign,
       draft: priorDraft,
     });
     clientTrace("predefined_lab.request", {
@@ -347,12 +417,15 @@ export default function PredefinedLabStageWorkspace({
       originalInstructionChars: instruction.trim().length,
       turnInstructionChars: userInstruction.trim().length,
       beatPlanChars: priorBeatPlan.length,
+      dialogueDesignChars: priorDialogueDesign.length,
       draftChars: priorDraft.length,
       draftDialogueLines: countDialogueLines(priorDraft),
     });
     const agentTitle =
       turnStage === "beats"
         ? "Beat Builder"
+        : turnStage === "dialogue"
+        ? "Dialogue Designer"
         : mode === "predef_lab_dialogue_pass"
           ? "Dialogue Pass"
           : mode === "predef_lab_iterate"
@@ -360,7 +433,7 @@ export default function PredefinedLabStageWorkspace({
           : "Episode Writer";
     const turnId = retryTurnId ?? `${Date.now()}-${turnStage}`;
 
-    setStage(turnStage);
+    setStage(visibleStage ?? turnStage);
     setIsStreaming(true);
     setRunningLabel(agentTitle);
     setCopyTarget(null);
@@ -421,6 +494,18 @@ export default function PredefinedLabStageWorkspace({
         throw new Error("No output returned from the model.");
       }
 
+      const originalTurn = retryTurnId ? turns.find((turn) => turn.id === retryTurnId) : null;
+      const completedTurn: LabTurn = {
+        id: turnId,
+        stage: turnStage,
+        userInstruction,
+        agentTitle,
+        mode,
+        output: accumulated,
+        status: "complete",
+        version: originalTurn?.version ?? nextVersion(turnStage),
+        createdAt: originalTurn?.createdAt ?? Date.now(),
+      };
       setTurns((prev) =>
         prev.map((turn) =>
           turn.id === turnId ? { ...turn, status: "complete", output: accumulated } : turn
@@ -436,6 +521,7 @@ export default function PredefinedLabStageWorkspace({
         leakedImportTags: /^\s*\[(H\d|P|UL|OL)\]/m.test(accumulated),
         hasCommentary: /\b(rationale|analysis|knowledge audit|here is|here's)\b/i.test(accumulated),
       });
+      return completedTurn;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Predefined Lab failed";
       clientTrace("predefined_lab.failed", {
@@ -449,6 +535,19 @@ export default function PredefinedLabStageWorkspace({
           turn.id === turnId ? { ...turn, status: "failed", error: message } : turn
         )
       );
+      const originalTurn = retryTurnId ? turns.find((turn) => turn.id === retryTurnId) : null;
+      return {
+        id: turnId,
+        stage: turnStage,
+        userInstruction,
+        agentTitle,
+        mode,
+        output: "",
+        status: "failed",
+        version: originalTurn?.version ?? nextVersion(turnStage),
+        error: message,
+        createdAt: originalTurn?.createdAt ?? Date.now(),
+      };
     } finally {
       setIsStreaming(false);
       setRunningLabel("");
@@ -456,6 +555,10 @@ export default function PredefinedLabStageWorkspace({
   }
 
   async function buildInitialBeats() {
+    if (autoRunToDraft) {
+      await runAutoPipeline();
+      return;
+    }
     await runTurn({
       turnStage: "beats",
       mode: "predef_lab_beats",
@@ -463,16 +566,89 @@ export default function PredefinedLabStageWorkspace({
     });
   }
 
+  async function runAutoPipeline() {
+    const startedAt = Date.now();
+    setAutoPipelineStartedAt(startedAt);
+    setAutoPipelineStep("beats");
+    setStage("draft");
+    setComposerText("");
+    const beat = await runTurn({
+      turnStage: "beats",
+      mode: "predef_lab_beats",
+      userInstruction: instruction || "Build key beats from the selected context.",
+      visibleStage: "draft",
+      skipInputWarnings: true,
+    });
+    if (!beat || beat.status !== "complete") {
+      setAutoPipelineStep("failed");
+      setStage("beats");
+      return;
+    }
+
+    const finalizedBeat = {
+      output: beat.output,
+      version: beat.version,
+      finalizedAt: Date.now(),
+    };
+    setFinalized({ beats: finalizedBeat });
+
+    setAutoPipelineStep("dialogue");
+    const dialogue = await runTurn({
+      turnStage: "dialogue",
+      mode: "predef_lab_dialogue_design",
+      userInstruction: "Build dialogue design from finalized key beats.",
+      beatPlanOverride: finalizedBeat.output,
+      visibleStage: "draft",
+      skipInputWarnings: true,
+    });
+    if (!dialogue || dialogue.status !== "complete") {
+      setAutoPipelineStep("failed");
+      setStage("dialogue");
+      return;
+    }
+
+    const finalizedDialogue = {
+      output: dialogue.output,
+      version: dialogue.version,
+      finalizedAt: Date.now(),
+    };
+    setFinalized({ beats: finalizedBeat, dialogue: finalizedDialogue });
+
+    setAutoPipelineStep("draft");
+    const draft = await runTurn({
+      turnStage: "draft",
+      mode: "predef_lab_draft",
+      userInstruction: "Write episode draft from finalized key beats and approved dialogue design.",
+      beatPlanOverride: finalizedBeat.output,
+      dialogueDesignOverride: finalizedDialogue.output,
+      visibleStage: "draft",
+      skipInputWarnings: true,
+    });
+    setAutoPipelineStep(draft?.status === "complete" ? "complete" : "failed");
+  }
+
   async function sendComposer() {
     const text = composerText.trim();
     if (isStreaming) return;
-    const firstDraft = stage === "draft" && !latestDraft && finalized.beats;
-    if (!text && !firstDraft) return;
+    const firstDialogue = stage === "dialogue" && !latestDialogue && finalized.beats;
+    const firstDraft = stage === "draft" && !latestDraft && finalized.beats && finalized.dialogue;
+    if (!text && !firstDialogue && !firstDraft) return;
     setComposerText("");
     await runTurn({
-      turnStage: stage === "draft" ? "draft" : "beats",
-      mode: stage === "draft" ? (firstDraft ? "predef_lab_draft" : "predef_lab_iterate") : "predef_lab_beats",
-      userInstruction: text || "Write episode draft from finalized key beats.",
+      turnStage: stage === "draft" ? "draft" : stage === "dialogue" ? "dialogue" : "beats",
+      mode:
+        stage === "draft"
+          ? firstDraft
+            ? "predef_lab_draft"
+            : "predef_lab_iterate"
+          : stage === "dialogue"
+            ? "predef_lab_dialogue_design"
+            : "predef_lab_beats",
+      userInstruction:
+        text ||
+        (stage === "dialogue"
+          ? "Build dialogue design from finalized key beats."
+          : "Write episode draft from finalized key beats and approved dialogue design."),
     });
   }
 
@@ -485,13 +661,45 @@ export default function PredefinedLabStageWorkspace({
     });
   }
 
-  async function finalizeBeats() {
-    if (!latestBeat || isStreaming) return;
-    setFinalizeDraftInstruction("");
-    setFinalizeModalOpen(true);
+  async function rerunTurn(turn: LabTurn) {
+    if (isStreaming) return;
+    const feedback = composerText.trim();
+    setComposerText("");
+    await runTurn({
+      turnStage: turn.stage,
+      mode: turn.mode,
+      userInstruction: feedback || `Rerun ${turn.agentTitle} from the latest saved output and current context.`,
+    });
   }
 
-  async function generateDraftFromFinalizedBeats() {
+  function startEditTurn(turn: LabTurn) {
+    setEditingTurnId(turn.id);
+    setEditingText(turn.output);
+  }
+
+  function cancelEditTurn() {
+    setEditingTurnId(null);
+    setEditingText("");
+  }
+
+  function saveEditedTurn(turn: LabTurn) {
+    const output = editingText;
+    setTurns((prev) =>
+      prev.map((item) => (item.id === turn.id ? { ...item, output } : item))
+    );
+    setFinalized((prev) => {
+      if (turn.stage === "beats" && prev.beats?.version === turn.version) {
+        return { ...prev, beats: { ...prev.beats, output } };
+      }
+      if (turn.stage === "dialogue" && prev.dialogue?.version === turn.version) {
+        return { ...prev, dialogue: { ...prev.dialogue, output } };
+      }
+      return prev;
+    });
+    cancelEditTurn();
+  }
+
+  async function generateDialogueFromFinalizedBeats() {
     if (!latestBeat || isStreaming) return;
     const finalizedBeat = {
       output: latestBeat.output,
@@ -499,15 +707,30 @@ export default function PredefinedLabStageWorkspace({
       finalizedAt: Date.now(),
     };
     setFinalized((prev) => ({ ...prev, beats: finalizedBeat }));
-    const draftInstruction = finalizeDraftInstruction.trim();
-    setFinalizeModalOpen(false);
-    setFinalizeDraftInstruction("");
+    setStage("dialogue");
+    await runTurn({
+      turnStage: "dialogue",
+      mode: "predef_lab_dialogue_design",
+      userInstruction: "Build dialogue design from finalized key beats.",
+      beatPlanOverride: finalizedBeat.output,
+    });
+  }
+
+  async function generateDraftFromApprovedDialogue() {
+    if (!latestDialogue || !finalized.beats || isStreaming) return;
+    const finalizedDialogue = {
+      output: latestDialogue.output,
+      version: latestDialogue.version,
+      finalizedAt: Date.now(),
+    };
+    setFinalized((prev) => ({ ...prev, dialogue: finalizedDialogue }));
     setStage("draft");
+    setComposerText("");
     await runTurn({
       turnStage: "draft",
       mode: "predef_lab_draft",
-      userInstruction: draftInstruction || "Write episode draft from finalized key beats.",
-      beatPlanOverride: finalizedBeat.output,
+      userInstruction: "Write episode draft from finalized key beats and approved dialogue design.",
+      dialogueDesignOverride: finalizedDialogue.output,
     });
   }
 
@@ -523,7 +746,12 @@ export default function PredefinedLabStageWorkspace({
           setTurns([]);
           setFinalized({});
           setComposerText("");
+          setEditingTurnId(null);
+          setEditingText("");
           setCopyTarget(null);
+          setAutoRunToDraft(false);
+          setAutoPipelineStep("idle");
+          setAutoPipelineStartedAt(null);
         },
       });
       return;
@@ -532,7 +760,12 @@ export default function PredefinedLabStageWorkspace({
     setTurns([]);
     setFinalized({});
     setComposerText("");
+    setEditingTurnId(null);
+    setEditingText("");
     setCopyTarget(null);
+    setAutoRunToDraft(false);
+    setAutoPipelineStep("idle");
+    setAutoPipelineStartedAt(null);
   }
 
   function nextRun() {
@@ -550,7 +783,12 @@ export default function PredefinedLabStageWorkspace({
         setTurns([]);
         setFinalized({});
         setComposerText("");
+        setEditingTurnId(null);
+        setEditingText("");
         setCopyTarget(null);
+        setAutoRunToDraft(false);
+        setAutoPipelineStep("idle");
+        setAutoPipelineStartedAt(null);
       },
     });
   }
@@ -562,14 +800,6 @@ export default function PredefinedLabStageWorkspace({
     return latest?.id === turn.id ? `LATEST v${turn.version}` : `OLD v${turn.version}`;
   }
 
-  function regenerateBeats() {
-    void runTurn({
-      turnStage: "beats",
-      mode: "predef_lab_beats",
-      userInstruction: instruction || "Regenerate key beats from the selected context.",
-    });
-  }
-
   function copyButtonClass(target: string, extra = "") {
     const copied = copyTarget === target;
     return `${extra} ${
@@ -577,6 +807,10 @@ export default function PredefinedLabStageWorkspace({
         ? "border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-700"
         : "border-border text-muted-foreground hover:bg-muted"
     }`;
+  }
+
+  function animatedWaitingText(label = "Generating") {
+    return `${label}${".".repeat(loadingDotCount)}`;
   }
 
   function renderInputs() {
@@ -708,6 +942,7 @@ export default function PredefinedLabStageWorkspace({
             <textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
+              onKeyDown={handleTextareaLineMoveKeyDown}
               disabled={isStreaming}
               placeholder="Example: Keep blocking simple. Make Taiga panic comic. Sakura should not know Taiga yet."
               className="mt-1 h-28 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-emerald-500 focus:outline-none"
@@ -715,14 +950,33 @@ export default function PredefinedLabStageWorkspace({
           </label>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+          <label className="flex min-w-[220px] items-start gap-3">
+            <input
+              type="checkbox"
+              checked={autoRunToDraft}
+              onChange={(event) => setAutoRunToDraft(event.target.checked)}
+              disabled={isStreaming}
+              className="mt-1 h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">Auto-run to Draft</span>
+              <span className="block text-xs leading-relaxed text-muted-foreground">
+                Runs key beats, dialogue, and draft without stopping for review.
+              </span>
+            </span>
+          </label>
           <button
             type="button"
             disabled={!selectedPlot || isStreaming}
             onClick={buildInitialBeats}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isStreaming && runningLabel === "Beat Builder" ? "Building Key Beats..." : "Build Key Beats"}
+            {isStreaming
+              ? `Running ${runningLabel || "Pipeline"}...`
+              : autoRunToDraft
+                ? "Generate Draft"
+                : "Build Key Beats"}
           </button>
         </div>
       </section>
@@ -735,7 +989,7 @@ export default function PredefinedLabStageWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-semibold text-foreground">
-              {stage === "draft" ? "Finalized Context" : "Context"}
+              {stage === "draft" || stage === "dialogue" ? "Finalized Context" : "Context"}
             </span>
             <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
               Plot: {selectedPlot ? shortHeading(selectedPlot.title, 24) : "None"}
@@ -743,9 +997,14 @@ export default function PredefinedLabStageWorkspace({
             <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">
               Previous predefined: {predefSummary}
             </span>
-            {stage === "draft" && finalized.beats && (
+            {(stage === "draft" || stage === "dialogue") && finalized.beats && (
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
                 Key Beats: Finalized v{finalized.beats.version}
+              </span>
+            )}
+            {stage === "draft" && finalized.dialogue && (
+              <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300">
+                Dialogue: Approved v{finalized.dialogue.version}
               </span>
             )}
           </div>
@@ -767,8 +1026,14 @@ export default function PredefinedLabStageWorkspace({
       return (
         <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           {stage === "draft"
-            ? "Key beats are finalized. Add an instruction below, or generate directly."
-            : "Key beat generation will appear here."}
+            ? autoPipelineStep === "complete"
+              ? "First draft generated from auto-run. Review it below, or add a change request and rerun."
+              : autoPipelineStartedAt
+                ? "Auto-run is building your first draft. The generated draft will appear here."
+                : "Add an instruction below, or generate the episode draft from the approved pipeline context."
+            : stage === "dialogue"
+              ? "Key beats are finalized. Build a dialogue design, then approve it for episode drafting."
+              : "Key beat generation will appear here."}
         </section>
       );
     }
@@ -778,6 +1043,8 @@ export default function PredefinedLabStageWorkspace({
         {visibleTurns.map((turn) => {
           const latestForStage = latestCompleteTurn(turns, turn.stage);
           const isLatestTurn = latestForStage?.id === turn.id;
+          const isEditing = editingTurnId === turn.id;
+          const visibleOutput = isEditing ? editingText : turn.output;
           return (
           <div key={turn.id} className="space-y-3">
             <article className="rounded-lg border border-border bg-muted p-4">
@@ -814,19 +1081,48 @@ export default function PredefinedLabStageWorkspace({
                 <div className="flex items-center gap-2">
                   {turn.status === "complete" && (
                     <>
-                      {turn.stage === "beats" && isLatestTurn && (
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isStreaming}
+                            onClick={() => saveEditedTurn(turn)}
+                            className="rounded-md bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isStreaming}
+                            onClick={cancelEditTurn}
+                            className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
                         <button
                           type="button"
                           disabled={isStreaming}
-                          onClick={regenerateBeats}
+                          onClick={() => startEditTurn(turn)}
                           className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
                         >
-                          Regenerate
+                          Edit
+                        </button>
+                      )}
+                      {isLatestTurn && !isEditing && (
+                        <button
+                          type="button"
+                          disabled={isStreaming}
+                          onClick={() => void rerunTurn(turn)}
+                          className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50"
+                        >
+                          Rerun
                         </button>
                       )}
                       <button
                         type="button"
-                        onClick={() => copyText(turn.output, `${turn.id}-top`)}
+                        onClick={() => copyText(visibleOutput, `${turn.id}-top`)}
                         className={copyButtonClass(
                           `${turn.id}-top`,
                           "rounded-md border px-2 py-1 text-xs transition-colors"
@@ -848,26 +1144,54 @@ export default function PredefinedLabStageWorkspace({
                   )}
                 </div>
               </div>
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                {turn.status === "failed"
-                  ? `Failed: ${turn.error ?? "Predefined Lab failed"}`
-                  : turn.output || "Generating..."}
-              </pre>
+              {isEditing ? (
+                <textarea
+                  value={editingText}
+                  onChange={(event) => setEditingText(event.target.value)}
+                  onKeyDown={handleTextareaLineMoveKeyDown}
+                  className="min-h-72 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground focus:border-emerald-500 focus:outline-none"
+                />
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                  {turn.status === "failed"
+                    ? `Failed: ${turn.error ?? "Predefined Lab failed"}`
+                    : turn.output || animatedWaitingText()}
+                </pre>
+              )}
               {turn.status === "complete" && (
                 <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
-                  {turn.stage === "beats" && isLatestTurn && (
+                  {isEditing ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isStreaming}
+                        onClick={cancelEditTurn}
+                        className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isStreaming}
+                        onClick={() => saveEditedTurn(turn)}
+                        className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                    </>
+                  ) : isLatestTurn ? (
                     <button
                       type="button"
                       disabled={isStreaming}
-                      onClick={regenerateBeats}
+                      onClick={() => void rerunTurn(turn)}
                       className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
                     >
-                      Regenerate
+                      Rerun
                     </button>
-                  )}
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => copyText(turn.output, `${turn.id}-bottom`)}
+                    onClick={() => copyText(visibleOutput, `${turn.id}-bottom`)}
                     className={copyButtonClass(
                       `${turn.id}-bottom`,
                       "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
@@ -885,32 +1209,129 @@ export default function PredefinedLabStageWorkspace({
     );
   }
 
+  function renderAutoPipelineProgress() {
+    if (!autoPipelineStartedAt || autoPipelineStep === "idle") return null;
+
+    const statusCopy: Record<AutoPipelineStep, { title: string; detail: string }> = {
+      idle: { title: "", detail: "" },
+      beats: {
+        title: animatedWaitingText("Building key beats"),
+        detail: "Auto-run is working in the background.",
+      },
+      dialogue: {
+        title: animatedWaitingText("Designing dialogue"),
+        detail: "Key beats are done. Dialogue design is running now.",
+      },
+      draft: {
+        title: animatedWaitingText("Writing first draft"),
+        detail: "Dialogue design is done. The episode draft is being generated.",
+      },
+      complete: {
+        title: "First draft ready.",
+        detail: "Auto-run completed. Review the draft below.",
+      },
+      failed: {
+        title: "Auto-run stopped.",
+        detail: "A pipeline step failed. Review the visible stage and rerun that step.",
+      },
+    };
+    const copy = statusCopy[autoPipelineStep];
+    const isFailed = autoPipelineStep === "failed";
+    const isComplete = autoPipelineStep === "complete";
+
+    return (
+      <section
+        className={`rounded-md border px-4 py-3 shadow-sm ${
+          isFailed
+            ? "border-red-200 bg-red-50 text-red-800 dark:border-red-900/70 dark:bg-red-950/30 dark:text-red-100"
+            : isComplete
+              ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-100"
+              : "border-cyan-200 bg-cyan-50/70 text-cyan-900 dark:border-cyan-900/60 dark:bg-cyan-950/20 dark:text-cyan-100"
+        }`}
+      >
+        <p className="text-sm font-semibold">{copy.title}</p>
+        <p className="mt-1 text-xs opacity-80">{copy.detail}</p>
+      </section>
+    );
+  }
+
+  function renderPipelineSummary() {
+    if (stage !== "draft") return null;
+    const pipelineTurns = turns.filter(
+      (turn) => turn.stage !== "draft" && turn.status === "complete"
+    );
+    if (pipelineTurns.length === 0) return null;
+
+    return (
+      <details className="rounded-lg border border-border bg-card shadow-sm">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-foreground">
+          Pipeline
+        </summary>
+        <div className="space-y-3 border-t border-border px-4 py-3">
+          {pipelineTurns.map((turn) => (
+            <section key={`pipeline-${turn.id}`} className="rounded-md border border-border bg-background p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-foreground">
+                  {turn.agentTitle} v{turn.version}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyText(turn.output, `${turn.id}-pipeline`)}
+                  className={copyButtonClass(
+                    `${turn.id}-pipeline`,
+                    "rounded-md border px-2 py-1 text-xs transition-colors"
+                  )}
+                >
+                  {copyTarget === `${turn.id}-pipeline` ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-foreground">
+                {turn.output}
+              </pre>
+            </section>
+          ))}
+        </div>
+      </details>
+    );
+  }
+
   function renderComposer() {
     const isDraftStage = stage === "draft";
-    const isFirstDraft = isDraftStage && !latestDraft && finalized.beats;
-    const canSend = !isStreaming && (composerText.trim().length > 0 || Boolean(isFirstDraft));
+    const isDialogueStage = stage === "dialogue";
+    const isFirstDialogue = isDialogueStage && !latestDialogue && finalized.beats;
+    const isFirstDraft = isDraftStage && !latestDraft && finalized.beats && finalized.dialogue;
+    const canSend = !isStreaming && (composerText.trim().length > 0 || Boolean(isFirstDialogue) || Boolean(isFirstDraft));
+    const composerLabel = isDraftStage
+      ? latestDraft
+        ? "What should change in the episode draft?"
+        : "Instruction for episode draft"
+      : isDialogueStage
+        ? latestDialogue
+          ? "What should change in the dialogue design?"
+          : "Instruction for dialogue design"
+        : "What should change in the key beats?";
+    const composerPlaceholder = isDraftStage
+      ? latestDraft
+        ? "Example: Make Sophie more defensive; preserve everything else."
+        : "Optional. Example: Keep it to about 12 dialogue lines and preserve the archive-room physical comedy."
+      : isDialogueStage
+        ? latestDialogue
+          ? "Example: Make the power shift sharper and add one better V.O. anchor."
+          : "Optional. Example: Make the exchange more romantic without losing the threat."
+        : "Example: Make the archive-room reveal sharper and funnier.";
     return (
       <div className="border-t border-border bg-card px-6 py-4">
         <div className="mx-auto max-w-6xl">
           <label className="block">
             <span className="text-sm font-medium text-foreground">
-              {isDraftStage
-                ? latestDraft
-                  ? "What should change in the episode draft?"
-                  : "Instruction for episode draft"
-                : "What should change in the key beats?"}
+              {composerLabel}
             </span>
             <textarea
               value={composerText}
               onChange={(e) => setComposerText(e.target.value)}
+              onKeyDown={handleTextareaLineMoveKeyDown}
               disabled={isStreaming}
-              placeholder={
-                isDraftStage
-                  ? latestDraft
-                    ? "Example: Make Sophie more defensive; preserve everything else."
-                    : "Optional. Example: Keep it to about 12 dialogue lines and preserve the archive-room physical comedy."
-                  : "Example: Make the archive-room reveal sharper and funnier."
-              }
+              placeholder={composerPlaceholder}
               className="mt-2 h-20 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-emerald-500 focus:outline-none disabled:opacity-60"
             />
           </label>
@@ -922,10 +1343,21 @@ export default function PredefinedLabStageWorkspace({
                   <button
                     type="button"
                     disabled={!latestBeat || isStreaming}
-                    onClick={finalizeBeats}
+                    onClick={generateDialogueFromFinalizedBeats}
                     className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    Finalize
+                    Approve Beats & Build Dialogue
+                  </button>
+                </>
+              ) : isDialogueStage ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!latestDialogue || isStreaming}
+                    onClick={generateDraftFromApprovedDialogue}
+                    className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    Approve Dialogue & Generate Episode
                   </button>
                 </>
               ) : (
@@ -959,85 +1391,17 @@ export default function PredefinedLabStageWorkspace({
                 onClick={sendComposer}
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isStreaming ? `Running ${runningLabel}...` : isFirstDraft ? "Generate Episode" : "Give Feedback"}
+                {isStreaming
+                  ? `Running ${runningLabel}...`
+                  : isFirstDialogue
+                    ? "Build Dialogue Design"
+                    : isFirstDraft
+                      ? "Generate Episode"
+                      : "Give Feedback"}
               </button>
             </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  function renderFinalizeModal() {
-    if (!finalizeModalOpen || !latestBeat) return null;
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="finalize-beats-title"
-      >
-        <section className="flex max-h-[calc(100vh-4rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl">
-          <div className="border-b border-border px-5 py-4">
-            <h2 id="finalize-beats-title" className="text-base font-semibold text-foreground">
-              Finalize Beats
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Review the latest key beats and add optional instruction for the episode draft.
-            </p>
-          </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <div className="rounded-md border border-border bg-background p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-foreground">Key Beats v{latestBeat.version}</span>
-                <button
-                  type="button"
-                  onClick={() => copyText(latestBeat.output, "finalize-beats")}
-                  className={copyButtonClass(
-                    "finalize-beats",
-                    "rounded-md border px-2 py-1 text-xs transition-colors"
-                  )}
-                >
-                  {copyTarget === "finalize-beats" ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                {latestBeat.output}
-              </pre>
-            </div>
-            <label className="block">
-              <span className="text-sm font-medium text-foreground">Instruction for episode draft</span>
-              <textarea
-                value={finalizeDraftInstruction}
-                onChange={(event) => setFinalizeDraftInstruction(event.target.value)}
-                disabled={isStreaming}
-                placeholder="Optional. Example: Keep it to about 12 dialogue lines and make the final catch feel earned."
-                className="mt-2 h-24 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-emerald-500 focus:outline-none disabled:opacity-60"
-              />
-            </label>
-          </div>
-          <div className="shrink-0 flex items-center justify-between gap-3 border-t border-border bg-card px-5 py-4">
-            <button
-              type="button"
-              disabled={isStreaming}
-              onClick={() => {
-                setFinalizeModalOpen(false);
-                setFinalizeDraftInstruction("");
-              }}
-              className="rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              disabled={isStreaming}
-              onClick={generateDraftFromFinalizedBeats}
-              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {isStreaming ? "Generating..." : "Generate Episode"}
-            </button>
-          </div>
-        </section>
       </div>
     );
   }
@@ -1086,14 +1450,20 @@ export default function PredefinedLabStageWorkspace({
             <h1 className="mt-1 text-xl font-semibold text-foreground">Build Predefined Episodes</h1>
           </div>
           <div className="flex rounded-full border border-border bg-muted p-1 text-xs">
-            {(["inputs", "beats", "draft"] as LabStage[]).map((item) => (
+            {(["inputs", "beats", "dialogue", "draft"] as LabStage[]).map((item) => (
               <span
                 key={item}
                 className={`rounded-full px-3 py-1 capitalize ${
                   stage === item ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >
-                {item === "inputs" ? "Stage 1: Inputs" : item === "beats" ? "Stage 2: Key Beats" : "Stage 3: Draft"}
+                {item === "inputs"
+                  ? "Stage 1: Inputs"
+                  : item === "beats"
+                    ? "Stage 2: Key Beats"
+                    : item === "dialogue"
+                      ? "Stage 3: Dialogue"
+                      : "Stage 4: Draft"}
               </span>
             ))}
           </div>
@@ -1106,12 +1476,13 @@ export default function PredefinedLabStageWorkspace({
         <>
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
             {renderContextBar()}
+            {renderAutoPipelineProgress()}
+            {renderPipelineSummary()}
             {renderTimeline()}
           </div>
           {renderComposer()}
         </>
       )}
-      {renderFinalizeModal()}
       {renderConfirmDialog()}
     </main>
   );
