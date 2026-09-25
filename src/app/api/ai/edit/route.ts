@@ -22,16 +22,20 @@ import {
   CONTINUATION_SYNTH_SYSTEM_PROMPT,
   PREDEFINED_LAB_BEATS_PROMPT,
   PREDEFINED_LAB_DRAFT_PROMPT,
+  PREDEFINED_LAB_DIALOGUE_DESIGN_PROMPT,
   PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
   PREDEFINED_LAB_ITERATE_PROMPT,
 } from "@/lib/ai/prompts";
-import { getActivePredefinedLabDialogueGuide } from "@/lib/ai/predefined-lab-dialogue-guide";
+import {
+  getActivePredefinedLabDialogueGuide,
+  getActivePredefinedLabDialogueReferencePack,
+} from "@/lib/ai/predefined-lab-dialogue-guide";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
   | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
   | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth"
-  | "predef_lab_beats" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass";
+  | "predef_lab_beats" | "predef_lab_dialogue_design" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -48,6 +52,7 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   pipe_continuation_logic: CONTINUATION_LOGIC_SYSTEM_PROMPT,
   pipe_continuation_synth: CONTINUATION_SYNTH_SYSTEM_PROMPT,
   predef_lab_beats: PREDEFINED_LAB_BEATS_PROMPT,
+  predef_lab_dialogue_design: PREDEFINED_LAB_DIALOGUE_DESIGN_PROMPT,
   predef_lab_draft: PREDEFINED_LAB_DRAFT_PROMPT,
   predef_lab_iterate: PREDEFINED_LAB_ITERATE_PROMPT,
   predef_lab_dialogue_pass: PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
@@ -67,6 +72,7 @@ const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "pipe_continuation_logic",
   "pipe_continuation_synth",
   "predef_lab_beats",
+  "predef_lab_dialogue_design",
   "predef_lab_draft",
   "predef_lab_iterate",
   "predef_lab_dialogue_pass",
@@ -83,6 +89,10 @@ const PERSONA_DEPENDENT_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "draft",
   "edit",
   "feedback",
+]);
+const PREDEFINED_LAB_DIALOGUE_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "predef_lab_dialogue_design",
+  "predef_lab_dialogue_pass",
 ]);
 
 async function getSystemPrompt(mode: Mode): Promise<string> {
@@ -149,17 +159,39 @@ export async function POST(req: Request) {
 
   const baseSystemPrompt = await getSystemPrompt(safeMode);
   const dialogueGuide =
-    safeMode === "predef_lab_dialogue_pass"
+    PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode)
       ? await getActivePredefinedLabDialogueGuide()
       : "";
+  const dialogueReferencePack =
+    safeMode === "predef_lab_dialogue_design"
+      ? await getActivePredefinedLabDialogueReferencePack()
+      : "";
   const systemPrompt =
-    safeMode === "predef_lab_dialogue_pass"
+    safeMode === "predef_lab_dialogue_design"
+      ? baseSystemPrompt
+      : safeMode === "predef_lab_dialogue_pass"
       ? `${baseSystemPrompt}\n\n## Dialogue Quality Guide\n${dialogueGuide}`
       : baseSystemPrompt;
+  const preparedMessages =
+    safeMode === "predef_lab_dialogue_design"
+      ? messages.map((message, index) => {
+          if (index !== 0 || message.role !== "user") return message;
+          const supplementalContext = `## Dialogue Quality Guide\n${dialogueGuide}\n\n## Dialogue Reference Pack\n${dialogueReferencePack}`;
+          return {
+            ...message,
+            content: message.content.includes("## Approved / Current Key Beats")
+              ? message.content.replace(
+                  "## Approved / Current Key Beats",
+                  `${supplementalContext}\n\n## Approved / Current Key Beats`
+                )
+              : `${message.content}\n\n${supplementalContext}`,
+          };
+        })
+      : messages;
 
   try {
     const requestedModelId =
-      safeMode === "predef_lab_dialogue_pass"
+      PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode)
         ? "gemini-3.1-pro-preview"
         : modelId || "claude-sonnet-4-20250514";
     const model = await getAIModel(
@@ -170,13 +202,13 @@ export async function POST(req: Request) {
       mode: safeMode,
       requestedModelId: modelId || null,
       modelId: requestedModelId,
-      forcedProvider: safeMode === "predef_lab_dialogue_pass" ? "google" : null,
+      forcedProvider: PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode) ? "google" : null,
     });
 
     const streamOptions: Parameters<typeof streamText>[0] = {
       model,
       system: systemPrompt,
-      messages: messages.map((m) => ({
+      messages: preparedMessages.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),

@@ -6,6 +6,7 @@ import type { EditorHandle } from "@/components/editor/Editor";
 import { buildAIContext, buildPipelineStepContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { parseCharacterProfiles, normalizeCharacterName } from "@/lib/ai/characters";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
+import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
 
 type AIJobController = ReturnType<typeof useJob>;
 
@@ -1310,6 +1311,7 @@ export default function AIChatSidebar({
                       ...current,
                       [activeQuestionnaireCharacter]: { ...(current[activeQuestionnaireCharacter] ?? draft), [question.key]: event.target.value },
                     }))}
+                    onKeyDown={handleTextareaLineMoveKeyDown}
                     rows={question.key === "sampleDialogue" || question.key === "relationships" ? 4 : 3}
                     className="mt-1 w-full resize-y rounded border border-border bg-background px-2.5 py-2 text-sm text-foreground"
                   />
@@ -1504,6 +1506,7 @@ export default function AIChatSidebar({
               : "border-border bg-card"
           }`}
           onKeyDown={(e) => {
+            if (handleTextareaLineMoveKeyDown(e)) return;
             if (e.key === "Enter") {
               if (sendOnEnter && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 e.preventDefault();

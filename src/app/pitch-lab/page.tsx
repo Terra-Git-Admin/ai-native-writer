@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
 import { parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
 
@@ -490,7 +491,7 @@ export default function PitchLabPage() {
 
               {generationMode === "framework" ? <div className="mt-6">
                 <label htmlFor="pitch-brief" className="block text-sm font-medium">Optional direction</label>
-                <textarea id="pitch-brief" value={brief} onChange={(event) => setBrief(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Any tone, genre, or creative direction to steer the ideas? You can leave this blank." />
+                <textarea id="pitch-brief" value={brief} onChange={(event) => setBrief(event.target.value)} onKeyDown={handleTextareaLineMoveKeyDown} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Any tone, genre, or creative direction to steer the ideas? You can leave this blank." />
               </div> : <div className="mt-6 border-t border-border pt-5">
                 <label htmlFor="source-document-search" className="block text-sm font-medium">Search all Writer docs</label>
                 <div className="relative mt-2">
@@ -504,7 +505,7 @@ export default function PitchLabPage() {
                   </div>}
                 </div>
                 <label htmlFor="pasted-source" className="mt-4 block text-sm font-medium">Or paste story material</label>
-                <textarea id="pasted-source" value={pastedSource} onChange={(event) => setPastedSource(event.target.value)} rows={4} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Paste a story or plot to adapt..." />
+                <textarea id="pasted-source" value={pastedSource} onChange={(event) => setPastedSource(event.target.value)} onKeyDown={handleTextareaLineMoveKeyDown} rows={4} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Paste a story or plot to adapt..." />
                 <label htmlFor="external-story-url" className="mt-4 block text-sm font-medium">Or adapt from a public story link</label>
                 <input id="external-story-url" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" placeholder="https://www.imdb.com/title/.../" />
                 <p className="mt-1 text-xs text-muted-foreground">Pitch Lab reads publicly available page text. Some sites block access or hide their synopsis; if that happens, paste the story details above.</p>
@@ -522,7 +523,7 @@ export default function PitchLabPage() {
                   </div>
                 </fieldset>}
                 <label htmlFor="pitch-brief-adaptation" className="mt-5 block text-sm font-medium">Optional direction</label>
-                <textarea id="pitch-brief-adaptation" value={brief} onChange={(event) => setBrief(event.target.value)} rows={2} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Any changes you want across the adaptations?" />
+                <textarea id="pitch-brief-adaptation" value={brief} onChange={(event) => setBrief(event.target.value)} onKeyDown={handleTextareaLineMoveKeyDown} rows={2} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Any changes you want across the adaptations?" />
               </div>}
 
               <p className="mt-5 text-sm text-muted-foreground">{generationMode === "framework" ? "The active plot framework guides the ideas without being shown here." : "Choose at least one source before generating adapted ideas."}</p>
@@ -559,7 +560,7 @@ export default function PitchLabPage() {
 
             {generated.length > 0 && <div className="mt-6 border-t border-border pt-5">
               <label htmlFor="regeneration-instructions" className="block text-sm font-medium">Optional instructions for the next ideas</label>
-              <textarea id="regeneration-instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Add a direction for the next ideas, or leave this blank." />
+              <textarea id="regeneration-instructions" value={instructions} onChange={(event) => setInstructions(event.target.value)} onKeyDown={handleTextareaLineMoveKeyDown} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Add a direction for the next ideas, or leave this blank." />
               <p className="mt-2 text-sm text-muted-foreground">Regenerating replaces ideas that have not been shortlisted. Your shortlist and discarded ideas stay available.</p>
               <button onClick={() => generate(true)} disabled={isBusy || (generationMode === "adaptation" && !hasSource)} className="mt-3 min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:opacity-50">{operation?.kind === "regenerate" ? "Regenerating..." : "Regenerate"}</button>
             </div>}
@@ -603,10 +604,10 @@ export default function PitchLabPage() {
               <label htmlFor="idea-title" className="mt-4 block text-sm font-medium">Title</label>
               <input id="idea-title" value={ideaTitle} onChange={(event) => setIdeaTitle(event.target.value)} readOnly={!isCurrentEditable} className={`mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm ${isCurrentEditable ? "bg-background" : "bg-muted/40 text-muted-foreground"}`} />
               <label htmlFor="idea-edit" className="mt-4 block text-sm font-medium">Current idea text</label>
-              <textarea ref={ideaTextRef} id="idea-edit" value={ideaDraft} onChange={(event) => { setIdeaDraft(event.target.value); setCurrentVersionNotice(null); }} readOnly={!isCurrentEditable} rows={8} className={`mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring ${isCurrentEditable ? "bg-background" : "bg-muted/40 text-muted-foreground"}`} />
+              <textarea ref={ideaTextRef} id="idea-edit" value={ideaDraft} onChange={(event) => { setIdeaDraft(event.target.value); setCurrentVersionNotice(null); }} onKeyDown={handleTextareaLineMoveKeyDown} readOnly={!isCurrentEditable} rows={8} className={`mt-2 w-full rounded-lg border border-input px-3 py-2 text-sm leading-6 outline-none focus:ring-2 focus:ring-ring ${isCurrentEditable ? "bg-background" : "bg-muted/40 text-muted-foreground"}`} />
               <div className="mt-5 border-t border-border pt-5">
               <label htmlFor="idea-instructions" className="block text-sm font-medium">Refine the current text</label>
-              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Example: make the betrayal sharper and keep the ending as a cliffhanger." />
+              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} onKeyDown={handleTextareaLineMoveKeyDown} rows={3} className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Example: make the betrayal sharper and keep the ending as a cliffhanger." />
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <button onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className="min-h-11 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{operation?.kind === "refine" ? "Refining..." : "Refine"}</button>
                 <span className="text-sm text-muted-foreground">Refine uses the current text above, including unsaved edits, and replaces it with the new version.</span>
