@@ -521,6 +521,16 @@ export default function PredefinedLabStageWorkspace({
         leakedImportTags: /^\s*\[(H\d|P|UL|OL)\]/m.test(accumulated),
         hasCommentary: /\b(rationale|analysis|knowledge audit|here is|here's)\b/i.test(accumulated),
       });
+      if (mode === "predef_lab_draft" && turnStage === "draft" && !priorDraft.trim() && !retryTurnId) {
+        clientTrace("predefined_lab.first_draft_text", {
+          documentId,
+          modelId,
+          thinking,
+          outputChars: accumulated.length,
+          dialogueLines: countDialogueLines(accumulated),
+          text: accumulated,
+        });
+      }
       return completedTurn;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Predefined Lab failed";

@@ -3895,8 +3895,19 @@ Episode N
 
 Seq 1 — Location | time | characters
 (Visual: brief visible action.)
-CHARACTER: "Short spoken line."
-CHARACTER (V.O.): interior thought.
+CHARACTER: "Short spoken line." [tone]
+CHARACTER (specific physical delivery or gesture): "Short spoken line." [tone]
+CHARACTER (V.O.): interior thought. [tone]
+
+Formatting grammar:
+- Visual beats must be exactly parenthesized as their own beat: (Visual: visible action.)
+- Gesture/stage direction belongs immediately after the character name in parentheses, before the colon: TAIGA (flailing his hands): "Line." [furious]
+- Emotion, tone, or delivery state belongs at the very end in square brackets: [furious], [cold], [trying not to break].
+- Do not move gesture into the spoken sentence. Do not write: TAIGA: "(flailing his hands) Line." [furious]
+- Do not move emotion into the character parenthetical. Do not write: TAIGA (furious): "Line." Use [furious] at the end instead.
+- Correct example:
+(Visual: Fast cut to Ha-Ku's luxurious, dimly lit penthouse. Ha-Ku stands by the window, staring out at the Shibuya skyline, ignoring Taiga pacing behind him.)
+TAIGA (flailing his hands): "Do you have any idea how much that launch event cost?? You have responsibilities, man!" [furious]
 
 Rules:
 - Preserve approved beats. Do not re-plan the episode.
@@ -3905,6 +3916,8 @@ Rules:
 - Use the Dialogue Design as a required scene-pressure and line-function contract. Convert its anchors into natural scene dialogue; do not preserve anchors verbatim if they become stiff.
 - Let dialogue carry pressure. Each spoken line should reveal character, shift power, or move the plot; cut greetings, repeated reactions, explained emotion, and filler.
 - Run short exchanges before interrupting with Visual beats. Do not place a separate Visual beat after every spoken line unless the action truly changes the scene.
+- Put every spoken dialogue line in double quotes and end it with a [tone] tag.
+- Keep visual action in (Visual: ...), gesture/stage direction in the character parenthetical, and emotion/tone in the final [tone] tag.
 - Keep dialogue playable, direct, and pressure-native.
 - Keep spatial blocking simple and coherent.
 - Do not let any character know a name or fact they could not know from selected context.
@@ -3984,7 +3997,7 @@ If the instruction is about dialogue, stay surgical:
 - Make every changed line more character-specific, more compressed, or more loaded with subtext.
 - Do not add explanation about what changed.
 
-Return the revised draft only, in the same readable Lab format as the current draft. Do not add [H3], [P], [UL], [OL], or [H2] import tags. No commentary, no change log, no markdown fences.`;
+Return the revised draft only, in the same readable Lab format as the current draft. Preserve Visual beats as (Visual: ...), character gestures as CHARACTER (gesture): before the line, and emotion/tone as the final [tone] tag. Do not add [H3], [P], [UL], [OL], or [H2] import tags. No commentary, no change log, no markdown fences.`;
 
 export const PREDEFINED_LAB_DIALOGUE_PASS_PROMPT = `You are the Predefined Lab dialogue editor.
 
@@ -4024,7 +4037,7 @@ Do not rewrite the plot. Do not add new scenes. Do not expand the episode. Do no
 
 Every kept or rewritten dialogue line should reveal character, shift power, expose knowledge, hide intent, escalate pressure, or move action. Cut filler, repeated reactions, generic greetings, explained emotion, and lines that only restate what the visual already says.
 
-Output only the full revised episode draft, in the same readable Lab format as the current draft. Do not add [H3], [P], [UL], [OL], or [H2] import tags. No preamble, no commentary, no changelog.`;
+Output only the full revised episode draft, in the same readable Lab format as the current draft. Preserve Visual beats as (Visual: ...), character gestures as CHARACTER (gesture): before the line, and emotion/tone as the final [tone] tag. Do not add [H3], [P], [UL], [OL], or [H2] import tags. No preamble, no commentary, no changelog.`;
 
 // ─── Entity Extraction (Sync button — Characters + Locations tabs) ───
 //
