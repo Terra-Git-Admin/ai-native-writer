@@ -365,3 +365,25 @@ Decision log and session summaries. Read at every session start.
 - Pitch Lab remains admin-only and is additionally gated by `PITCH_LAB_ENABLED` and `NEXT_PUBLIC_PITCH_LAB_ENABLED`; direct `/pitch-lab` page access is blocked when disabled or non-admin.
 - RCA release path: use VM DB read-only inspection before enablement, keep `0010_pitch_lab_reconcile` as the forward-only reconcile migration, and prefer flag disable over rollback for Pitch Lab issues.
 - Local verification: focused Pitch Lab ESLint passed with docs `<img>` warnings only; `npm run build` passed. Full repo lint still has unrelated existing React compiler/typing errors.
+
+## Session - 2026-09-25 (Pitch Lab AI Studio migration checkpoint)
+
+- Worked on migrating Pitch Lab toward the live Predefined Lab / AI Studio interaction model.
+- Implemented local staged workspace shape: Inputs -> Concepts -> Pitch -> Writer Doc, with fixed header stage pills, one scrollable workspace pane, and a sticky bottom composer/CTA bar.
+- Added `src/components/pitch-lab/PitchLabStudioPage.tsx`; `/pitch-lab/page.tsx` delegates to it. Existing update API now preserves manual edit/restore labels through `versionInstruction`.
+- Decisions: core action is moving one pitch artifact forward; CTAs are stage-specific (`Generate Concepts`, `Regenerate Concepts`, `Give Feedback`, `Create Writer Doc`); pitch iterations render as User -> Pitch Builder turns with `LATEST vN` / `OLD vN`, Edit/Rerun/Restore/Copy.
+- Verification: targeted ESLint passed, `npm run build` passed, `git diff --check` passed with CRLF warnings only, and `http://localhost:3002/pitch-lab` returned HTTP 200.
+- Still in progress: UI needs Monday feedback/playtesting against live Predefined Lab comps; `page.tsx` currently compiles as a wrapper but still has old commented code below it because patch deletion failed and should be cleaned before PR.
+- Next priorities: playtest Inputs -> Concepts -> Build Pitch -> Give Feedback -> Edit/Rerun/Restore -> Create Writer Doc; tighten spacing/header density/CTA hierarchy/running states; decide whether Stage 2 should group concepts as one generation turn or separate Concept Builder cards; clean wrapper file; rerun lint/build/local smoke.
+
+## Session - 2026-09-28 (Pitch Lab direction-grouped pilot sets)
+
+- Pitch Lab generation now keeps writers on Story Directions after pressing Generate; pilot options append as grouped sets under the direction that created them instead of replacing the current batch or auto-navigating.
+- Grouping is stored in the existing pitch idea envelope (`premiseId`, `batchId`, `batchNumber`, `generatedAt`) to avoid a DB migration; older rows fall back to premise text matching.
+- Shortlisting is now a card state change only. Multiple pilots can be shortlisted across generated sets, and the Shortlist tab remains the deliberate place to improve selected stories.
+
+## Session - 2026-09-28 (Pitch Lab compact single-set UX)
+
+- Pitch Lab Start now uses `View` and `Generate`; Generate warns before replacing unshortlisted directions/pilots while preserving shortlisted/promoted pitches.
+- Story Directions now has a compact expandable row UX with per-row Copy/Regenerate/Discard/Generate actions and inline generation progress.
+- The separate Generated tab is removed from the active UI. Only one active generated pilot set is shown under Story Directions; Shortlist remains the durable multi-day improvement workspace.

@@ -98,7 +98,7 @@ export const pitchIdeas = sqliteTable("pitch_ideas", {
   workspaceId: text("workspace_id").notNull().references(() => pitchWorkspaces.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   ideaText: text("idea_text").notNull(),
-  status: text("status", { enum: ["generated", "shortlisted", "discarded", "promoted"] }).notNull().default("generated"),
+  status: text("status", { enum: ["premise", "generated", "shortlisted", "discarded", "promoted"] }).notNull().default("generated"),
   position: integer("position").notNull().default(0),
   promotedDocumentId: text("promoted_document_id"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),

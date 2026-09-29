@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 
 interface Episode {
@@ -59,10 +59,7 @@ export default function QualityAgentModal({
   const [selectedTabId, setSelectedTabId] = useState(defaultTab?.id ?? "");
 
   const selectedTab = episodeTabs.find((t) => t.id === selectedTabId);
-  const episodes = useMemo(
-    () => extractEpisodes(selectedTab?.content ?? null),
-    [selectedTab]
-  );
+  const episodes = extractEpisodes(selectedTab?.content ?? null);
 
   const [selectedEpisodeIndex, setSelectedEpisodeIndex] = useState(
     episodes.length > 0 ? episodes[episodes.length - 1].index : 0
