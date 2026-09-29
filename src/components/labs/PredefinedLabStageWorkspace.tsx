@@ -17,6 +17,9 @@ type TurnStage = "beats" | "dialogue" | "draft";
 type TurnStatus = "running" | "complete" | "failed";
 type AutoPipelineStep = "idle" | "beats" | "dialogue" | "draft" | "complete" | "failed";
 
+const DEFAULT_DIALOGUE_DESIGN_INSTRUCTION =
+  "Build dialogue design from finalized key beats. Infer relationship state from selected previous predefined episodes, choose beat-fit exchange types, and keep strangers or staff procedural unless the key beats make them story-important.";
+
 interface SectionOption {
   id: string;
   title: string;
@@ -606,7 +609,7 @@ export default function PredefinedLabStageWorkspace({
     const dialogue = await runTurn({
       turnStage: "dialogue",
       mode: "predef_lab_dialogue_design",
-      userInstruction: "Build dialogue design from finalized key beats.",
+      userInstruction: DEFAULT_DIALOGUE_DESIGN_INSTRUCTION,
       beatPlanOverride: finalizedBeat.output,
       visibleStage: "draft",
       skipInputWarnings: true,
@@ -657,7 +660,7 @@ export default function PredefinedLabStageWorkspace({
       userInstruction:
         text ||
         (stage === "dialogue"
-          ? "Build dialogue design from finalized key beats."
+          ? DEFAULT_DIALOGUE_DESIGN_INSTRUCTION
           : "Write episode draft from finalized key beats and approved dialogue design."),
     });
   }
@@ -721,7 +724,7 @@ export default function PredefinedLabStageWorkspace({
     await runTurn({
       turnStage: "dialogue",
       mode: "predef_lab_dialogue_design",
-      userInstruction: "Build dialogue design from finalized key beats.",
+      userInstruction: DEFAULT_DIALOGUE_DESIGN_INSTRUCTION,
       beatPlanOverride: finalizedBeat.output,
     });
   }
