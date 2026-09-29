@@ -1,4 +1,4 @@
-import { eq, asc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -13,7 +13,7 @@ export async function GET() {
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
   if (!workspace) return NextResponse.json({ workspace: null, ideas: [], sources: [] });
   const [ideas, sources] = await Promise.all([
-    db.select().from(pitchIdeas).where(eq(pitchIdeas.workspaceId, workspace.id)).orderBy(asc(pitchIdeas.position)),
+    db.select().from(pitchIdeas).where(eq(pitchIdeas.workspaceId, workspace.id)).orderBy(desc(pitchIdeas.position)),
     db.select().from(pitchSources).where(eq(pitchSources.workspaceId, workspace.id)),
   ]);
   return NextResponse.json({ workspace, ideas, sources });

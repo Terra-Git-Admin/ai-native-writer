@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
 interface Prompt {
@@ -23,21 +23,35 @@ export default function PromptEditor({ onClose }: PromptEditorProps) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const fetchPrompts = useCallback(async () => {
+  async function fetchPrompts(selectFirst = false) {
     const res = await fetch("/api/prompts");
     if (res.ok) {
-      const data = await res.json();
+      const data = await res.json() as Prompt[];
       setPromptsList(data);
-      if (!selectedId && data.length > 0) {
+      if (selectFirst && data.length > 0) {
         setSelectedId(data[0].id);
         setEditContent(data[0].content);
       }
     }
-  }, []);
+  }
 
   useEffect(() => {
-    fetchPrompts();
-  }, [fetchPrompts]);
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/prompts");
+      if (!res.ok || cancelled) return;
+      const data = await res.json() as Prompt[];
+      if (cancelled) return;
+      setPromptsList(data);
+      if (data.length > 0) {
+        setSelectedId(data[0].id);
+        setEditContent(data[0].content);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSelect = (id: string) => {
     setSelectedId(id);
@@ -56,7 +70,7 @@ export default function PromptEditor({ onClose }: PromptEditorProps) {
     });
     setSaving(false);
     setSaved(true);
-    fetchPrompts();
+    void fetchPrompts();
     setTimeout(() => setSaved(false), 2000);
   };
 

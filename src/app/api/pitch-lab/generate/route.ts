@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -7,22 +7,30 @@ import { documents, pitchIdeas, pitchSources, pitchWorkspaces, tabs } from "@/li
 import { nanoid } from "nanoid";
 import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
-import { buildPitchLabSampleIdeas, isPitchLabSampleMode } from "@/lib/ai/pitch-lab-samples";
+import { buildPitchLabSampleIdeas, buildPitchLabSamplePremises, isPitchLabSampleMode } from "@/lib/ai/pitch-lab-samples";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { splitTabByH3, tiptapJsonToTagged, extractEpisodeNumber } from "@/lib/ai/context-engine";
 import {
-  buildPitchLabGenerationPrompt,
-  buildPitchLabGenerationSystemPrompt,
+  buildPitchLabPilotBatchPrompt,
+  buildPitchLabPilotBatchSystemPrompt,
+  buildPitchLabPremisePrompt,
+  buildPitchLabPremiseSystemPrompt,
   cleanPitchLabTitle,
   isValidPitchLabTitle,
   PITCH_LAB_IDEA_COUNT,
+  PITCH_LAB_PREMISE_COUNT,
 } from "@/lib/ai/pitch-lab-prompts";
 import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
+import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 
 const SOURCE_LIMIT = 60_000;
 const WRITER_SOURCE_BLOCK_LIMIT = 20_000;
+
+type PitchLabPhase = "premises" | "pilots";
+type ParsedPremise = { title: string; premiseText: string; appealLane: string; transformationNotes: string };
+type ParsedPilot = { title: string; ideaText: string; kernel: string; beats: string; clarityChecks: string; adaptationNotes: string };
 
 function logPitchLabGenerationOutput(input: {
   workspaceId: string;
@@ -49,7 +57,7 @@ function logPitchLabGenerationOutput(input: {
   });
 }
 
-function parseIdeas(text: string): { title: string; ideaText: string }[] {
+function parseModelJson(text: string): unknown {
   const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   // Some providers emit literal line breaks or tabs inside quoted JSON values.
   // Escape those control characters before parsing so valid plot text is retained.
@@ -67,12 +75,35 @@ function parseIdeas(text: string): { title: string; ideaText: string }[] {
     else if (inString && character === "\\") escaped = true;
     else if (character === '"') inString = !inString;
   }
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(repaired);
+    return JSON.parse(repaired);
   } catch {
     throw new Error("The model returned an unreadable idea list. Your current ideas are unchanged; try generating again.");
   }
+}
+
+function parsePremises(text: string): ParsedPremise[] {
+  const parsed = parseModelJson(text);
+  if (!Array.isArray(parsed)) throw new Error("The model returned an invalid premise list.");
+  const premises = parsed.map((item) => {
+    if (!item || typeof item !== "object") return null;
+    const candidate = item as Record<string, unknown>;
+    if (typeof candidate.title !== "string" || typeof candidate.premiseText !== "string") return null;
+    const title = cleanPitchLabTitle(candidate.title);
+    const premiseText = candidate.premiseText.trim();
+    return title && premiseText && isValidPitchLabTitle(title) ? {
+      title,
+      premiseText,
+      appealLane: typeof candidate.appealLane === "string" ? candidate.appealLane.trim() : "",
+      transformationNotes: typeof candidate.transformationNotes === "string" ? candidate.transformationNotes.trim() : "",
+    } : null;
+  }).filter((premise): premise is ParsedPremise => Boolean(premise));
+  if (premises.length !== PITCH_LAB_PREMISE_COUNT) throw new Error(`The model returned ${premises.length} valid premises; expected ${PITCH_LAB_PREMISE_COUNT}. Please regenerate.`);
+  return premises;
+}
+
+function parseIdeas(text: string): ParsedPilot[] {
+  const parsed = parseModelJson(text);
   if (!Array.isArray(parsed)) throw new Error("The model returned an invalid idea list.");
   const ideas = parsed.map((item) => {
     if (!item || typeof item !== "object") return null;
@@ -80,8 +111,15 @@ function parseIdeas(text: string): { title: string; ideaText: string }[] {
     if (typeof candidate.title !== "string" || typeof candidate.ideaText !== "string") return null;
     const title = cleanPitchLabTitle(candidate.title);
     const ideaText = candidate.ideaText.trim();
-    return title && ideaText && isValidPitchLabTitle(title) ? { title, ideaText } : null;
-  }).filter((idea): idea is { title: string; ideaText: string } => Boolean(idea));
+    return title && ideaText && isValidPitchLabTitle(title) ? {
+      title,
+      ideaText,
+      kernel: typeof candidate.kernel === "string" ? candidate.kernel.trim() : "",
+      beats: typeof candidate.beats === "string" ? candidate.beats.trim() : "",
+      clarityChecks: typeof candidate.clarityChecks === "string" ? candidate.clarityChecks.trim() : "",
+      adaptationNotes: typeof candidate.adaptationNotes === "string" ? candidate.adaptationNotes.trim() : "",
+    } : null;
+  }).filter((idea): idea is ParsedPilot => Boolean(idea));
   if (ideas.length !== PITCH_LAB_IDEA_COUNT) throw new Error(`The model returned ${ideas.length} valid ideas with one- or two-word titles; expected ${PITCH_LAB_IDEA_COUNT}. Please regenerate.`);
   return ideas;
 }
@@ -244,8 +282,14 @@ export async function POST(req: Request) {
   const pastedSource = typeof body?.pastedSource === "string" ? body.pastedSource.trim() : "";
   const sourceUrl = typeof body?.sourceUrl === "string" ? body.sourceUrl.trim() : "";
   const instruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
+  const phase: PitchLabPhase = body?.phase === "pilots" ? "pilots" : "premises";
+  const selectedPremise = typeof body?.selectedPremise === "string" ? body.selectedPremise.trim() : "";
+  const selectedPremiseId = typeof body?.selectedPremiseId === "string" ? body.selectedPremiseId : "";
   const generationType = body?.generationType === "adaptation" ? "adaptation" : "framework";
   const adaptationStyle = body?.adaptationStyle === "close" ? "close" : "loose";
+  if (phase === "pilots" && !selectedPremise) {
+    return NextResponse.json({ error: "Choose an idea before generating pitch options." }, { status: 400 });
+  }
   if (generationType === "adaptation" && !sourceDocumentId && !pastedSource && !sourceUrl) {
     return NextResponse.json({ error: "Choose a Writer story, add a public story link, or paste story material to adapt." }, { status: 400 });
   }
@@ -271,15 +315,29 @@ export async function POST(req: Request) {
   }
   const sourceMaterial = sources.map((source) => source.text).join("\n\n---\n\n").slice(0, SOURCE_LIMIT);
 
-  let parsedIdeas: { title: string; ideaText: string }[] | null = null;
+  let parsedPremises: ParsedPremise[] | null = null;
+  let parsedIdeas: ParsedPilot[] | null = null;
   let isPlaceholder = false;
   try {
     if (isPitchLabSampleMode()) {
-      parsedIdeas = buildPitchLabSampleIdeas({
-        generationType,
-        adaptationStyle,
-        sourceTitle: sources.map((source) => source.title).join(" + ") || "the selected story",
-      }).slice(0, PITCH_LAB_IDEA_COUNT);
+      if (phase === "premises") {
+        parsedPremises = buildPitchLabSamplePremises({
+          generationType,
+          adaptationStyle,
+          sourceTitle: sources.map((source) => source.title).join(" + ") || "the selected story",
+        });
+      } else {
+        const sampleIdeas = buildPitchLabSampleIdeas({
+          generationType,
+          adaptationStyle,
+          sourceTitle: sources.map((source) => source.title).join(" + ") || "the selected story",
+          selectedPremise,
+        });
+        if (sampleIdeas.length !== PITCH_LAB_IDEA_COUNT) {
+          throw new Error(`Sample pitch batch returned ${sampleIdeas.length} ideas; expected ${PITCH_LAB_IDEA_COUNT}.`);
+        }
+        parsedIdeas = sampleIdeas.map((idea) => ({ ...idea, kernel: selectedPremise, beats: "", clarityChecks: "", adaptationNotes: "" }));
+      }
       isPlaceholder = true;
     } else {
       const providers = await getConfiguredProviders();
@@ -292,26 +350,79 @@ export async function POST(req: Request) {
         try {
           const result = await generateText({
             model: await getAIModel(candidate.modelId),
-            system: buildPitchLabGenerationSystemPrompt(tasteBrief),
-            prompt: buildPitchLabGenerationPrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial }),
-            maxOutputTokens: 14000,
+            system: phase === "premises"
+              ? buildPitchLabPremiseSystemPrompt(tasteBrief)
+              : buildPitchLabPilotBatchSystemPrompt(tasteBrief),
+            prompt: phase === "premises"
+              ? buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial })
+              : buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, selectedPremise }),
+            maxOutputTokens: phase === "premises" ? 9000 : 14000,
             maxRetries: 0,
           });
-          parsedIdeas = parseIdeas(result.text);
+          if (phase === "premises") parsedPremises = parsePremises(result.text);
+          else parsedIdeas = parseIdeas(result.text);
           lastError = null;
           break;
         } catch (err) {
           lastError = err;
-          console.warn("[pitch-lab] idea generation provider failed", {
+          console.warn("[pitch-lab] generation provider failed", {
+            phase,
             provider: candidate.provider,
             modelId: candidate.modelId,
             error: pitchLabErrorMessage(err),
           });
         }
       }
-      if (!parsedIdeas) {
+      if (phase === "premises" && !parsedPremises) {
         return NextResponse.json({ error: `All configured AI providers failed. Last error: ${pitchLabErrorMessage(lastError)}` }, { status: 502 });
       }
+      if (phase === "pilots" && !parsedIdeas) {
+        return NextResponse.json({ error: `All configured AI providers failed. Last error: ${pitchLabErrorMessage(lastError)}` }, { status: 502 });
+      }
+    }
+
+    if (phase === "premises") {
+      if (!parsedPremises) throw new Error("Idea generation returned no ideas.");
+      const premisesToSave = parsedPremises;
+      const saved = db.transaction((tx) => {
+        const now = new Date();
+        let workspaceId = tx.select({ id: pitchWorkspaces.id }).from(pitchWorkspaces)
+          .where(eq(pitchWorkspaces.ownerId, session.user.id)).get()?.id ?? null;
+        if (!workspaceId) {
+          workspaceId = nanoid(12);
+          tx.insert(pitchWorkspaces).values({ id: workspaceId, ownerId: session.user.id, brief, adaptationStyle: sourceMaterial ? adaptationStyle : null, createdAt: now, updatedAt: now }).run();
+        } else {
+          tx.update(pitchWorkspaces).set({ brief, adaptationStyle: sourceMaterial ? adaptationStyle : null, updatedAt: now })
+            .where(eq(pitchWorkspaces.id, workspaceId)).run();
+        }
+        tx.delete(pitchSources).where(eq(pitchSources.workspaceId, workspaceId)).run();
+        if (sources.length) tx.insert(pitchSources).values(sources.map((source) => ({
+          id: nanoid(12), workspaceId: workspaceId!, type: source.type, sourceDocumentId: source.sourceDocumentId,
+          title: source.title, textSnapshot: source.text.slice(0, SOURCE_LIMIT), createdAt: now,
+        }))).run();
+        tx.delete(pitchIdeas).where(and(
+          eq(pitchIdeas.workspaceId, workspaceId),
+          inArray(pitchIdeas.status, ["premise", "generated", "discarded"]),
+        )).run();
+        const existingRows = tx.select({ position: pitchIdeas.position }).from(pitchIdeas)
+          .where(eq(pitchIdeas.workspaceId, workspaceId)).all();
+        const startPosition = existingRows.length ? Math.max(...existingRows.map((row) => row.position)) + 1 : 0;
+        const premises = premisesToSave.map((premise, index) => ({
+          id: nanoid(12), workspaceId: workspaceId!,
+          title: premise.title.replace(/^\[Sample\]\s*/i, ""),
+          ideaText: serializePitchIdeaEnvelope({
+            originalText: premise.premiseText,
+            currentText: premise.premiseText,
+            turns: [{ instruction: "Idea", ideaText: premise.premiseText, createdAt: now.toISOString(), kind: "initial" }],
+            premise: premise.premiseText,
+            adaptationNotes: [premise.appealLane, premise.transformationNotes].filter(Boolean).join(" | "),
+          }),
+          status: "premise" as const, position: startPosition + index, createdAt: now, updatedAt: now,
+        }));
+        tx.insert(pitchIdeas).values(premises).run();
+        return { workspaceId, ideas: premises };
+      });
+      return NextResponse.json({ ...saved, phase, isPlaceholder });
     }
 
     if (!parsedIdeas) throw new Error("Idea generation returned no ideas.");
@@ -332,18 +443,39 @@ export async function POST(req: Request) {
         id: nanoid(12), workspaceId: workspaceId!, type: source.type, sourceDocumentId: source.sourceDocumentId,
         title: source.title, textSnapshot: source.text.slice(0, SOURCE_LIMIT), createdAt: now,
       }))).run();
-      // A new generation replaces unsorted ideas. Shortlisted ideas and the small discarded collection stay available.
-      tx.delete(pitchIdeas).where(and(
-        eq(pitchIdeas.workspaceId, workspaceId),
-        eq(pitchIdeas.status, "generated"),
-      )).run();
       const existingRows = tx.select({ position: pitchIdeas.position }).from(pitchIdeas)
         .where(eq(pitchIdeas.workspaceId, workspaceId)).all();
       const startPosition = existingRows.length ? Math.max(...existingRows.map((row) => row.position)) + 1 : 0;
+      const existingIdeaRows = tx.select({ ideaText: pitchIdeas.ideaText, status: pitchIdeas.status }).from(pitchIdeas)
+        .where(eq(pitchIdeas.workspaceId, workspaceId)).all();
+      const existingBatchKeys = new Set<string>();
+      existingIdeaRows.forEach((row) => {
+        if (!["generated", "shortlisted", "discarded", "promoted"].includes(row.status)) return;
+        const envelope = parsePitchIdeaEnvelope(row.ideaText);
+        if (selectedPremiseId && envelope.premiseId !== selectedPremiseId) return;
+        if (!selectedPremiseId && envelope.premise !== selectedPremise) return;
+        existingBatchKeys.add(envelope.batchId || `legacy:${envelope.generatedAt || envelope.premise || row.ideaText.slice(0, 80)}`);
+      });
+      const batchId = nanoid(12);
+      const generatedAt = now.toISOString();
+      const batchNumber = existingBatchKeys.size + 1;
       const generated = ideasToSave.map((idea, index) => ({
         id: nanoid(12), workspaceId: workspaceId!,
         title: idea.title.replace(/^\[Sample\]\s*/i, ""),
-        ideaText: idea.ideaText,
+        ideaText: serializePitchIdeaEnvelope({
+          originalText: idea.ideaText,
+          currentText: idea.ideaText,
+          turns: [{ instruction: `Selected idea: ${selectedPremise}`, ideaText: idea.ideaText, createdAt: now.toISOString(), kind: "initial" }],
+          premise: selectedPremise,
+          premiseId: selectedPremiseId || undefined,
+          batchId,
+          batchNumber,
+          generatedAt,
+          kernel: idea.kernel,
+          beats: idea.beats,
+          clarityChecks: idea.clarityChecks,
+          adaptationNotes: idea.adaptationNotes,
+        }),
         status: "generated" as const, position: startPosition + index, createdAt: now, updatedAt: now,
       }));
       tx.insert(pitchIdeas).values(generated).run();

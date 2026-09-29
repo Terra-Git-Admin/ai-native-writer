@@ -286,6 +286,6 @@ export async function forceBackupNow(): Promise<void> {
 // satisfy.
 export const db: DB = new Proxy({} as DB, {
   get(_target, prop) {
-    return (getDb() as any)[prop];
+    return Reflect.get(getDb() as object, prop);
   },
 });

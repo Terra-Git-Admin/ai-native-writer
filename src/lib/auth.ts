@@ -93,12 +93,17 @@ function getNextAuth(): AuthExports {
 }
 
 // Static exports for Turbopack — each lazily delegates to getNextAuth().
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const lazy = () => getNextAuth() as any;
+const lazy = (): AuthExports => getNextAuth();
+
+type AuthGetHandler = AuthExports["handlers"]["GET"];
+type AuthPostHandler = AuthExports["handlers"]["POST"];
+type AuthSessionGetter = AuthExports["auth"];
+type AuthSignIn = AuthExports["signIn"];
+type AuthSignOut = AuthExports["signOut"];
 
 export const handlers = {
-  GET: ((req: any) => lazy().handlers.GET(req)) as AuthExports["handlers"]["GET"],
-  POST: ((req: any) => lazy().handlers.POST(req)) as AuthExports["handlers"]["POST"],
+  GET: ((...args: Parameters<AuthGetHandler>) => lazy().handlers.GET(...args)) as AuthGetHandler,
+  POST: ((...args: Parameters<AuthPostHandler>) => lazy().handlers.POST(...args)) as AuthPostHandler,
 };
 
 // Bypass session for local development — set BYPASS_AUTH=true in .env.local
@@ -112,11 +117,10 @@ const BYPASS_SESSION = {
   expires: new Date(Date.now() + 86400 * 1000).toISOString(),
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const auth = ((...args: any[]) => {
+export const auth = ((...args: Parameters<AuthSessionGetter>) => {
   if (process.env.BYPASS_AUTH === "true") return Promise.resolve(BYPASS_SESSION);
   return lazy().auth(...args);
-}) as AuthExports["auth"];
+}) as AuthSessionGetter;
 
-export const signIn = ((...args: any[]) => lazy().signIn(...args)) as AuthExports["signIn"];
-export const signOut = ((...args: any[]) => lazy().signOut(...args)) as AuthExports["signOut"];
+export const signIn = ((...args: Parameters<AuthSignIn>) => lazy().signIn(...args)) as AuthSignIn;
+export const signOut = ((...args: Parameters<AuthSignOut>) => lazy().signOut(...args)) as AuthSignOut;
