@@ -413,7 +413,7 @@ export async function POST(req: Request) {
           ideaText: serializePitchIdeaEnvelope({
             originalText: premise.premiseText,
             currentText: premise.premiseText,
-            turns: [{ instruction: "Idea", ideaText: premise.premiseText, createdAt: now.toISOString(), kind: "initial" }],
+            turns: [{ instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea", ideaText: premise.premiseText, createdAt: now.toISOString(), kind: "initial" }],
             premise: premise.premiseText,
             adaptationNotes: [premise.appealLane, premise.transformationNotes].filter(Boolean).join(" | "),
           }),
@@ -465,7 +465,7 @@ export async function POST(req: Request) {
         ideaText: serializePitchIdeaEnvelope({
           originalText: idea.ideaText,
           currentText: idea.ideaText,
-          turns: [{ instruction: `Selected idea: ${selectedPremise}`, ideaText: idea.ideaText, createdAt: now.toISOString(), kind: "initial" }],
+          turns: [{ instruction: instruction ? `Selected idea: ${selectedPremise}\nPilot instruction: ${instruction}` : `Selected idea: ${selectedPremise}`, ideaText: idea.ideaText, createdAt: now.toISOString(), kind: "initial" }],
           premise: selectedPremise,
           premiseId: selectedPremiseId || undefined,
           batchId,
