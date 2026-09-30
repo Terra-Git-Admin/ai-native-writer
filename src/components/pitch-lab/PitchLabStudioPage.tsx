@@ -481,6 +481,7 @@ export default function PitchLabStudioPage() {
   async function generatePremises(instructionOverride = "") {
     const instruction = instructionOverride.trim();
     setConfirmDialog(null);
+    setDocDropdownOpen(false);
     startOperation("generate");
     try {
       const response = await fetch("/api/pitch-lab/generate", {
@@ -1077,8 +1078,9 @@ export default function PitchLabStudioPage() {
                 id={instructionId}
                 value={regenerateIdeaDialog.instruction}
                 onChange={(event) => setRegenerateIdeaDialog((current) => current ? { ...current, instruction: event.target.value } : current)}
+                disabled={Boolean(task)}
                 rows={4}
-                className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none focus:border-emerald-500"
+                className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 placeholder="Make this more female-led, less wedding-heavy, with a sharper cliffhanger..."
               />
               <p className="mt-2 text-xs leading-5 text-muted-foreground">This updates the idea only. Pilots are generated later from the version you choose.</p>
@@ -1124,8 +1126,9 @@ export default function PitchLabStudioPage() {
             id="regenerate-all-ideas-instruction"
             value={regenerateAllIdeasDialog.instruction}
             onChange={(event) => setRegenerateAllIdeasDialog((current) => current ? { ...current, instruction: event.target.value } : current)}
+            disabled={isGeneratingIdeas}
             rows={4}
-            className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none focus:border-emerald-500"
+            className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
             placeholder="Optional: regenerate the batch with fresher hooks, stronger female leads, fewer wedding setups..."
           />
           <div className="mt-5 flex justify-end gap-2">
@@ -1140,6 +1143,7 @@ export default function PitchLabStudioPage() {
   }
 
   function renderInputs() {
+    const isGeneratingIdeas = operation?.kind === "generate";
     return (
       <section className="mx-auto max-w-4xl rounded-md border border-border bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-4">
@@ -1148,10 +1152,10 @@ export default function PitchLabStudioPage() {
             <h2 className="mt-1 text-xl font-semibold text-foreground">Create ideas</h2>
           </div>
           <div className="grid min-h-10 grid-cols-2 rounded-md border border-border bg-muted p-1 text-sm">
-            <button type="button" onClick={() => setGenerationMode("framework")} aria-pressed={generationMode === "framework"} className={`rounded px-3 py-1.5 font-medium transition duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${generationMode === "framework" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            <button type="button" onClick={() => setGenerationMode("framework")} disabled={isGeneratingIdeas} aria-pressed={generationMode === "framework"} className={`rounded px-3 py-1.5 font-medium transition duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 ${generationMode === "framework" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               Fresh
             </button>
-            <button type="button" onClick={() => setGenerationMode("adaptation")} aria-pressed={generationMode === "adaptation"} className={`rounded px-3 py-1.5 font-medium transition duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 ${generationMode === "adaptation" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+            <button type="button" onClick={() => setGenerationMode("adaptation")} disabled={isGeneratingIdeas} aria-pressed={generationMode === "adaptation"} className={`rounded px-3 py-1.5 font-medium transition duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 ${generationMode === "adaptation" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               Adapt
             </button>
           </div>
@@ -1161,7 +1165,7 @@ export default function PitchLabStudioPage() {
           <div className="mt-5 space-y-4">
             <label htmlFor="pitch-brief" className="block text-sm font-medium">
               Seed idea
-              <textarea id="pitch-brief" value={brief} onChange={(event) => setBrief(event.target.value)} rows={5} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm font-normal leading-6 outline-none transition-colors focus:border-emerald-500" placeholder={DIRECTION_PLACEHOLDER} />
+              <textarea id="pitch-brief" value={brief} onChange={(event) => setBrief(event.target.value)} disabled={isGeneratingIdeas} rows={5} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm font-normal leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder={DIRECTION_PLACEHOLDER} />
             </label>
             <p className="text-xs leading-5 text-muted-foreground">{DIRECTION_EXAMPLE_TEXT}</p>
             <p className="text-xs leading-5 text-muted-foreground">This text is sent into generation and should steer the first set of ideas.</p>
@@ -1171,22 +1175,22 @@ export default function PitchLabStudioPage() {
             <label htmlFor="source-document-search" className="block text-sm font-medium">Source story</label>
             <div className="relative">
               <div className="flex min-h-11 items-center rounded-md border border-border bg-background focus-within:border-emerald-500">
-                <input id="source-document-search" type="search" role="combobox" value={docDropdownOpen ? docSearch : selectedSource?.title ?? docSearch} onFocus={() => { setDocSearch(""); setDocDropdownOpen(true); }} onBlur={() => setDocDropdownOpen(false)} onChange={(event) => { setDocSearch(event.target.value); setSourceDocumentId(""); setDocDropdownOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setDocDropdownOpen(false); }} className="w-full bg-transparent px-3 py-2 text-sm outline-none" placeholder={selectedSource && !docDropdownOpen ? selectedSource.title : "Search Writer docs..."} aria-controls="source-document-results" aria-expanded={docDropdownOpen} aria-haspopup="listbox" aria-autocomplete="list" autoComplete="off" />
+                <input id="source-document-search" type="search" role="combobox" value={docDropdownOpen ? docSearch : selectedSource?.title ?? docSearch} disabled={isGeneratingIdeas} onFocus={() => { if (isGeneratingIdeas) return; setDocSearch(""); setDocDropdownOpen(true); }} onBlur={() => setDocDropdownOpen(false)} onChange={(event) => { setDocSearch(event.target.value); setSourceDocumentId(""); setDocDropdownOpen(true); }} onKeyDown={(event) => { if (event.key === "Escape") setDocDropdownOpen(false); }} className="w-full bg-transparent px-3 py-2 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-60" placeholder={selectedSource && !docDropdownOpen ? selectedSource.title : "Search Writer docs..."} aria-controls="source-document-results" aria-expanded={docDropdownOpen} aria-haspopup="listbox" aria-autocomplete="list" autoComplete="off" />
                 {selectedSource && !docDropdownOpen && <span className="mr-3 shrink-0 text-xs font-medium text-emerald-700 dark:text-emerald-300">Selected</span>}
               </div>
               {docDropdownOpen && <div id="source-document-results" role="listbox" aria-label="All Writer docs" className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
                 {docsLoading ? <p className="px-3 py-3 text-sm text-muted-foreground">Loading Writer docs...</p> : filteredDocs.length ? filteredDocs.map((doc) => <button type="button" role="option" aria-selected={doc.id === sourceDocumentId} key={doc.id} onMouseDown={(event) => event.preventDefault()} onClick={() => { setSourceDocumentId(doc.id); setDocSearch(doc.title); setDocDropdownOpen(false); }} className={`flex min-h-11 w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left text-sm transition duration-150 last:border-b-0 active:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-500 hover:bg-muted ${doc.id === sourceDocumentId ? "bg-emerald-50 dark:bg-emerald-950/30" : ""}`}><span className="font-medium">{doc.title}</span><span className="shrink-0 text-xs text-muted-foreground">{doc.ownerName || "Unknown owner"}</span></button>) : <p className="px-3 py-3 text-sm text-muted-foreground">{docs.length ? "No Writer docs match that search." : "No Writer docs yet. Paste story material below."}</p>}
               </div>}
             </div>
-            <textarea id="pasted-source" value={pastedSource} onChange={(event) => setPastedSource(event.target.value)} rows={5} className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500" placeholder="Or paste source material here." />
+            <textarea id="pasted-source" value={pastedSource} onChange={(event) => setPastedSource(event.target.value)} disabled={isGeneratingIdeas} rows={5} className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder="Or paste source material here." />
             <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
-              <input id="external-story-url" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} className="min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500" placeholder="Optional public link" />
-              <select value={adaptationStyle} onChange={(event) => setAdaptationStyle(event.target.value as "close" | "loose")} className="min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500" aria-label="Adaptation distance">
+              <input id="external-story-url" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} disabled={isGeneratingIdeas} className="min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder="Optional public link" />
+              <select value={adaptationStyle} onChange={(event) => setAdaptationStyle(event.target.value as "close" | "loose")} disabled={isGeneratingIdeas} className="min-h-10 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" aria-label="Adaptation distance">
                 <option value="loose">Loose adaptation</option>
                 <option value="close">Close adaptation</option>
               </select>
             </div>
-            <textarea id="pitch-brief-adaptation" value={brief} onChange={(event) => setBrief(event.target.value)} rows={3} className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500" placeholder={DIRECTION_PLACEHOLDER} />
+            <textarea id="pitch-brief-adaptation" value={brief} onChange={(event) => setBrief(event.target.value)} disabled={isGeneratingIdeas} rows={3} className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder={DIRECTION_PLACEHOLDER} />
             <p className="text-xs leading-5 text-muted-foreground">{DIRECTION_EXAMPLE_TEXT}</p>
           </div>
         )}
@@ -1401,7 +1405,7 @@ export default function PitchLabStudioPage() {
                     {isPilotInstructionOpen && !hasGeneratedPilots && !isGeneratingThis && !isEditingThis && (
                       <div className={envelope.adaptationNotes ? "mt-3 rounded-md border border-border bg-background/60 p-3" : "rounded-md border border-border bg-background/60 p-3"}>
                         <label htmlFor={`pilot-instruction-${idea.id}`} className="block text-sm font-medium">Pilot instruction</label>
-                        <textarea id={`pilot-instruction-${idea.id}`} value={pilotInstruction} onChange={(event) => setPilotInstructionDrafts((current) => ({ ...current, [idea.id]: event.target.value }))} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Optional: make the heroine more active, avoid caregiver setup, change the cliffhanger..." />
+                        <textarea id={`pilot-instruction-${idea.id}`} value={pilotInstruction} onChange={(event) => setPilotInstructionDrafts((current) => ({ ...current, [idea.id]: event.target.value }))} disabled={isGeneratingThis} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder="Optional: make the heroine more active, avoid caregiver setup, change the cliffhanger..." />
                         {activePilotGenerationCount >= MAX_PARALLEL_PILOT_GENERATIONS && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Two pilot generations are already running.</p>}
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" onClick={() => setPilotInstructionId(null)} className={secondaryButtonClass}>Cancel</button>
