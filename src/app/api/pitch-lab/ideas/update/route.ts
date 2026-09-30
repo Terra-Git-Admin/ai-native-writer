@@ -9,7 +9,14 @@ import { isPitchLabSampleMode, PITCH_LAB_SAMPLE_TITLE_PREFIX } from "@/lib/ai/pi
 import { cleanPitchIdeaText, parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
-import { buildPitchLabRefinementPrompt, buildPitchLabRefinementSystemPrompt, cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
+import {
+  buildPitchLabPremiseRefinementPrompt,
+  buildPitchLabPremiseRefinementSystemPrompt,
+  buildPitchLabRefinementPrompt,
+  buildPitchLabRefinementSystemPrompt,
+  cleanPitchLabTitle,
+  isValidPitchLabTitle,
+} from "@/lib/ai/pitch-lab-prompts";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 
@@ -50,6 +57,24 @@ function parseRefinedIdea(raw: string, fallbackTitle: string): { title: string; 
   return { title: fallbackTitle, ideaText: clean };
 }
 
+function parseRefinedPremise(raw: string, fallbackTitle: string): { title: string; premiseText: string; appealLane?: string; transformationNotes?: string } {
+  const clean = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const parsed: unknown = JSON.parse(clean);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("The model returned an invalid idea.");
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.premiseText !== "string") {
+    throw new Error("The model returned an invalid idea.");
+  }
+  return {
+    title: typeof record.title === "string" ? record.title.trim().slice(0, 160) || fallbackTitle : fallbackTitle,
+    premiseText: record.premiseText.trim(),
+    appealLane: typeof record.appealLane === "string" ? record.appealLane.trim() : undefined,
+    transformationNotes: typeof record.transformationNotes === "string" ? record.transformationNotes.trim() : undefined,
+  };
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   const accessError = requirePitchLabAccess(session);
@@ -67,10 +92,11 @@ export async function POST(req: Request) {
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
   if (!workspace) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
   const idea = await db.query.pitchIdeas.findFirst({ where: and(eq(pitchIdeas.id, ideaId), eq(pitchIdeas.workspaceId, workspace.id)) });
-  if (!idea || !["generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose a generated or shortlisted pitch before refining." }, { status: 404 });
+  if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an idea before refining." }, { status: 404 });
 
   const envelope = parsePitchIdeaEnvelope(idea.ideaText);
   if (turnIndex !== null && !instruction) {
+    if (idea.status === "premise") return NextResponse.json({ error: "Generated option not found." }, { status: 404 });
     const turn = envelope.turns[turnIndex];
     if (!turn || turn.kind !== "rewrite") return NextResponse.json({ error: "Generated option not found." }, { status: 404 });
     const storedEnvelope = serializePitchIdeaEnvelope({
@@ -87,6 +113,8 @@ export async function POST(req: Request) {
   let updatedText = cleanPitchIdeaText(ideaText);
   let isPlaceholder = idea.title.startsWith(PITCH_LAB_SAMPLE_TITLE_PREFIX);
   let refinedIdea: ReturnType<typeof parseRefinedIdea> | null = null;
+  let refinedPremise: ReturnType<typeof parseRefinedPremise> | null = null;
+  const isPremise = idea.status === "premise";
   if (instruction) {
     if (isPitchLabSampleMode()) {
       // Keep local flow tests usable without sending a paid request to a model.
@@ -103,23 +131,35 @@ export async function POST(req: Request) {
         try {
           const result = await generateText({
             model: await getAIModel(candidate.modelId),
-            system: buildPitchLabRefinementSystemPrompt(tasteBrief),
-            prompt: buildPitchLabRefinementPrompt({
-              currentTitle: updatedTitle,
-              currentText: ideaText,
-              originalText: envelope.originalText,
-              priorTurns,
-              instruction,
-              premise: envelope.premise,
-              kernel: envelope.kernel,
-              beats: envelope.beats,
-              clarityChecks: envelope.clarityChecks,
-              adaptationNotes: envelope.adaptationNotes,
-            }),
-            maxOutputTokens: 2400,
+            system: isPremise
+              ? buildPitchLabPremiseRefinementSystemPrompt(tasteBrief)
+              : buildPitchLabRefinementSystemPrompt(tasteBrief),
+            prompt: isPremise
+              ? buildPitchLabPremiseRefinementPrompt({
+                currentTitle: updatedTitle,
+                currentText: ideaText,
+                originalText: envelope.originalText,
+                priorTurns,
+                instruction,
+                transformationNotes: envelope.adaptationNotes,
+              })
+              : buildPitchLabRefinementPrompt({
+                currentTitle: updatedTitle,
+                currentText: ideaText,
+                originalText: envelope.originalText,
+                priorTurns,
+                instruction,
+                premise: envelope.premise,
+                kernel: envelope.kernel,
+                beats: envelope.beats,
+                clarityChecks: envelope.clarityChecks,
+                adaptationNotes: envelope.adaptationNotes,
+              }),
+            maxOutputTokens: isPremise ? 1200 : 2400,
             maxRetries: 0,
           });
-          refinedIdea = parseRefinedIdea(result.text, updatedTitle);
+          if (isPremise) refinedPremise = parseRefinedPremise(result.text, updatedTitle);
+          else refinedIdea = parseRefinedIdea(result.text, updatedTitle);
           lastError = null;
           break;
         } catch (err) {
@@ -131,19 +171,22 @@ export async function POST(req: Request) {
           });
         }
       }
-      if (!refinedIdea) {
+      if (!refinedIdea && !refinedPremise) {
         return NextResponse.json({ error: `All configured AI providers failed. Last error: ${pitchLabErrorMessage(lastError)}` }, { status: 502 });
       }
-      updatedTitle = refinedIdea.title;
-      updatedText = cleanPitchIdeaText(refinedIdea.ideaText);
+      updatedTitle = refinedPremise?.title ?? refinedIdea!.title;
+      updatedText = cleanPitchIdeaText(refinedPremise?.premiseText ?? refinedIdea!.ideaText);
       if (!updatedText) return NextResponse.json({ error: "The model returned an empty idea." }, { status: 502 });
       if (!isValidPitchLabTitle(updatedTitle)) return NextResponse.json({ error: "The model returned a title longer than two words. Try a simpler refinement." }, { status: 502 });
     }
   }
 
-  const cleanTitle = cleanPitchLabTitle((instruction ? idea.title : updatedTitle).replace(/^\[Sample\]\s*/i, ""));
+  const cleanTitle = cleanPitchLabTitle((instruction && !isPremise ? idea.title : updatedTitle).replace(/^\[Sample\]\s*/i, ""));
   if (!isValidPitchLabTitle(cleanTitle)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
-  const currentText = instruction ? cleanPitchIdeaText(envelope.currentText || ideaText) : updatedText;
+  const currentText = isPremise || !instruction ? updatedText : cleanPitchIdeaText(envelope.currentText || ideaText);
+  const adaptationNotes = refinedPremise
+    ? [refinedPremise.appealLane, refinedPremise.transformationNotes].filter(Boolean).join(" | ")
+    : envelope.adaptationNotes;
   const storedEnvelope = serializePitchIdeaEnvelope({
     originalText: envelope.originalText || currentText || updatedText,
     currentText,
@@ -152,14 +195,16 @@ export async function POST(req: Request) {
           instruction,
           ideaText: updatedText,
           createdAt: new Date().toISOString(),
-          kind: "rewrite" as const,
+          kind: isPremise ? "rerun" as const : "rewrite" as const,
           kernel: refinedIdea?.kernel || envelope.kernel,
           beats: refinedIdea?.beats || envelope.beats,
           clarityChecks: refinedIdea?.clarityChecks || envelope.clarityChecks,
-          adaptationNotes: refinedIdea?.adaptationNotes || envelope.adaptationNotes,
+          adaptationNotes: refinedIdea?.adaptationNotes || adaptationNotes,
         }]
-      : envelope.turns,
-    premise: envelope.premise,
+      : isPremise && updatedText !== envelope.currentText
+        ? [...envelope.turns, { instruction: "Manual edit", ideaText: updatedText, createdAt: new Date().toISOString(), kind: "manual_edit" as const }]
+        : envelope.turns,
+    premise: isPremise ? currentText : envelope.premise,
     premiseId: envelope.premiseId,
     batchId: envelope.batchId,
     batchNumber: envelope.batchNumber,
@@ -168,7 +213,7 @@ export async function POST(req: Request) {
     kernel: envelope.kernel,
     beats: envelope.beats,
     clarityChecks: envelope.clarityChecks,
-    adaptationNotes: envelope.adaptationNotes,
+    adaptationNotes,
   });
   await db.update(pitchIdeas).set({
     title: cleanTitle,

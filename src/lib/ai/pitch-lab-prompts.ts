@@ -147,7 +147,7 @@ export function buildPitchLabPremisePrompt(input: GenerationPromptInput): string
       : "Existing-series loose adaptation mode: preserve the source's emotional/commercial engine, but freely rebuild the premise mechanics, world, jobs, pressure object, and cliffhanger.";
 
   return `${writerDirections
-    ? `WRITER SEED / INSTRUCTIONS - HIGHEST CREATIVE PRIORITY. Use these instructions to generate the visible ideas. Treat named tropes, roles, relationship dynamics, settings, tones, and exclusions as binding unless they would break clarity or the required output shape.\n${writerDirections}`
+    ? `WRITER SEED / INSTRUCTIONS - HIGHEST CREATIVE PRIORITY. Use these instructions to generate the visible ideas. Treat named tropes, roles, relationship dynamics, settings, tones, and exclusions as binding unless they would break clarity or the required output shape. If a latest writer instruction is supplied, it is not optional mood text: every returned idea should visibly reflect it unless that would make the idea incoherent.\n${writerDirections}`
     : "Writer direction: none provided."}
 
 ${mode}
@@ -169,11 +169,60 @@ Adaptation distance rules:
 - Avoid continuity shortcuts where the heroine saves the same man twice within hours unless the reason for the second encounter is visible and necessary.
 - A premise should feel like a new show built from the source's proven engine, not the same scene with renamed people.` : "Source material: none."}
 
+Instruction compliance check before returning:
+- If the latest writer instruction asks for more or less of a trope, setting, lead type, tone, setup, cliffhanger, or source distance, apply that request across the whole batch.
+- Do not include an idea that clearly violates a named exclusion in the latest writer instruction.
+- Use transformationNotes to briefly capture how the idea followed the instruction or why it is distinct.
+
 Return exactly ${PITCH_LAB_PREMISE_COUNT} visible idea cards as one valid JSON array.
 Each item must have exactly these fields:
 {"title":"one or two words","premiseText":"one clear sentence, 28-45 words that names or clearly identifies the female heroine and male lead by role and carries a clear trope or trope promise","appealLane":"short hidden-facing label naming the trope/drama promise","transformationNotes":"one short sentence about what changed or what makes it distinct"}
 
 Do not write pitch paragraphs. Do not output broad series premises. Do not output ambiguous leads such as "a driver" and "a passenger" without making heroine/male-lead identity clear. Do not add markdown, numbering, commentary, scores, or extra fields.`;
+}
+
+export function buildPitchLabPremiseRefinementSystemPrompt(framework: string): string {
+  return `You are the Pitch Lab Idea Regeneration Agent.
+
+The writer is still in the Ideas stage. Do not write pilot options. Your job is to rewrite one selected idea card so the writer can decide whether it is worth expanding into pilot options.
+
+The writer's instruction is the highest creative priority. Preserve the idea's useful core unless the writer asks to change it. Keep this as an idea card: heroine role, male lead or opposing force, trope promise, drama type, and high-pressure meeting or collision. Do not solve the full pilot, invent complicated prop rules, or set up broad series lore.
+
+Use the private Taste Brief only as hidden creative calibration. Never mention it, explain it, score against it, or output its labels.
+
+PRIVATE TASTE BRIEF FOR THIS RUN:
+${framework}`;
+}
+
+export function buildPitchLabPremiseRefinementPrompt(input: { currentTitle: string; currentText: string; originalText: string; priorTurns: string; instruction: string; appealLane?: string; transformationNotes?: string }): string {
+  return `SCRIPTWRITER INSTRUCTION - HIGHEST CREATIVE PRIORITY:
+${input.instruction}
+
+CURRENT IDEA:
+Title: ${input.currentTitle}
+Idea: ${input.currentText}
+Appeal lane / notes: ${[input.appealLane, input.transformationNotes].filter(Boolean).join(" | ") || "None."}
+
+ORIGINAL IDEA:
+${input.originalText}
+
+COMPACT PRIOR IDEA HISTORY:
+${input.priorTurns}
+
+Rules:
+- Apply the writer instruction directly.
+- Preserve the idea's useful core unless the writer asks to change it.
+- Do not return the same idea with cosmetic wording if the instruction asks for a story, role, pressure, tone, setting, trope, or cliffhanger change.
+- If the instruction contains exclusions, remove those elements from the regenerated idea unless they are essential to the explicitly approved core.
+- Keep this as an idea card, not a pilot paragraph.
+- premiseText must be one clear sentence, 28-45 words.
+- Name or clearly identify the female heroine and male lead or opposing force.
+- Include the drama/trope promise and the high-pressure meeting or collision.
+- If the instruction asks for stronger commercial appeal, improve pressure, relationship polarity, heroine agency, and cliffhanger promise at the idea level.
+- Do not solve the full pilot, add broad series lore, output labels, analysis, markdown, or multiple options.
+
+Return only valid JSON:
+{"title":"one or two words","premiseText":"one clear sentence, 28-45 words","appealLane":"short hidden-facing label","transformationNotes":"one short sentence about what changed"}`;
 }
 
 export function buildPitchLabPilotBatchSystemPrompt(framework: string): string {
@@ -226,7 +275,9 @@ If the source is Nurse-like, avoid the whole bundle: nurse/EMT/caregiver or near
 Continuity rule: do not make the heroine save the same man twice within a short span unless the second event has a visible cause, new stakes, and a different dramatic function.`
     : "Source material: none; generate from the selected idea and Taste Brief.";
 
-  return `${writerDirections || "Writer direction: none provided."}
+  return `${writerDirections
+    ? `WRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Apply the latest batch instruction to all four pilot options while preserving the selected idea's core. If the instruction asks to add, remove, avoid, strengthen, soften, change tone, change setting, or change lead behavior, every option must respect that request.\n${writerDirections}`
+    : "Writer direction: none provided."}
 
 SELECTED IDEA
 ${input.selectedPremise}
@@ -239,6 +290,7 @@ For each of the ${PITCH_LAB_IDEA_COUNT} pitch options, silently build:
 - Clarity Checks: short answers to who she is, who he is, what each wants, why he engages, what the visible stakes are, what the main pressure object/deadline is, who owns/controls any important object, and why the cliffhanger is understandable.
 - Logic Coverage: fix unclear identity, fake stakes, unexplained prop mechanics, forced public reactions, and dialogue that patches missing logic before final prose.
 - Simplicity Gate: the reader should understand the full pilot after one read. If the option needs more than two named roles, more than one important object, or more than one location change, simplify before writing.
+- Instruction Gate: before finalizing each option, check it against the latest writer instruction. Reject and rebuild any option that ignores a requested inclusion, violates a requested exclusion, or keeps a setup the writer asked to move away from.
 - Prose Gate: ideaText must read like an actual Episode 1 pitch. Reject any line that says "Option 1/2/3/4", "this option changes", "preserving the selected idea", "the heroine stays active", or any other meta commentary about the generation process.
 
 Return exactly ${PITCH_LAB_IDEA_COUNT} distinct pitch options as one valid JSON array.
