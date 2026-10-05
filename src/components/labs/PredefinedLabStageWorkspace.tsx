@@ -18,7 +18,7 @@ type TurnStatus = "running" | "complete" | "failed";
 type AutoPipelineStep = "idle" | "beats" | "dialogue" | "draft" | "complete" | "failed";
 
 const DEFAULT_DIALOGUE_DESIGN_INSTRUCTION =
-  "Build dialogue design from finalized key beats. Infer relationship state from selected previous predefined episodes, choose beat-fit exchange types, and keep strangers or staff procedural unless the key beats make them story-important.";
+  "Build a source-bound dialogue plan from the finalized key beats. Preserve the target plot facts and order; do not add new characters, questions, conflicts, or scene events.";
 
 interface SectionOption {
   id: string;
@@ -122,6 +122,27 @@ function countDialogueLines(text: string): number {
     .length;
 }
 
+export function buildEpisodeSourceContract({
+  selectedPlot,
+  beatPlan,
+}: {
+  selectedPlot: SectionOption;
+  beatPlan: string;
+}): string {
+  return `Authority:
+- This contract is the factual boundary for Dialogue Design and Draft.
+- Target Plot facts, participants, event order, explicit line order, objects, and ending state are source truth.
+- Approved Key Beats may compress or clarify the Target Plot, but they do not authorize new characters, new conflicts, new questions, or new scene events unless the Target Plot already implies them.
+- Dialogue Design may plan pressure, turn-taking, interruption, silence, subtext, and line jobs only inside this boundary.
+- Draft must ignore any Dialogue Design detail that adds unsupported facts, extra interrogations, new participants, or reordered source events.
+
+Target Plot:
+${selectedPlot.content.trim()}
+
+Approved Key Beats:
+${beatPlan.trim() || "(none yet)"}`;
+}
+
 function buildContext({
   mode,
   selectedPlot,
@@ -141,12 +162,20 @@ function buildContext({
   dialogueDesign: string;
   draft: string;
 }): string {
+  const sourceContract = buildEpisodeSourceContract({
+    selectedPlot,
+    beatPlan,
+  });
+
   if (mode === "predef_lab_dialogue_design") {
     return `## Original Writer Instruction
 ${originalInstruction.trim() || "(none)"}
 
 ## Current Turn Instruction
 ${turnInstruction.trim() || "(none)"}
+
+## Episode Source Contract
+${sourceContract}
 
 ## Approved / Current Key Beats
 ${beatPlan.trim() || "(none yet)"}
@@ -158,7 +187,7 @@ ${selectedPredefs.length > 0 ? selectedPredefs.map((s) => s.content).join("\n\n"
 ${dialogueDesign.trim() || "(none yet)"}
 
 ## Important Context Rule
-The Characters tab and Target Plot are intentionally excluded. Use finalized beats for episode shape and selected previous predefined episodes for voice, continuity, and knowledge state.`;
+The Characters tab is intentionally excluded. Use the Episode Source Contract as the hard factual boundary, and selected previous predefined episodes only for voice, continuity, relationship state, and knowledge state.`;
   }
 
   return `## Original Writer Instruction
@@ -166,6 +195,9 @@ ${originalInstruction.trim() || "(none)"}
 
 ## Current Turn Instruction
 ${turnInstruction.trim() || "(none)"}
+
+## Episode Source Contract
+${sourceContract}
 
 ## Target Plot
 ${selectedPlot.content}
@@ -421,6 +453,10 @@ export default function PredefinedLabStageWorkspace({
       turnInstructionChars: userInstruction.trim().length,
       beatPlanChars: priorBeatPlan.length,
       dialogueDesignChars: priorDialogueDesign.length,
+      sourceContractChars: buildEpisodeSourceContract({
+        selectedPlot: activeSelectedPlot,
+        beatPlan: priorBeatPlan,
+      }).length,
       draftChars: priorDraft.length,
       draftDialogueLines: countDialogueLines(priorDraft),
     });
@@ -745,6 +781,18 @@ export default function PredefinedLabStageWorkspace({
       userInstruction: "Write episode draft from finalized key beats and approved dialogue design.",
       dialogueDesignOverride: finalizedDialogue.output,
     });
+  }
+
+  async function runDialoguePass() {
+    if (!latestDraft || isStreaming) return;
+    await runTurn({
+      turnStage: "draft",
+      mode: "predef_lab_dialogue_pass",
+      userInstruction:
+        composerText.trim() ||
+        "Run a source-bound cleanup pass. Remove unsupported inventions, preserve source event order, tighten dialogue, and keep visual action literal.",
+    });
+    setComposerText("");
   }
 
   function editInputs() {
@@ -1391,11 +1439,12 @@ export default function PredefinedLabStageWorkspace({
               {isDraftStage && latestDraft && (
                 <button
                   type="button"
-                  disabled
-                  title="Dialogue Pass is coming soon."
+                  disabled={isStreaming}
+                  onClick={runDialoguePass}
+                  title="Run a source-bound cleanup pass on the current draft."
                   className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Dialogue Pass Coming Soon
+                  Dialogue Pass
                 </button>
               )}
               <button
