@@ -125,6 +125,7 @@ export interface EditorHandle {
   getFullText: () => string;
   getContentJSON: () => string | null;
   isEmpty: () => boolean;
+  hasUnsavedChanges: () => boolean;
   setFullContent: (content: string) => void;
   findAndReplace: (original: string, replacement: string) => void;
   highlightSelection: (from: number, to: number, color: string) => void;
@@ -448,6 +449,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     isEmpty() {
       return !editor || editor.isEmpty;
+    },
+    hasUnsavedChanges() {
+      return hasUnsavedEdits.current || saveStatusRef.current === "unsaved" || saveInFlight.current;
     },
     setFullContent(content: string) {
       if (!editor) return;

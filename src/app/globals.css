@@ -222,3 +222,77 @@ body {
 .dark .causal-phrase {
   color: #a5b4fc;
 }
+
+/* Predefined Lab three-pane shell */
+.source-pane-shell,
+.lab-pane-shell {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 42%, transparent) transparent;
+}
+
+.source-pane-shell {
+  background: color-mix(in srgb, var(--background) 92%, var(--muted));
+  border-right-color: color-mix(in srgb, var(--border) 76%, var(--ring));
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ring) 16%, transparent);
+}
+
+.lab-pane-shell {
+  background: color-mix(in srgb, var(--card) 88%, var(--background));
+  border-left: 1px solid color-mix(in srgb, var(--border) 72%, var(--ring));
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.pane-tab-header {
+  background: color-mix(in srgb, var(--card) 92%, var(--muted));
+}
+
+.lab-pane-divider::before {
+  content: "";
+  position: absolute;
+  inset: 0 4px;
+  background: color-mix(in srgb, var(--border) 64%, var(--ring));
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.lab-pane-divider:hover::before,
+.lab-pane-divider:active::before {
+  background: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.source-pane-shell *,
+.lab-pane-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent) transparent;
+  scroll-padding-top: 72px;
+}
+
+.source-pane-shell ::-webkit-scrollbar,
+.lab-pane-shell ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.source-pane-shell ::-webkit-scrollbar-track,
+.lab-pane-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.source-pane-shell ::-webkit-scrollbar-thumb,
+.lab-pane-shell ::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground) 34%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.source-pane-shell:hover ::-webkit-scrollbar-thumb,
+.lab-pane-shell:hover ::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--muted-foreground) 54%, transparent);
+}
+
+.source-pane-shell :focus-visible,
+.lab-pane-shell :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 const Database = require("better-sqlite3");
 
 function argValue(name, fallback = null) {
