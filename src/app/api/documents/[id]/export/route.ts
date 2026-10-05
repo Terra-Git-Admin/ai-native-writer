@@ -76,7 +76,7 @@ export async function POST(
   logEvent("export.route.start", {
     docId: id,
     userId: session.user.id,
-    mode: "last_saved_no_flush",
+    mode: "saved_snapshot",
     episodeRange: rangeResult.episodeRange ?? null,
   });
 
@@ -94,7 +94,7 @@ export async function POST(
       docId: id,
       userId: session.user.id,
       exportId: result.exportId,
-      mode: "last_saved_no_flush",
+      mode: "saved_snapshot",
       episodeRange: result.export.episodeRange,
       elapsedMs: Date.now() - startedAt,
       payloadBytes,
@@ -117,7 +117,7 @@ export async function POST(
     logEvent("export.route.fail", {
       docId: id,
       userId: session.user.id,
-      mode: "last_saved_no_flush",
+      mode: "saved_snapshot",
       episodeRange: rangeResult.episodeRange ?? null,
       elapsedMs: Date.now() - startedAt,
       err: err instanceof Error ? err.message : String(err),

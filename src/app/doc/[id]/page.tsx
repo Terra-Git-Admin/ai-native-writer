@@ -639,9 +639,24 @@ export default function DocumentPage() {
     setExportLoading(true);
     setExportError(null);
     setCopyStatus("idle");
+    try {
+      await editorRef.current?.flushPendingSave?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Save failed before export.";
+      clientTrace("export.client.flush_failed", {
+        docId: params.id,
+        mode: "flush_before_export",
+        episodeRange,
+        message,
+      });
+      setHandoffExport(null);
+      setExportError("Save failed before export. Please retry.");
+      setExportLoading(false);
+      return;
+    }
     clientTrace("export.client.click", {
       docId: params.id,
-      mode: "last_saved_no_flush",
+      mode: "flush_before_export",
       episodeRange,
     });
     try {
@@ -653,7 +668,7 @@ export default function DocumentPage() {
       const data = await res.json().catch(() => null);
       clientTrace("export.client.response", {
         docId: params.id,
-        mode: "last_saved_no_flush",
+        mode: "flush_before_export",
         episodeRange,
         ok: res.ok,
         status: res.status,
@@ -668,7 +683,7 @@ export default function DocumentPage() {
       const message = err instanceof Error ? err.message : "Export failed";
       clientTrace("export.client.fail", {
         docId: params.id,
-        mode: "last_saved_no_flush",
+        mode: "flush_before_export",
         episodeRange,
         message,
       });

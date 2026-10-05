@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { tabs, aiSettings } from "@/lib/db/schema";
+import { tabs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { decrypt } from "@/lib/crypto";
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { tiptapJsonToTagged, splitTabByH3 } from "@/lib/ai/context-engine";
+import { getProviderApiKey } from "@/lib/ai/providers";
 
 const PROMPT_GEN_SYSTEM = `You are creating storyboard frames for a microdrama episode. The goal is NOT cinematic technique — no shot types, camera angles, or lighting terminology. The goal is to communicate story: what is happening, who is feeling what, where this takes place, and what is being said or decided.
 
@@ -100,16 +100,13 @@ async function postHandler(
     // ignored — episodeIndex stays undefined (= latest)
   }
 
-  const googleSettings = await db.query.aiSettings.findFirst({
-    where: eq(aiSettings.id, "google"),
-  });
-  if (!googleSettings) {
+  const apiKey = await getProviderApiKey("google");
+  if (!apiKey) {
     return NextResponse.json(
-      { error: "No Google API key configured. Ask an admin to add it in Settings." },
+      { error: "No decryptable Google API key configured. Ask an admin to add it in Settings." },
       { status: 503 }
     );
   }
-  const apiKey = decrypt(googleSettings.apiKey);
 
   const tabRows = await db.query.tabs.findMany({
     where: eq(tabs.documentId, documentId),

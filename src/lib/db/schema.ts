@@ -310,6 +310,258 @@ export const handoffExportsRelations = relations(handoffExports, ({ one }) => ({
   }),
 }));
 
+export const contentLineages = sqliteTable(
+  "content_lineages",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "set null" }),
+    artifactType: text("artifact_type", {
+      enum: ["predefined_episode", "plot_lab_plot"],
+    }).notNull(),
+    currentNumber: integer("current_number"),
+    currentTitle: text("current_title"),
+    sectionUid: text("section_uid"),
+    spineId: text("spine_id"),
+    generationRunId: text("generation_run_id"),
+    status: text("status", {
+      enum: ["active", "deleted_from_tab", "exported"],
+    })
+      .notNull()
+      .default("active"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("idx_content_lineages_doc_type_number").on(
+      table.documentId,
+      table.artifactType,
+      table.currentNumber
+    ),
+    index("idx_content_lineages_section").on(table.documentId, table.sectionUid),
+    index("idx_content_lineages_spine").on(table.documentId, table.spineId),
+    index("idx_content_lineages_doc_status").on(table.documentId, table.status),
+  ]
+);
+
+export const storySpines = sqliteTable(
+  "story_spines",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    sourceTabId: text("source_tab_id").references(() => tabs.id, { onDelete: "set null" }),
+    sourceSectionUid: text("source_section_uid"),
+    initialEpisodeNumber: integer("initial_episode_number"),
+    initialTitle: text("initial_title"),
+    currentEpisodeNumber: integer("current_episode_number"),
+    currentTitle: text("current_title"),
+    currentPositionIndex: integer("current_position_index"),
+    status: text("status", {
+      enum: ["active", "replaced", "abandoned", "deleted"],
+    })
+      .notNull()
+      .default("active"),
+    replacesSpineId: text("replaces_spine_id"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("idx_story_spines_doc_section").on(table.documentId, table.sourceSectionUid),
+    index("idx_story_spines_doc_status").on(table.documentId, table.status),
+  ]
+);
+
+export const storySpineRevisions = sqliteTable(
+  "story_spine_revisions",
+  {
+    id: text("id").primaryKey(),
+    spineId: text("spine_id")
+      .notNull()
+      .references(() => storySpines.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "set null" }),
+    sectionUid: text("section_uid"),
+    episodeNumber: integer("episode_number"),
+    episodeTitle: text("episode_title"),
+    positionIndex: integer("position_index"),
+    textRaw: text("text_raw").notNull(),
+    textComparable: text("text_comparable").notNull(),
+    textHash: text("text_hash").notNull(),
+    textLength: integer("text_length").notNull(),
+    snapshotKind: text("snapshot_kind", {
+      enum: ["plot_saved", "plot_selected", "plot_replaced", "tombstone"],
+    })
+      .notNull()
+      .default("plot_saved"),
+    metadataJson: text("metadata_json"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_story_spine_revisions_spine_created").on(table.spineId, table.createdAt),
+    index("idx_story_spine_revisions_doc_hash").on(table.documentId, table.textHash),
+  ]
+);
+
+export const generationRuns = sqliteTable(
+  "generation_runs",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    spineId: text("spine_id").references(() => storySpines.id, { onDelete: "set null" }),
+    spineRevisionId: text("spine_revision_id").references(() => storySpineRevisions.id, { onDelete: "set null" }),
+    sourceSurface: text("source_surface", { enum: ["predefined_lab", "plot_lab"] })
+      .notNull()
+      .default("predefined_lab"),
+    targetEpisodeNumber: integer("target_episode_number"),
+    targetTitle: text("target_title"),
+    writerInstructionHash: text("writer_instruction_hash"),
+    writerInstructionLength: integer("writer_instruction_length"),
+    selectedContextJson: text("selected_context_json"),
+    modelId: text("model_id"),
+    promptMode: text("prompt_mode"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_generation_runs_doc_created").on(table.documentId, table.createdAt),
+    index("idx_generation_runs_spine").on(table.spineId),
+  ]
+);
+
+export const contentTextSnapshots = sqliteTable(
+  "content_text_snapshots",
+  {
+    id: text("id").primaryKey(),
+    lineageId: text("lineage_id")
+      .notNull()
+      .references(() => contentLineages.id, { onDelete: "cascade" }),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "set null" }),
+    artifactType: text("artifact_type", {
+      enum: ["predefined_episode", "plot_lab_plot"],
+    }).notNull(),
+    sourceSurface: text("source_surface", {
+      enum: ["predefined_lab", "predefined_tab", "handoff_export", "plot_lab"],
+    }).notNull(),
+    snapshotKind: text("snapshot_kind", {
+      enum: ["first_generation", "final_saved", "final_export", "interim_generation", "tombstone"],
+    }).notNull(),
+    snapshotStatus: text("snapshot_status", {
+      enum: ["active", "trashed_by_user", "abandoned_by_reset"],
+    })
+      .notNull()
+      .default("active"),
+    sourceId: text("source_id"),
+    labRunId: text("lab_run_id"),
+    labTurnId: text("lab_turn_id"),
+    parentSnapshotId: text("parent_snapshot_id"),
+    turnIndex: integer("turn_index"),
+    episodeNumber: integer("episode_number"),
+    episodeTitle: text("episode_title"),
+    sectionUid: text("section_uid"),
+    spineId: text("spine_id").references(() => storySpines.id, { onDelete: "set null" }),
+    spineRevisionId: text("spine_revision_id").references(() => storySpineRevisions.id, { onDelete: "set null" }),
+    generationRunId: text("generation_run_id").references(() => generationRuns.id, { onDelete: "set null" }),
+    positionIndex: integer("position_index"),
+    matchConfidence: text("match_confidence", { enum: ["high", "medium", "low", "none"] })
+      .notNull()
+      .default("none"),
+    matchReason: text("match_reason"),
+    textRaw: text("text_raw").notNull(),
+    textComparable: text("text_comparable").notNull(),
+    textHash: text("text_hash").notNull(),
+    textLength: integer("text_length").notNull(),
+    metadataJson: text("metadata_json"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_content_snapshots_lineage_created").on(
+      table.lineageId,
+      table.createdAt
+    ),
+    index("idx_content_snapshots_doc_kind").on(
+      table.documentId,
+      table.snapshotKind
+    ),
+    index("idx_content_snapshots_source").on(
+      table.sourceSurface,
+      table.sourceId
+    ),
+    index("idx_content_snapshots_spine").on(table.spineId),
+    index("idx_content_snapshots_generation_run").on(table.generationRunId),
+  ]
+);
+
+export const contentExportEvents = sqliteTable(
+  "content_export_events",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    exportId: text("export_id")
+      .notNull()
+      .references(() => handoffExports.id, { onDelete: "cascade" }),
+    exportUrl: text("export_url"),
+    lineageId: text("lineage_id").references(() => contentLineages.id, { onDelete: "set null" }),
+    snapshotId: text("snapshot_id").references(() => contentTextSnapshots.id, { onDelete: "set null" }),
+    previousExportEventId: text("previous_export_event_id"),
+    changedSincePreviousExport: integer("changed_since_previous_export", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    episodeNumber: integer("episode_number"),
+    episodeTitle: text("episode_title"),
+    sectionUid: text("section_uid"),
+    spineId: text("spine_id").references(() => storySpines.id, { onDelete: "set null" }),
+    spineRevisionId: text("spine_revision_id").references(() => storySpineRevisions.id, { onDelete: "set null" }),
+    generationRunId: text("generation_run_id").references(() => generationRuns.id, { onDelete: "set null" }),
+    positionIndex: integer("position_index"),
+    textHash: text("text_hash").notNull(),
+    textLength: integer("text_length").notNull(),
+    matchConfidence: text("match_confidence", { enum: ["high", "medium", "low", "none"] })
+      .notNull()
+      .default("none"),
+    matchReason: text("match_reason"),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_content_export_events_doc_created").on(table.documentId, table.createdAt),
+    index("idx_content_export_events_export").on(table.exportId),
+    index("idx_content_export_events_lineage").on(table.lineageId),
+  ]
+);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),

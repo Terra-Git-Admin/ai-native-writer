@@ -9,6 +9,7 @@ import {
   parsePredefinedEpisodes,
   type EpisodeRange,
 } from "./tiptap-parser";
+import { capturePredefinedTiptapSnapshots } from "@/lib/lineage/content-lineage";
 import { contentHash, logEvent } from "@/lib/saveTrace";
 
 export interface WriterExportPredefinedSnapshot {
@@ -103,7 +104,7 @@ export async function buildExport(
     documentId,
     userId,
     exportId,
-    mode: "last_saved_no_flush",
+    mode: "saved_snapshot",
     episodeRange: writerExport.episodeRange,
     predefinedUpdatedAt: predefinedEpisodes.updatedAt,
     payloadBytes: exportJson.length,
@@ -124,10 +125,32 @@ export async function buildExport(
     requestBaseUrl ??
     process.env.NEXT_PUBLIC_APP_URL ??
     "https://writer.plotpix.ai";
+  const exportUrl = `${baseUrl}/api/export/${exportId}`;
+
+  if (episodesTab?.id && selectedEpisodesContent) {
+    const captureResults = await capturePredefinedTiptapSnapshots({
+      documentId,
+      tabId: episodesTab.id,
+      contentJson: selectedEpisodesContent,
+      sourceSurface: "handoff_export",
+      snapshotKind: "final_export",
+      sourceId: exportId,
+      exportUrl,
+      createdBy: userId,
+    });
+
+    logEvent("export.build.lineage_capture", {
+      documentId,
+      userId,
+      exportId,
+      snapshotsCreated: captureResults.filter((result) => !result.skipped).length,
+      snapshotsSkipped: captureResults.filter((result) => result.skipped).length,
+    });
+  }
 
   return {
     exportId,
-    exportUrl: `${baseUrl}/api/export/${exportId}`,
+    exportUrl,
     export: writerExport,
   };
 }

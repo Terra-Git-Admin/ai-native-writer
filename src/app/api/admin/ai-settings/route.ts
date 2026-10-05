@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { aiSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt } from "@/lib/crypto";
+import { getConfiguredProviders } from "@/lib/ai/providers";
 
 // GET /api/admin/ai-settings — returns which providers have keys configured
 export async function GET() {
@@ -12,8 +13,7 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const all = await db.select({ id: aiSettings.id }).from(aiSettings);
-  const configured = all.map((r) => r.id);
+  const configured = await getConfiguredProviders();
 
   return NextResponse.json({
     anthropic: configured.includes("anthropic"),
