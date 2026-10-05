@@ -34,6 +34,13 @@ interface SectionOption {
   generationRunId: string | null;
 }
 
+interface TiptapNode {
+  type?: string;
+  attrs?: Record<string, unknown>;
+  content?: TiptapNode[];
+  text?: string;
+}
+
 interface LabTurn {
   id: string;
   stage: TurnStage;
@@ -64,7 +71,9 @@ interface ConfirmDialogState {
   title: string;
   body: string;
   confirmLabel: string;
-  onConfirm: () => void;
+  cancelLabel?: string;
+  onCancel?: () => void;
+  onConfirm: () => void | Promise<void>;
 }
 
 interface PredefinedLabStageWorkspaceProps {
@@ -73,6 +82,8 @@ interface PredefinedLabStageWorkspaceProps {
   modelId: string;
   thinking: boolean;
   onRefreshTabs?: () => Promise<TabRow[]>;
+  onCheckSourceDirty?: () => boolean;
+  onSaveSource?: () => Promise<boolean>;
 }
 
 function episodeNumberFromTitle(title: string): number | null {
@@ -101,14 +112,7 @@ function getSections(tabs: TabRow[], type: TabRow["type"]): SectionOption[] {
   const tab = tabs.find((t) => t.type === type);
   if (!tab?.content) return [];
   try {
-    const doc = JSON.parse(tab.content) as {
-      content?: Array<{
-        type?: string;
-        attrs?: Record<string, unknown>;
-        content?: unknown[];
-        text?: string;
-      }>;
-    };
+    const doc = JSON.parse(tab.content) as { content?: TiptapNode[] };
     const sections: SectionOption[] = [];
     let current:
       | {
@@ -119,12 +123,12 @@ function getSections(tabs: TabRow[], type: TabRow["type"]): SectionOption[] {
           generationRunId: string | null;
         }
       | null = null;
-    const textOf = (node: any): string => {
+    const textOf = (node: TiptapNode): string => {
       if (typeof node?.text === "string") return node.text;
       if (!Array.isArray(node?.content)) return "";
       return node.content.map(textOf).join("");
     };
-    const lineOf = (node: any): string | null => {
+    const lineOf = (node: TiptapNode): string | null => {
       if (node?.type === "heading") {
         const level = typeof node.attrs?.level === "number" ? node.attrs.level : 1;
         const text = textOf(node).trim();
@@ -137,7 +141,7 @@ function getSections(tabs: TabRow[], type: TabRow["type"]): SectionOption[] {
       if (node?.type === "orderedList" || node?.type === "bulletList") {
         const tag = node.type === "orderedList" ? "[OL]" : "[UL]";
         return (node.content ?? [])
-          .map((item: any) => textOf(item).trim())
+          .map((item) => textOf(item).trim())
           .filter(Boolean)
           .map((text: string) => `${tag} ${text}`)
           .join("\n");
@@ -216,6 +220,39 @@ function countDialogueLines(text: string): number {
     .split("\n")
     .filter((line) => /^\s*[A-Z][A-Z0-9 .'-]*(?:\s*\(V\.?O\.?\))?\s*:/.test(line))
     .length;
+}
+
+function contentFingerprint(value: string | null | undefined): string {
+  const text = value ?? "";
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return `${text.length}:${hash.toString(36)}`;
+}
+
+function tabRevision(tab: TabRow | undefined): string {
+  if (!tab) return "missing";
+  const updatedAt =
+    tab.updatedAt instanceof Date ? tab.updatedAt.toISOString() : String(tab.updatedAt ?? "");
+  return `${tab.id}:${updatedAt}:${contentFingerprint(tab.content)}`;
+}
+
+function buildSourceSnapshotSignature({
+  tabs,
+  selectedPlotId,
+  selectedPredefIds,
+}: {
+  tabs: TabRow[];
+  selectedPlotId: string;
+  selectedPredefIds: string[];
+}): string {
+  return JSON.stringify({
+    selectedPlotId,
+    selectedPredefIds: [...selectedPredefIds].sort(),
+    microdramaPlots: tabRevision(tabs.find((tab) => tab.type === "microdrama_plots")),
+    predefinedEpisodes: tabRevision(tabs.find((tab) => tab.type === "predefined_episodes")),
+  });
 }
 
 export function buildEpisodeSourceContract({
@@ -320,6 +357,8 @@ export default function PredefinedLabStageWorkspace({
   modelId,
   thinking,
   onRefreshTabs,
+  onCheckSourceDirty,
+  onSaveSource,
 }: PredefinedLabStageWorkspaceProps) {
   const plotOptions = useMemo(() => getSections(tabs, "microdrama_plots"), [tabs]);
   const predefOptions = useMemo(() => getSections(tabs, "predefined_episodes"), [tabs]);
@@ -344,19 +383,24 @@ export default function PredefinedLabStageWorkspace({
   const [editingText, setEditingText] = useState("");
   const [predefPickerOpen, setPredefPickerOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [contextSnapshotSignature, setContextSnapshotSignature] = useState<string | null>(null);
   const predefPickerRef = useRef<HTMLDivElement | null>(null);
   const labRunIdRef = useRef(newLabRunId());
 
   useEffect(() => {
-    if (selectedPlotId || plotOptions.length === 0 || predefOptions.length === 0) return;
-    const latestPredefEpisode = Math.max(
-      ...predefOptions
+    if (selectedPlotId || plotOptions.length === 0) return;
+    const predefEpisodeNumbers = new Set(
+      predefOptions
         .map((episode) => episode.episodeNumber)
         .filter((episodeNumber): episodeNumber is number => episodeNumber != null)
     );
-    if (!Number.isFinite(latestPredefEpisode)) return;
-    const nextPlot = plotOptions.find((plot) => plot.episodeNumber === latestPredefEpisode + 1);
-    if (nextPlot) setSelectedPlotId(nextPlot.id);
+    const numberedPlots = plotOptions
+      .filter((plot) => plot.episodeNumber != null)
+      .sort((a, b) => a.episodeNumber! - b.episodeNumber!);
+    const firstMissingPlot = numberedPlots.find((plot) => !predefEpisodeNumbers.has(plot.episodeNumber!));
+    const latestPlot =
+      numberedPlots[numberedPlots.length - 1] ?? plotOptions[plotOptions.length - 1];
+    setSelectedPlotId((firstMissingPlot ?? latestPlot).id);
   }, [plotOptions, predefOptions, selectedPlotId]);
 
   useEffect(() => {
@@ -426,8 +470,80 @@ export default function PredefinedLabStageWorkspace({
           : "Selected episodes";
   const missingPredefHeadings = predefOptions.length === 0 && hasBodyContent(predefTagged);
 
+  const selectedPredefKey = selectedPredefIds.join("|");
+
+  useEffect(() => {
+    if (!selectedPlotId) {
+      setContextSnapshotSignature(null);
+      return;
+    }
+    setContextSnapshotSignature(
+      buildSourceSnapshotSignature({
+        tabs,
+        selectedPlotId,
+        selectedPredefIds,
+      })
+    );
+    // Intentionally exclude `tabs`; source edits should make the existing
+    // selection stale, not silently refresh the selected context.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlotId, selectedPredefKey]);
+
   function nextVersion(turnStage: TurnStage) {
     return turns.filter((turn) => turn.stage === turnStage && turn.status === "complete").length + 1;
+  }
+
+  async function latestSourceSignature(): Promise<string> {
+    const freshTabs = onRefreshTabs ? await onRefreshTabs() : tabs;
+    return buildSourceSnapshotSignature({
+      tabs: freshTabs.length > 0 ? freshTabs : tabs,
+      selectedPlotId,
+      selectedPredefIds,
+    });
+  }
+
+  async function runWithLabPreflight(action: () => Promise<void> | void) {
+    if (isStreaming) return;
+
+    if (onCheckSourceDirty?.()) {
+      setConfirmDialog({
+        title: "Save latest changes",
+        body: "Save latest changes before running Lab.",
+        confirmLabel: "Save Changes",
+        onConfirm: async () => {
+          const saved = await onSaveSource?.();
+          if (!saved) return;
+          setConfirmDialog(null);
+          const signature = await latestSourceSignature();
+          setContextSnapshotSignature(signature);
+          await action();
+        },
+      });
+      return;
+    }
+
+    const signature = await latestSourceSignature();
+    if (contextSnapshotSignature && contextSnapshotSignature !== signature) {
+      setConfirmDialog({
+        title: "Source changed",
+        body: "Source changed since Lab inputs were selected.",
+        cancelLabel: "Review Inputs",
+        confirmLabel: "Run with Latest Saved Source",
+        onCancel: () => {
+          setConfirmDialog(null);
+          setStage("inputs");
+        },
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          setContextSnapshotSignature(signature);
+          await action();
+        },
+      });
+      return;
+    }
+
+    setContextSnapshotSignature(signature);
+    await action();
   }
 
   useEffect(() => {
@@ -745,14 +861,16 @@ export default function PredefinedLabStageWorkspace({
   }
 
   async function buildInitialBeats() {
-    if (autoRunToDraft) {
-      await runAutoPipeline();
-      return;
-    }
-    await runTurn({
-      turnStage: "beats",
-      mode: "predef_lab_beats",
-      userInstruction: instruction || "Build key beats from the selected context.",
+    await runWithLabPreflight(async () => {
+      if (autoRunToDraft) {
+        await runAutoPipeline();
+        return;
+      }
+      await runTurn({
+        turnStage: "beats",
+        mode: "predef_lab_beats",
+        userInstruction: instruction || "Build key beats from the selected context.",
+      });
     });
   }
 
@@ -823,42 +941,48 @@ export default function PredefinedLabStageWorkspace({
     const firstDialogue = stage === "dialogue" && !latestDialogue && finalized.beats;
     const firstDraft = stage === "draft" && !latestDraft && finalized.beats && finalized.dialogue;
     if (!text && !firstDialogue && !firstDraft) return;
-    setComposerText("");
-    await runTurn({
-      turnStage: stage === "draft" ? "draft" : stage === "dialogue" ? "dialogue" : "beats",
-      mode:
-        stage === "draft"
-          ? firstDraft
-            ? "predef_lab_draft"
-            : "predef_lab_iterate"
-          : stage === "dialogue"
-            ? "predef_lab_dialogue_design"
-            : "predef_lab_beats",
-      userInstruction:
-        text ||
-        (stage === "dialogue"
-          ? DEFAULT_DIALOGUE_DESIGN_INSTRUCTION
-          : "Write episode draft from finalized key beats and approved dialogue design."),
+    await runWithLabPreflight(async () => {
+      setComposerText("");
+      await runTurn({
+        turnStage: stage === "draft" ? "draft" : stage === "dialogue" ? "dialogue" : "beats",
+        mode:
+          stage === "draft"
+            ? firstDraft
+              ? "predef_lab_draft"
+              : "predef_lab_iterate"
+            : stage === "dialogue"
+              ? "predef_lab_dialogue_design"
+              : "predef_lab_beats",
+        userInstruction:
+          text ||
+          (stage === "dialogue"
+            ? DEFAULT_DIALOGUE_DESIGN_INSTRUCTION
+            : "Write episode draft from finalized key beats and approved dialogue design."),
+      });
     });
   }
 
   async function retryTurn(turn: LabTurn) {
-    await runTurn({
-      turnStage: turn.stage,
-      mode: turn.mode,
-      userInstruction: turn.userInstruction,
-      retryTurnId: turn.id,
+    await runWithLabPreflight(async () => {
+      await runTurn({
+        turnStage: turn.stage,
+        mode: turn.mode,
+        userInstruction: turn.userInstruction,
+        retryTurnId: turn.id,
+      });
     });
   }
 
   async function rerunTurn(turn: LabTurn) {
     if (isStreaming) return;
     const feedback = composerText.trim();
-    setComposerText("");
-    await runTurn({
-      turnStage: turn.stage,
-      mode: turn.mode,
-      userInstruction: feedback || `Rerun ${turn.agentTitle} from the latest saved output and current context.`,
+    await runWithLabPreflight(async () => {
+      setComposerText("");
+      await runTurn({
+        turnStage: turn.stage,
+        mode: turn.mode,
+        userInstruction: feedback || `Rerun ${turn.agentTitle} from the latest saved output and current context.`,
+      });
     });
   }
 
@@ -891,49 +1015,41 @@ export default function PredefinedLabStageWorkspace({
 
   async function generateDialogueFromFinalizedBeats() {
     if (!latestBeat || isStreaming) return;
-    const finalizedBeat = {
-      output: latestBeat.output,
-      version: latestBeat.version,
-      finalizedAt: Date.now(),
-    };
-    setFinalized((prev) => ({ ...prev, beats: finalizedBeat }));
-    setStage("dialogue");
-    await runTurn({
-      turnStage: "dialogue",
-      mode: "predef_lab_dialogue_design",
-      userInstruction: DEFAULT_DIALOGUE_DESIGN_INSTRUCTION,
-      beatPlanOverride: finalizedBeat.output,
+    await runWithLabPreflight(async () => {
+      const finalizedBeat = {
+        output: latestBeat.output,
+        version: latestBeat.version,
+        finalizedAt: Date.now(),
+      };
+      setFinalized((prev) => ({ ...prev, beats: finalizedBeat }));
+      setStage("dialogue");
+      await runTurn({
+        turnStage: "dialogue",
+        mode: "predef_lab_dialogue_design",
+        userInstruction: DEFAULT_DIALOGUE_DESIGN_INSTRUCTION,
+        beatPlanOverride: finalizedBeat.output,
+      });
     });
   }
 
   async function generateDraftFromApprovedDialogue() {
     if (!latestDialogue || !finalized.beats || isStreaming) return;
-    const finalizedDialogue = {
-      output: latestDialogue.output,
-      version: latestDialogue.version,
-      finalizedAt: Date.now(),
-    };
-    setFinalized((prev) => ({ ...prev, dialogue: finalizedDialogue }));
-    setStage("draft");
-    setComposerText("");
-    await runTurn({
-      turnStage: "draft",
-      mode: "predef_lab_draft",
-      userInstruction: "Write episode draft from finalized key beats and approved dialogue design.",
-      dialogueDesignOverride: finalizedDialogue.output,
+    await runWithLabPreflight(async () => {
+      const finalizedDialogue = {
+        output: latestDialogue.output,
+        version: latestDialogue.version,
+        finalizedAt: Date.now(),
+      };
+      setFinalized((prev) => ({ ...prev, dialogue: finalizedDialogue }));
+      setStage("draft");
+      setComposerText("");
+      await runTurn({
+        turnStage: "draft",
+        mode: "predef_lab_draft",
+        userInstruction: "Write episode draft from finalized key beats and approved dialogue design.",
+        dialogueDesignOverride: finalizedDialogue.output,
+      });
     });
-  }
-
-  async function runDialoguePass() {
-    if (!latestDraft || isStreaming) return;
-    await runTurn({
-      turnStage: "draft",
-      mode: "predef_lab_dialogue_pass",
-      userInstruction:
-        composerText.trim() ||
-        "Run a source-bound cleanup pass. Remove unsupported inventions, preserve source event order, tighten dialogue, and keep visual action literal.",
-    });
-    setComposerText("");
   }
 
   function editInputs() {
@@ -1580,17 +1696,6 @@ export default function PredefinedLabStageWorkspace({
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
-              {isDraftStage && latestDraft && (
-                <button
-                  type="button"
-                  disabled={isStreaming}
-                  onClick={runDialoguePass}
-                  title="Run a source-bound cleanup pass on the current draft."
-                  className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Dialogue Pass
-                </button>
-              )}
               <button
                 type="button"
                 disabled={!canSend}
@@ -1629,14 +1734,20 @@ export default function PredefinedLabStageWorkspace({
           <div className="mt-5 flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setConfirmDialog(null)}
+              onClick={() => {
+                if (confirmDialog.onCancel) {
+                  confirmDialog.onCancel();
+                  return;
+                }
+                setConfirmDialog(null);
+              }}
               className="rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
             >
-              Cancel
+              {confirmDialog.cancelLabel ?? "Cancel"}
             </button>
             <button
               type="button"
-              onClick={confirmDialog.onConfirm}
+              onClick={() => void confirmDialog.onConfirm()}
               className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
             >
               {confirmDialog.confirmLabel}
@@ -1649,17 +1760,26 @@ export default function PredefinedLabStageWorkspace({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="border-b border-border bg-card px-6 py-4">
+      <div className="sticky top-0 z-10 border-b border-border bg-card px-5 py-3">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Predefined</p>
-            <h1 className="mt-1 text-xl font-semibold text-foreground">Build Predefined Episodes</h1>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600">Predefined Lab</p>
+            <h1 className="mt-1 truncate text-base font-semibold text-foreground">
+              {selectedPlot
+                ? selectedPlot.episodeNumber
+                  ? `Episode ${selectedPlot.episodeNumber}`
+                  : "Selected Plot"
+                : "Build Predefined Episodes"}
+            </h1>
+            <p className="mt-1 truncate text-xs text-muted-foreground">
+              {selectedPlot ? cleanHeading(selectedPlot.title) : "Select a target plot and previous episodes"}
+            </p>
           </div>
-          <div className="flex rounded-full border border-border bg-muted p-1 text-xs">
+          <div className="flex shrink-0 rounded-full border border-border bg-muted p-1 text-xs">
             {(["inputs", "beats", "dialogue", "draft"] as LabStage[]).map((item) => (
               <span
                 key={item}
-                className={`rounded-full px-3 py-1 capitalize ${
+                className={`whitespace-nowrap rounded-full px-3 py-1 capitalize ${
                   stage === item ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
                 }`}
               >

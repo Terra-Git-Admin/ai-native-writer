@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Editor, { EditorHandle, HeadingItem } from "@/components/editor/Editor";
 import TabRail, { TabRow } from "@/components/editor/TabRail";
 import AIChatSidebar from "@/components/ai/AIChatSidebar";
@@ -33,6 +34,10 @@ export type ApplyToTabResult = {
 };
 
 type PipelineBranch = "monetization" | "regular";
+
+const LAB_PANE_DEFAULT = 0.5;
+const LAB_PANE_MIN = 0.32;
+const LAB_PANE_MAX = 0.62;
 
 interface DocumentData {
   id: string;
@@ -119,6 +124,7 @@ export default function DocumentPage() {
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [predefinedLabOpen, setPredefinedLabOpen] = useState(false);
   const [predefinedLabMounted, setPredefinedLabMounted] = useState(false);
+  const [sourcePaneCollapsed, setSourcePaneCollapsed] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityPanelRequest, setQualityPanelRequest] = useState<{
     episodeTabId: string;
@@ -202,6 +208,54 @@ export default function DocumentPage() {
         Math.min(AI_SIDEBAR_MAX, startW + delta)
       );
       setAiSidebarWidth(next);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
+
+  const [labPaneRatio, setLabPaneRatio] = useState(LAB_PANE_DEFAULT);
+  const labPaneRatioRef = useRef(LAB_PANE_DEFAULT);
+  useEffect(() => {
+    labPaneRatioRef.current = labPaneRatio;
+  }, [labPaneRatio]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedRatio = Number(window.localStorage.getItem("predefinedLabPaneRatio"));
+    if (savedRatio >= LAB_PANE_MIN && savedRatio <= LAB_PANE_MAX) {
+      setLabPaneRatio(savedRatio);
+    }
+    setSourcePaneCollapsed(window.localStorage.getItem("predefinedLabSourceCollapsed") === "true");
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("predefinedLabPaneRatio", String(labPaneRatio));
+  }, [labPaneRatio]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("predefinedLabSourceCollapsed", String(sourcePaneCollapsed));
+  }, [sourcePaneCollapsed]);
+  const startLabPaneDrag = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const container = e.currentTarget.parentElement;
+    const bounds = container?.getBoundingClientRect();
+    if (!bounds) return;
+    const startX = e.clientX;
+    const startRatio = labPaneRatioRef.current;
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX;
+      const next = Math.max(
+        LAB_PANE_MIN,
+        Math.min(LAB_PANE_MAX, startRatio - delta / bounds.width)
+      );
+      setLabPaneRatio(next);
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
@@ -306,6 +360,9 @@ export default function DocumentPage() {
     async (tabId: string, scrollToHeadingText?: string) => {
       // Same-tab click with a heading target: scroll immediately.
       if (tabId === activeTabId) {
+        if (predefinedLabOpen && sourcePaneCollapsed) {
+          setSourcePaneCollapsed(false);
+        }
         if (scrollToHeadingText) {
           editorRef.current?.scrollToHeadingByText(scrollToHeadingText);
         }
@@ -352,7 +409,9 @@ export default function DocumentPage() {
       // 3. Swap the active tab. Editor remount now reads the freshly-fetched
       // activeTabContent derived from updated tabs state.
       setActiveTabId(tabId);
-      setPredefinedLabOpen(false);
+      if (predefinedLabOpen && sourcePaneCollapsed) {
+        setSourcePaneCollapsed(false);
+      }
       // KEEP the AI sidebar open across tab switches — the writer expects
       // the assistant to follow them as they navigate. The sidebar component
       // re-scopes its state to the new (documentId, activeTabId) on its own.
@@ -368,7 +427,7 @@ export default function DocumentPage() {
         }, 400);
       }
     },
-    [activeTabId, params.id]
+    [activeTabId, params.id, predefinedLabOpen, sourcePaneCollapsed]
   );
 
   const handleTabsChange = useCallback(async () => {
@@ -396,12 +455,17 @@ export default function DocumentPage() {
   }, [params.id]);
 
   const handlePredefinedLabRefreshTabs = useCallback(async (): Promise<TabRow[]> => {
+    return fetchTabs();
+  }, [fetchTabs]);
+
+  const handlePredefinedLabSaveSource = useCallback(async (): Promise<boolean> => {
     try {
       await editorRef.current?.flushPendingSave?.();
+      await fetchTabs();
+      return true;
     } catch {
-      /* best-effort refresh; fetchTabs still gives the lab the latest saved snapshot */
+      return false;
     }
-    return fetchTabs();
   }, [fetchTabs]);
 
   const handleAIJobApplied = useCallback(
@@ -729,6 +793,16 @@ export default function DocumentPage() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
+  const predefinedLabActive = predefinedLabOpen && predefinedLabMounted;
+  const sourcePaneHidden = predefinedLabActive && sourcePaneCollapsed;
+  const labPaneWidth = sourcePaneHidden ? "calc(100% - 0px)" : `${Math.round(labPaneRatio * 1000) / 10}%`;
+  const sourcePaneWidth = `${Math.round((1 - labPaneRatio) * 1000) / 10}%`;
+  const sourceLabel =
+    activeTab?.type === "microdrama_plots"
+      ? "Microdrama Plots"
+      : activeTab?.type === "predefined_episodes"
+        ? "Predefined Episodes"
+        : activeTab?.title ?? "Document Tab";
   const canExport = doc.isOwner || isAdmin;
   const exportFromNumber = Number(exportFromEpisode);
   const exportToNumber = Number(exportToEpisode);
@@ -821,7 +895,9 @@ export default function DocumentPage() {
                 History
               </button>
               <button
+                disabled={predefinedLabOpen}
                 onClick={() => {
+                  if (predefinedLabOpen) return;
                   setAiSidebarOpen(!aiSidebarOpen);
                   if (!aiSidebarOpen) {
                     setCommentSidebarOpen(false);
@@ -831,7 +907,9 @@ export default function DocumentPage() {
                   }
                 }}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  aiSidebarOpen
+                  predefinedLabOpen
+                    ? "cursor-not-allowed text-muted-foreground opacity-45"
+                    : aiSidebarOpen
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
                     : "text-muted-foreground hover:bg-muted"
                 }`}
@@ -915,7 +993,7 @@ export default function DocumentPage() {
               Export
             </button>
           )}
-          <details className="relative">
+          <details className={`relative ${predefinedLabOpen ? "pointer-events-none opacity-45" : ""}`}>
             <summary className="cursor-pointer list-none rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors marker:hidden hover:bg-muted">
               Admin
             </summary>
@@ -1052,50 +1130,119 @@ export default function DocumentPage() {
           onForceTabRefresh={handleForceTabRefresh}
         />
 
+        {!sourcePaneHidden && (
+          <div
+            className={
+              predefinedLabActive
+                ? "source-pane-shell flex min-w-[420px] flex-col overflow-hidden border-r border-border bg-background"
+                : "contents"
+            }
+            style={predefinedLabActive ? { width: sourcePaneWidth } : undefined}
+          >
+            {predefinedLabActive && (
+              <div className="pane-tab-header flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="min-w-0">
+                  <h2 className="truncate text-sm font-semibold text-foreground">
+                    {sourceLabel}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSourcePaneCollapsed(true)}
+                  aria-label="Collapse tab pane"
+                  title="Collapse tab pane"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+
+            {activeTab?.type === "pipeline_playground" ? (
+              predefinedLabActive ? (
+                <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+                  <div className="max-w-md rounded-lg border border-border bg-card p-5 text-center shadow-sm">
+                    <p className="text-sm font-semibold text-foreground">Playground is not available beside Lab.</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      Close Predefined Lab to open Playground.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <PipelinePlayground
+                  key={activeTabId}
+                  tab={activeTab}
+                  tabs={tabs}
+                  documentId={doc.id}
+                  modelId={selectedModelId}
+                  thinking={thinkingEnabled}
+                  isAdmin={isAdmin}
+                  pipelineBranch={pipelineBranch}
+                  onPipelineBranchChange={setPipelineBranch}
+                  onTabsChange={handleTabsChange}
+                />
+              )
+            ) : (
+              <Editor
+                key={`${activeTabId}-${editorContentKey}`}
+                ref={editorRef}
+                documentId={doc.id}
+                tabId={activeTabId}
+                tabType={activeTab?.type}
+                initialContent={activeTabContent}
+                initialUpdatedAt={activeTab?.updatedAt ? new Date(activeTab.updatedAt).toISOString() : null}
+                isOwner={doc.isOwner}
+                activeCommentId={predefinedLabActive ? null : activeCommentId}
+                onAddComment={predefinedLabActive ? undefined : handleAddComment}
+                onCommentMarkClick={predefinedLabActive ? undefined : handleCommentMarkClick}
+                onHeadingsChange={setActiveTabHeadings}
+                onCommentMarkPositions={setCommentMarkPositions}
+              />
+            )}
+          </div>
+        )}
+
         {predefinedLabMounted && (
-          <div className={predefinedLabOpen ? "contents" : "hidden"}>
+          <div
+            className={
+              predefinedLabOpen
+                ? "lab-pane-shell relative flex min-w-[440px] shrink-0 bg-background"
+                : "hidden"
+            }
+            style={predefinedLabOpen ? { width: labPaneWidth } : undefined}
+          >
+            {!sourcePaneHidden && (
+              <div
+                onMouseDown={startLabPaneDrag}
+                onDoubleClick={() => setLabPaneRatio(LAB_PANE_DEFAULT)}
+                title="Drag to resize. Double-click to reset."
+                className="lab-pane-divider absolute left-0 top-0 bottom-0 z-20 w-3 -translate-x-1.5 cursor-col-resize"
+              />
+            )}
+            {sourcePaneHidden && (
+              <button
+                type="button"
+                onClick={() => setSourcePaneCollapsed(false)}
+                aria-label="Expand tab pane"
+                title="Expand tab pane"
+                className="absolute left-0 top-1/2 z-20 inline-flex h-12 w-7 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
             <PredefinedLabStageWorkspace
               documentId={doc.id}
               tabs={tabs}
               modelId={selectedModelId}
               thinking={thinkingEnabled}
               onRefreshTabs={handlePredefinedLabRefreshTabs}
+              onCheckSourceDirty={() => editorRef.current?.hasUnsavedChanges?.() ?? false}
+              onSaveSource={handlePredefinedLabSaveSource}
             />
           </div>
         )}
 
-        {!predefinedLabOpen && activeTab?.type === "pipeline_playground" ? (
-          <PipelinePlayground
-            key={activeTabId}
-            tab={activeTab}
-            tabs={tabs}
-            documentId={doc.id}
-            modelId={selectedModelId}
-            thinking={thinkingEnabled}
-            isAdmin={isAdmin}
-            pipelineBranch={pipelineBranch}
-            onPipelineBranchChange={setPipelineBranch}
-            onTabsChange={handleTabsChange}
-          />
-        ) : !predefinedLabOpen ? (
-          <Editor
-            key={`${activeTabId}-${editorContentKey}`}
-            ref={editorRef}
-            documentId={doc.id}
-            tabId={activeTabId}
-            tabType={activeTab?.type}
-            initialContent={activeTabContent}
-            initialUpdatedAt={activeTab?.updatedAt ? new Date(activeTab.updatedAt).toISOString() : null}
-            isOwner={doc.isOwner}
-            activeCommentId={activeCommentId}
-            onAddComment={handleAddComment}
-            onCommentMarkClick={handleCommentMarkClick}
-            onHeadingsChange={setActiveTabHeadings}
-            onCommentMarkPositions={setCommentMarkPositions}
-          />
-        ) : null}
-
-        {commentSidebarOpen && (
+        {commentSidebarOpen && !predefinedLabOpen && (
           <div className="w-80 border-l border-border bg-muted">
             <CommentSidebar
               documentId={doc.id}
