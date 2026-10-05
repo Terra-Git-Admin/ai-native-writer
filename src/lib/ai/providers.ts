@@ -6,12 +6,16 @@ import { aiSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { decrypt } from "@/lib/crypto";
 
+const OPENAI_FALLBACK_MODEL_ID = "gpt-5.2";
+
 interface AIModel {
   id: string;
   label: string;
   provider: "anthropic" | "google" | "openai";
   thinking?: boolean;
 }
+
+export type AIProvider = AIModel["provider"];
 
 export const AI_MODELS: AIModel[] = [
   // OpenAI
@@ -29,6 +33,21 @@ export const AI_MODELS: AIModel[] = [
   { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Thinking)", provider: "google", thinking: true },
 ];
 
+export async function getProviderApiKey(provider: AIProvider): Promise<string | null> {
+  const settings = await db.query.aiSettings.findFirst({
+    where: eq(aiSettings.id, provider),
+  });
+
+  if (!settings) return null;
+
+  try {
+    return decrypt(settings.apiKey);
+  } catch {
+    console.warn("[ai] configured provider key is not decryptable", { provider });
+    return null;
+  }
+}
+
 export async function getAIModel(modelId: string, thinking: boolean = false) {
   // Determine provider from model ID
   const modelDef = AI_MODELS.find((m) => m.id === modelId && m.thinking === thinking)
@@ -40,40 +59,52 @@ export async function getAIModel(modelId: string, thinking: boolean = false) {
 
   const provider = modelDef.provider;
 
-  // Fetch the key for this provider
-  const settings = await db.query.aiSettings.findFirst({
-    where: eq(aiSettings.id, provider),
-  });
+  let apiKey = await getProviderApiKey(provider);
+  let resolvedProvider = provider;
+  let resolvedModelId = modelId;
 
-  if (!settings) {
+  if (!apiKey && provider !== "openai") {
+    const fallbackApiKey = await getProviderApiKey("openai");
+    if (fallbackApiKey) {
+      console.warn("[ai] falling back to OpenAI provider", {
+        requestedProvider: provider,
+        requestedModelId: modelId,
+        fallbackModelId: OPENAI_FALLBACK_MODEL_ID,
+      });
+      apiKey = fallbackApiKey;
+      resolvedProvider = "openai";
+      resolvedModelId = OPENAI_FALLBACK_MODEL_ID;
+    }
+  }
+
+  if (!apiKey) {
     throw new Error(
-      `No API key configured for ${provider}. Ask an admin to add it in Settings.`
+      `No decryptable API key configured for ${provider}. Ask an admin to add it in Settings.`
     );
   }
 
-  let apiKey: string;
-  try {
-    apiKey = decrypt(settings.apiKey);
-  } catch {
-    throw new Error(
-      `The saved ${provider} API key cannot be decrypted in this local environment. Re-enter it in Admin > AI Settings.`
-    );
-  }
-
-  if (provider === "anthropic") {
+  if (resolvedProvider === "anthropic") {
     const anthropic = createAnthropic({ apiKey });
-    return anthropic(modelId);
-  } else if (provider === "openai") {
+    return anthropic(resolvedModelId);
+  } else if (resolvedProvider === "openai") {
     const openai = createOpenAI({ apiKey });
-    return openai(modelId);
+    return openai(resolvedModelId);
   } else {
     const google = createGoogleGenerativeAI({ apiKey });
-    return google(modelId);
+    return google(resolvedModelId);
   }
 }
 
 // Return which providers have keys configured (for the frontend to filter models)
 export async function getConfiguredProviders(): Promise<string[]> {
   const all = await db.select({ id: aiSettings.id }).from(aiSettings);
-  return all.map((r) => r.id);
+  const configured: string[] = [];
+
+  for (const row of all) {
+    if (!["anthropic", "google", "openai"].includes(row.id)) continue;
+    const apiKey = await getProviderApiKey(row.id as AIProvider);
+    if (apiKey) configured.push(row.id);
+  }
+
+  return configured;
 }

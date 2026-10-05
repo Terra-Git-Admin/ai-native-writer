@@ -20,11 +20,18 @@ type AutoPipelineStep = "idle" | "beats" | "dialogue" | "draft" | "complete" | "
 const DEFAULT_DIALOGUE_DESIGN_INSTRUCTION =
   "Build a source-bound dialogue plan from the finalized key beats. Preserve the target plot facts and order; do not add new characters, questions, conflicts, or scene events.";
 
+function newLabRunId(): string {
+  return `predef-lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 interface SectionOption {
   id: string;
   title: string;
   content: string;
   episodeNumber: number | null;
+  sectionUid: string | null;
+  spineId: string | null;
+  generationRunId: string | null;
 }
 
 interface LabTurn {
@@ -91,15 +98,104 @@ function getTaggedForTab(tabs: TabRow[], type: TabRow["type"]): string {
 }
 
 function getSections(tabs: TabRow[], type: TabRow["type"]): SectionOption[] {
-  const tagged = getTaggedForTab(tabs, type);
-  return splitTabByH3(tagged)
-    .filter((section) => cleanHeading(section.title).length > 0)
-    .map((section) => ({
-      id: `${type}-${section.index}`,
-      title: section.title,
-      content: section.content,
-      episodeNumber: episodeNumberFromTitle(section.title),
-    }));
+  const tab = tabs.find((t) => t.type === type);
+  if (!tab?.content) return [];
+  try {
+    const doc = JSON.parse(tab.content) as {
+      content?: Array<{
+        type?: string;
+        attrs?: Record<string, unknown>;
+        content?: unknown[];
+        text?: string;
+      }>;
+    };
+    const sections: SectionOption[] = [];
+    let current:
+      | {
+          title: string;
+          lines: string[];
+          sectionUid: string | null;
+          spineId: string | null;
+          generationRunId: string | null;
+        }
+      | null = null;
+    const textOf = (node: any): string => {
+      if (typeof node?.text === "string") return node.text;
+      if (!Array.isArray(node?.content)) return "";
+      return node.content.map(textOf).join("");
+    };
+    const lineOf = (node: any): string | null => {
+      if (node?.type === "heading") {
+        const level = typeof node.attrs?.level === "number" ? node.attrs.level : 1;
+        const text = textOf(node).trim();
+        return text ? `[H${level}] ${text}` : null;
+      }
+      if (node?.type === "paragraph") {
+        const text = textOf(node).trim();
+        return text ? `[P] ${text}` : null;
+      }
+      if (node?.type === "orderedList" || node?.type === "bulletList") {
+        const tag = node.type === "orderedList" ? "[OL]" : "[UL]";
+        return (node.content ?? [])
+          .map((item: any) => textOf(item).trim())
+          .filter(Boolean)
+          .map((text: string) => `${tag} ${text}`)
+          .join("\n");
+      }
+      return null;
+    };
+    const flush = () => {
+      if (!current || !cleanHeading(current.title)) return;
+      sections.push({
+        id: current.sectionUid ?? `${type}-${sections.length}`,
+        title: current.title,
+        content: current.lines.join("\n").trim(),
+        episodeNumber: episodeNumberFromTitle(current.title),
+        sectionUid: current.sectionUid,
+        spineId: current.spineId,
+        generationRunId: current.generationRunId,
+      });
+    };
+    for (const node of doc.content ?? []) {
+      if (node.type === "heading") {
+        const title = textOf(node).trim();
+        if (episodeNumberFromTitle(title) != null) {
+          flush();
+          current = {
+            title,
+            lines: [lineOf(node)].filter(Boolean) as string[],
+            sectionUid: typeof node.attrs?.anwSectionUid === "string" ? node.attrs.anwSectionUid : null,
+            spineId: typeof node.attrs?.anwSpineId === "string" ? node.attrs.anwSpineId : null,
+            generationRunId:
+              typeof node.attrs?.anwGenerationRunId === "string" ? node.attrs.anwGenerationRunId : null,
+          };
+          continue;
+        }
+        flush();
+        current = null;
+        continue;
+      }
+      if (current) {
+        const line = lineOf(node);
+        if (line) current.lines.push(line);
+      }
+    }
+    flush();
+    return sections;
+  } catch {
+    const tagged = getTaggedForTab(tabs, type);
+    return splitTabByH3(tagged)
+      .filter((section) => cleanHeading(section.title).length > 0)
+      .map((section) => ({
+        id: `${type}-${section.index}`,
+        title: section.title,
+        content: section.content,
+        episodeNumber: episodeNumberFromTitle(section.title),
+        sectionUid: null,
+        spineId: null,
+        generationRunId: null,
+      }));
+  }
 }
 
 function compactLabel(option: SectionOption): string {
@@ -249,6 +345,7 @@ export default function PredefinedLabStageWorkspace({
   const [predefPickerOpen, setPredefPickerOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const predefPickerRef = useRef<HTMLDivElement | null>(null);
+  const labRunIdRef = useRef(newLabRunId());
 
   useEffect(() => {
     if (selectedPlotId || plotOptions.length === 0 || predefOptions.length === 0) return;
@@ -264,6 +361,7 @@ export default function PredefinedLabStageWorkspace({
 
   useEffect(() => {
     setPredefManuallyChanged(false);
+    labRunIdRef.current = newLabRunId();
   }, [selectedPlotId]);
 
   useEffect(() => {
@@ -569,6 +667,49 @@ export default function PredefinedLabStageWorkspace({
           dialogueLines: countDialogueLines(accumulated),
           text: accumulated,
         });
+        try {
+          const captureRes = await fetch(`/api/documents/${documentId}/lineage-snapshots`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceSurface: "predefined_lab",
+              snapshotKind: "first_generation",
+              textRaw: accumulated,
+              episodeNumber: activeSelectedPlot.episodeNumber,
+              episodeTitle: cleanHeading(activeSelectedPlot.title),
+              labRunId: labRunIdRef.current,
+              labTurnId: turnId,
+              turnIndex: completedTurn.version,
+              targetPlotText: activeSelectedPlot.content,
+              targetPlotSectionUid: activeSelectedPlot.sectionUid,
+              writerInstruction: instruction,
+              modelId,
+              promptMode: mode,
+              selectedPreviousEpisodes: activeSelectedPredefs.map((episode) => ({
+                sectionUid: episode.sectionUid,
+                spineId: episode.spineId,
+                generationRunId: episode.generationRunId,
+                episodeNumber: episode.episodeNumber,
+                title: cleanHeading(episode.title),
+                chars: episode.content.length,
+              })),
+            }),
+          });
+          clientTrace("predefined_lab.first_generation_capture", {
+            documentId,
+            ok: captureRes.ok,
+            status: captureRes.status,
+            labRunId: labRunIdRef.current,
+            turnId,
+          });
+        } catch (captureErr) {
+          clientTrace("predefined_lab.first_generation_capture_failed", {
+            documentId,
+            labRunId: labRunIdRef.current,
+            turnId,
+            message: captureErr instanceof Error ? captureErr.message : String(captureErr),
+          });
+        }
       }
       return completedTurn;
     } catch (err) {
@@ -813,6 +954,7 @@ export default function PredefinedLabStageWorkspace({
           setAutoRunToDraft(false);
           setAutoPipelineStep("idle");
           setAutoPipelineStartedAt(null);
+          labRunIdRef.current = newLabRunId();
         },
       });
       return;
@@ -827,6 +969,7 @@ export default function PredefinedLabStageWorkspace({
     setAutoRunToDraft(false);
     setAutoPipelineStep("idle");
     setAutoPipelineStartedAt(null);
+    labRunIdRef.current = newLabRunId();
   }
 
   function nextRun() {
@@ -850,6 +993,7 @@ export default function PredefinedLabStageWorkspace({
         setAutoRunToDraft(false);
         setAutoPipelineStep("idle");
         setAutoPipelineStartedAt(null);
+        labRunIdRef.current = newLabRunId();
       },
     });
   }

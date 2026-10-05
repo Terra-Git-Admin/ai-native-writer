@@ -3,6 +3,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
+import Heading from "@tiptap/extension-heading";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Highlight from "@tiptap/extension-highlight";
@@ -68,6 +69,34 @@ function trace(event: string, data: Record<string, unknown> = {}): void {
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+const LineageHeading = Heading.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      anwSectionUid: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-anw-section-uid"),
+        renderHTML: (attributes) =>
+          attributes.anwSectionUid ? { "data-anw-section-uid": attributes.anwSectionUid } : {},
+      },
+      anwSpineId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-anw-spine-id"),
+        renderHTML: (attributes) =>
+          attributes.anwSpineId ? { "data-anw-spine-id": attributes.anwSpineId } : {},
+      },
+      anwGenerationRunId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-anw-generation-run-id"),
+        renderHTML: (attributes) =>
+          attributes.anwGenerationRunId
+            ? { "data-anw-generation-run-id": attributes.anwGenerationRunId }
+            : {},
+      },
+    };
+  },
+});
 
 interface EditorProps {
   documentId: string;
@@ -247,7 +276,9 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
       StarterKit.configure({
         link: false,
         underline: false,
+        heading: false,
       }),
+      LineageHeading.configure({ levels: [1, 2, 3] }),
       Placeholder.configure({
         placeholder: "Start writing your script...",
       }),

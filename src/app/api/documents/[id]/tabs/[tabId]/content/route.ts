@@ -6,6 +6,11 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { compareDocs, extractCommentMarkIds } from "@/lib/commentMarks";
 import {
+  captureMicrodramaPlotSpines,
+  capturePredefinedTiptapSnapshots,
+  ensureEpisodeSectionUids,
+} from "@/lib/lineage/content-lineage";
+import {
   logEvent,
   logTrace,
   warnTrace,
@@ -430,11 +435,36 @@ export async function PUT(
   // made in the 5-second poll gap would trigger a false "Content mismatch"
   // banner. Truncate to seconds here so the PUT response matches the next
   // GET response exactly. (Bug repro: 27 Apr 2026, doc 1VEYHPRkgiDD.)
+  let contentToSave = body.content ?? tab.content;
+  let lineagePreparedMicrodrama = 0;
+  if (isOwner && !commentMarkOnly && body.content && tab.type === "microdrama_plots") {
+    try {
+      const prepared = await captureMicrodramaPlotSpines({
+        documentId: id,
+        tabId,
+        contentJson: body.content,
+        createdBy: session.user.id,
+      });
+      contentToSave = prepared.contentJson ?? body.content;
+      lineagePreparedMicrodrama = prepared.sectionsSeen;
+    } catch (err) {
+      warnTrace("content.lineage.microdrama_plot_capture.failed", {
+        docId: id,
+        docTabIdPath: tabId,
+        userId: session.user.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  } else if (isOwner && !commentMarkOnly && body.content && tab.type === "predefined_episodes") {
+    const prepared = ensureEpisodeSectionUids(body.content);
+    contentToSave = prepared.contentJson ?? body.content;
+  }
+
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);
   await db
     .update(tabs)
     .set({
-      content: body.content ?? tab.content,
+      content: contentToSave,
       updatedAt: now,
     })
     .where(and(eq(tabs.id, tabId), eq(tabs.documentId, id)));
@@ -452,16 +482,43 @@ export async function PUT(
   // On single-instance Cloud Run a container kill in the gap between response
   // and this completing could drop the version snapshot — never the content itself.
   let msVersionSnapshot = 0;
-  if (isOwner && !commentMarkOnly && body.content) {
+  if (isOwner && !commentMarkOnly && contentToSave) {
     try {
       const tSnap = Date.now();
-      await maybeCreateTabVersion(id, tabId, body.content, session.user.id, {
+      await maybeCreateTabVersion(id, tabId, contentToSave, session.user.id, {
         force: forceVersion,
         reason: versionReason ?? undefined,
       });
       msVersionSnapshot = Date.now() - tSnap;
     } catch (err) {
       warnTrace("tab.version.failed", {
+        docId: id,
+        docTabIdPath: tabId,
+        userId: session.user.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  let msLineageCapture = 0;
+  let lineageSnapshotsCreated = 0;
+  let lineageSnapshotsSkipped = 0;
+  if (isOwner && !commentMarkOnly && contentToSave && tab.type === "predefined_episodes") {
+    try {
+      const tLineage = Date.now();
+      const captureResults = await capturePredefinedTiptapSnapshots({
+        documentId: id,
+        tabId,
+        contentJson: contentToSave,
+        sourceSurface: "predefined_tab",
+        snapshotKind: "final_saved",
+        createdBy: session.user.id,
+      });
+      msLineageCapture = Date.now() - tLineage;
+      lineageSnapshotsCreated = captureResults.filter((result) => !result.skipped).length;
+      lineageSnapshotsSkipped = captureResults.filter((result) => result.skipped).length;
+    } catch (err) {
+      warnTrace("content.lineage.predefined_tab_capture.failed", {
         docId: id,
         docTabIdPath: tabId,
         userId: session.user.id,
@@ -477,10 +534,14 @@ export async function PUT(
     isOwner,
     commentMarkOnly,
     updatedAt: now.toISOString(),
-    contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
-    hashAfter: contentHash(body.content ?? tab.content),
+    contentLenAfter: contentToSave?.length ?? 0,
+    hashAfter: contentHash(contentToSave ?? ""),
     msTotal: Date.now() - t0,
     msVersionSnapshot,
+    msLineageCapture,
+    lineageSnapshotsCreated,
+    lineageSnapshotsSkipped,
+    lineagePreparedMicrodrama,
     phase: "heal-skip",
     ...trace,
   });
@@ -491,8 +552,8 @@ export async function PUT(
   logEvent("tab.put.fingerprint", {
     docId: id,
     docTabIdPath: tabId,
-    hashAfter: contentHash(body.content ?? tab.content),
-    contentLenAfter: (body.content ?? tab.content)?.length ?? 0,
+    hashAfter: contentHash(contentToSave ?? ""),
+    contentLenAfter: contentToSave?.length ?? 0,
     ...dbFileStats(),
   });
 
