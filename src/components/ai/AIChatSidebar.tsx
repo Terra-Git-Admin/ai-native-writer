@@ -3,10 +3,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo, RefObject } from "react";
 import type { TabRow } from "@/components/editor/TabRail";
 import type { EditorHandle } from "@/components/editor/Editor";
-import { buildAIContext, buildPipelineStepContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
+import { buildAIContext, buildPipelineStepContext, buildPlotLabContext, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { parseCharacterProfiles, normalizeCharacterName } from "@/lib/ai/characters";
 import type { useJob, JobKind } from "@/lib/ai/useJob";
 import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
+import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
+import { inferPlotLabDecisionSection } from "@/lib/plot-lab/workflow";
 
 type AIJobController = ReturnType<typeof useJob>;
 
@@ -20,7 +22,8 @@ const JOB_LABELS: Partial<Record<JobKind, string>> = {
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
   | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
-  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth";
+  | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth"
+  | "plot_lab_chat" | "plot_lab_save_preview" | "plot_lab_final_plot";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -45,6 +48,9 @@ const MODE_LABELS: Record<Mode, string> = {
   pipe_continuation_beats: "Suggest Continuation Beats",
   pipe_continuation_logic: "Connect Continuation Story",
   pipe_continuation_synth: "Write Continuation Pack",
+  plot_lab_chat: "Plot Lab",
+  plot_lab_save_preview: "Plot Lab Save Preview",
+  plot_lab_final_plot: "Plot Lab Final Plot",
 };
 
 // Strip structural tags ([H1] [P] [UL] etc.) and [CHANGE] scaffolding for
@@ -402,6 +408,233 @@ function normalizeCharacterTab(tagged: string): string {
 // ─── Props ───
 
 type PipelineBranch = "monetization" | "regular";
+type PlotLabSaveKind = "decision_lock" | "character_lock" | "location_lock" | "beat_shortlist" | "episode_sketch_lock" | "final_plot_commit";
+
+const PLOT_LAB_SAVE_LABELS: Record<PlotLabSaveKind, string> = {
+  decision_lock: "Plot Lab decision",
+  character_lock: "Character decision",
+  location_lock: "Location decision",
+  beat_shortlist: "Selected beat",
+  episode_sketch_lock: "Episode sketch",
+  final_plot_commit: "Final plot",
+};
+
+const PLOT_LAB_DESTINATION_LABELS: Record<PlotLabSaveKind, string> = {
+  decision_lock: "Plot Lab Decisions",
+  character_lock: "Characters",
+  location_lock: "Locations",
+  beat_shortlist: "Beats",
+  episode_sketch_lock: "Episode Sketches",
+  final_plot_commit: "Microdrama Plots",
+};
+
+function targetTabTypeForPlotLabSave(kind: PlotLabSaveKind): string {
+  if (kind === "decision_lock") return "plot_lab_decisions";
+  if (kind === "character_lock") return "characters";
+  if (kind === "location_lock") return "locations";
+  if (kind === "beat_shortlist") return "beat_sequence";
+  if (kind === "final_plot_commit") return "microdrama_plots";
+  return "episode_sketches";
+}
+
+function stripAssistantTextForSave(content: string): string {
+  const display = stripTagsForDisplay(content);
+  const textToSave = display.match(/^Text to save:\s*(.+)$/im)?.[1]?.trim();
+  if (textToSave) return textToSave;
+  return display
+    .replace(/^Save Preview\s*/i, "")
+    .replace(/^(?:Save kind|Destination tab|Why it matters):.*$/gim, "")
+    .replace(/^Text to save:\s*/gim, "")
+    .trim();
+}
+
+function inferPlotLabSaveKind(content: string): PlotLabSaveKind {
+  const display = stripTagsForDisplay(content);
+  const destination = display.match(/^Destination tab:\s*(.+)$/im)?.[1]?.trim().toLowerCase() ?? "";
+  const saveKind = display.match(/^Save kind:\s*(.+)$/im)?.[1]?.trim().toLowerCase() ?? "";
+  const combined = `${destination} ${saveKind}`;
+  if (combined.includes("plot lab") || combined.includes("decision ledger") || combined.includes("runway decision") || combined.includes("soul") || combined.includes("paywall") || combined.includes("core contract")) return "decision_lock";
+  if (combined.includes("microdrama") || combined.includes("final plot")) return "final_plot_commit";
+  if (combined.includes("episode sketch")) return "episode_sketch_lock";
+  if (combined.includes("beat")) return "beat_shortlist";
+  if (combined.includes("location")) return "location_lock";
+  if (combined.includes("character")) return "character_lock";
+  return "decision_lock";
+}
+
+function taggedParagraphs(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((block) => `[P] ${block}`)
+    .join("\n");
+}
+
+function buildPlotLabTaggedSave(kind: PlotLabSaveKind, text: string, episodeNumber: string): string {
+  const body = taggedParagraphs(text);
+  const episode = episodeNumber.trim();
+  const timestamp = new Date().toISOString().slice(0, 10);
+  if (kind === "episode_sketch_lock") {
+    const title = episode ? `Episode ${episode} Sketch` : `Episode Sketch ${timestamp}`;
+    return `[H3] ${title}\n${body}`;
+  }
+  if (kind === "final_plot_commit") {
+    if (/^\[H3\]/m.test(text)) return text.trim();
+    const title = episode ? `Episode ${episode}: Plot` : `Episode Plot ${timestamp}`;
+    return `[H3] ${title}\n${body}`;
+  }
+  if (kind === "beat_shortlist") return `[H2] Selected Beats ${timestamp}\n${body}`;
+  if (kind === "location_lock") return `[H2] Location Decisions ${timestamp}\n${body}`;
+  if (kind === "decision_lock") {
+    const section = inferPlotLabDecisionSection(text);
+    return `[H2] ${section}\n${body}`;
+  }
+  return `[H2] Character Decisions ${timestamp}\n${body}`;
+}
+
+interface PlotLabChoice {
+  key: string;
+  label: string;
+  detail: string;
+  response: string;
+  compact?: boolean;
+}
+
+function cleanPlotLabChoiceText(value: string): string {
+  return value
+    .replace(/\*\*/g, "")
+    .replace(/\*/g, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^["“”]+|["“”]+$/g, "")
+    .trim();
+}
+
+function plotLabChoiceLineMatch(line: string): RegExpMatchArray | null {
+  return line.match(/^\s*[-•]?\s*(?:\*\*)?((?:[A-D]\d*)|(?:Option\s+\d+)|(?:\d+))\)\s*(.*)$/i);
+}
+
+function latestPlotLabChoiceWindow(lines: string[]): { start: number; end: number } | null {
+  const choiceIndexes = lines
+    .map((line, index) => (plotLabChoiceLineMatch(line) ? index : -1))
+    .filter((index) => index >= 0);
+  if (choiceIndexes.length === 0) return null;
+
+  let start = choiceIndexes[choiceIndexes.length - 1];
+  const lastChoice = start;
+  for (let index = choiceIndexes.length - 2; index >= 0; index -= 1) {
+    const previous = choiceIndexes[index];
+    const between = lines.slice(previous + 1, start).join("\n").trim();
+    if (between.length > 0) break;
+    start = previous;
+  }
+  let end = lastChoice + 1;
+  while (end < lines.length && lines[end].trim().length === 0) end += 1;
+  return { start, end };
+}
+
+function parsePlotLabChoices(text: string): { prompt: string; choices: PlotLabChoice[]; after: string } | null {
+  const lines = text.split("\n");
+  const window = latestPlotLabChoiceWindow(lines);
+  if (!window) return null;
+
+  const optionLines = lines.slice(window.start, window.end);
+  const choices: PlotLabChoice[] = [];
+
+  for (const line of optionLines) {
+    const match = plotLabChoiceLineMatch(line);
+    if (!match) continue;
+    const key = match[1].replace(/\s+/g, " ").trim().toUpperCase();
+    const rest = match[2].trim();
+    const titleMatch = rest.match(/^(.*?)(?:\*\*)?\s*:\s*(.*)$/);
+    const label = cleanPlotLabChoiceText(titleMatch?.[1] ?? rest);
+    const detail = cleanPlotLabChoiceText(titleMatch?.[2] ?? "");
+    if (!label || !detail) continue;
+    const response = detail ? `I choose ${key}: ${label}. ${detail}` : `I choose ${key}: ${label}`;
+    choices.push({ key, label, detail, response });
+  }
+
+  if (choices.length < 2) return null;
+  return {
+    prompt: lines.slice(0, window.start).join("\n").trim(),
+    choices: choices.slice(-4),
+    after: lines.slice(window.end).join("\n").trim(),
+  };
+}
+
+function uniquePlotLabChoices(choices: PlotLabChoice[]): PlotLabChoice[] {
+  const seen = new Set<string>();
+  return choices.filter((choice) => {
+    const key = choice.key.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function parseInlinePlotLabQuickChoices(text: string): PlotLabChoice[] {
+  const choices: PlotLabChoice[] = [];
+  const replyMatch = text.match(/\b(?:reply|choose|pick|select)\s+(?:with\s+)?([A-D]\d?(?:\s*,\s*[A-D]\d?)*(?:\s*,?\s*or\s+[A-D]\d?)?)/i);
+  if (replyMatch) {
+    for (const token of replyMatch[1].match(/[A-D]\d?/gi) ?? []) {
+      const key = token.toUpperCase();
+      choices.push({ key, label: key, detail: "", response: `I choose ${key}.`, compact: true });
+    }
+  }
+
+  if (/\byes\s*\/\s*no\b/i.test(text) || /\bconfirm\b/i.test(text)) {
+    choices.push(
+      { key: "yes", label: "Yes, confirm", detail: "", response: "Yes, confirm this.", compact: true },
+      { key: "tweak", label: "Tweak", detail: "", response: "I want to tweak this before confirming.", compact: true },
+      { key: "no", label: "No", detail: "", response: "No, this is not right.", compact: true }
+    );
+  }
+
+  if (/\breroll\b|\bnew options\b|\btry again\b/i.test(text)) {
+    choices.push({ key: "reroll", label: "Reroll", detail: "", response: "Reroll these options with a different angle.", compact: true });
+  }
+
+  if (choices.length === 0 && /\?$/.test(text.trim())) {
+    choices.push(
+      { key: "agree", label: "Looks right", detail: "", response: "This looks right. Continue.", compact: true },
+      { key: "custom", label: "I will type", detail: "", response: "", compact: true }
+    );
+  }
+
+  return uniquePlotLabChoices(choices).filter((choice) => choice.response || choice.key === "custom");
+}
+
+function normalizeAssistantDisplayContent(content: string): string {
+  if (content.startsWith("[CLARIFY]")) {
+    return content.replace(/^\[CLARIFY\]\s*/, "");
+  }
+  if (/^\[(?:H\d|OL|UL|P)]/m.test(content) || content.includes("[CHANGE")) {
+    return stripTagsForDisplay(content);
+  }
+  return content;
+}
+
+function hasPlotLabActions(content: string): boolean {
+  const displayContent = normalizeAssistantDisplayContent(content);
+  return Boolean(parsePlotLabChoices(displayContent)) || parseInlinePlotLabQuickChoices(displayContent).length > 0;
+}
+
+function isPlotLabMode(mode: Mode): boolean {
+  return mode === "plot_lab_chat" || mode === "plot_lab_save_preview" || mode === "plot_lab_final_plot";
+}
+
+function isPlotLabStageSummary(content: string): boolean {
+  const displayContent = normalizeAssistantDisplayContent(content);
+  return /stage summary/i.test(displayContent)
+    && /what was decided/i.test(displayContent)
+    && /what this unlocks/i.test(displayContent)
+    && /destination tab/i.test(displayContent)
+    && /-\s*A\)\s*Confirm/i.test(displayContent);
+}
+
+function isPlotLabConfirmDecision(decisionText: string): boolean {
+  return /\b(?:yes,\s*)?confirm\b|\blooks right\b|\bthis looks right\b|\bsave this\b/i.test(decisionText);
+}
 
 interface AIChatSidebarProps {
   documentId: string;
@@ -413,12 +646,15 @@ interface AIChatSidebarProps {
   thinking: boolean;
   isAdmin: boolean;
   pipelineBranch: PipelineBranch;
+  plotLabActive: boolean;
+  canUsePlotLab: boolean;
   aiJob: AIJobController;
   onFlushPendingSave: () => Promise<void>;
   onAIJobApplied: (landedTabId: string) => Promise<void>;
   onSetModel: (modelId: string) => void;
   onSetThinking: (enabled: boolean) => void;
   onSetTitle: (title: string) => void;
+  onPlotLabActiveChange: (active: boolean) => void;
   onClose: () => void;
 }
 
@@ -431,11 +667,14 @@ export default function AIChatSidebar({
   thinking,
   isAdmin,
   pipelineBranch,
+  plotLabActive,
+  canUsePlotLab,
   aiJob,
   onFlushPendingSave,
   onAIJobApplied,
   onSetModel,
   onSetThinking,
+  onPlotLabActiveChange,
   onClose,
 }: AIChatSidebarProps) {
   type PipelineStepId =
@@ -468,7 +707,7 @@ export default function AIChatSidebar({
   ], []);
   const [activeStep, setActiveStep] = useState<PipelineStepId | null>(null);
   const selectedPipelineGroup: PipelineGroup = isAdmin && pipelineBranch === "regular" ? "Beyond Monetization" : "Monetization Runway";
-  const mode: Mode = activeStep ?? "chat";
+  const mode: Mode = plotLabActive ? "plot_lab_chat" : activeStep ?? "chat";
   const getStepLabel = useCallback((step: { id: PipelineStepId; label: string }) => {
     if (isAdmin && step.id === "pipe_plot_synth") return "Write Monetization Plot";
     return step.label;
@@ -492,6 +731,11 @@ export default function AIChatSidebar({
   const [characterDrafts, setCharacterDrafts] = useState<Record<string, CharacterDraft>>({});
   const [answerSelections, setAnswerSelections] = useState<Record<string, string>>({});
   const [isApplyingJob, setIsApplyingJob] = useState(false);
+  const [plotLabSaveOpen, setPlotLabSaveOpen] = useState(false);
+  const [plotLabSaveText, setPlotLabSaveText] = useState("");
+  const [plotLabSaveKind, setPlotLabSaveKind] = useState<PlotLabSaveKind>("episode_sketch_lock");
+  const [plotLabEpisodeNumber, setPlotLabEpisodeNumber] = useState("");
+  const [isPlotLabSaving, setIsPlotLabSaving] = useState(false);
   const [sendOnEnter, setSendOnEnter] = useState(() => {
     try { return localStorage.getItem("ai-send-on-enter") === "true"; } catch { return false; }
   });
@@ -521,6 +765,17 @@ export default function AIChatSidebar({
   }, []);
 
   const isAIBusy = aiJob.state.status === "starting" || aiJob.state.status === "running";
+  const latestActionableHistoryIndex = useMemo(() => {
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+      const entry = history[index];
+      if (entry.type === "mode-change") continue;
+      if (entry.role === "user") return -1;
+      if (entry.mode === "plot_lab_chat" && hasPlotLabActions(entry.content)) return index;
+      if (entry.mode === "plot_lab_save_preview") return index;
+      return -1;
+    }
+    return -1;
+  }, [history]);
 
   const characterTab = tabs.find((tab) => tab.type === "characters");
   const characterTagged = tiptapJsonToTagged(
@@ -962,8 +1217,30 @@ export default function AIChatSidebar({
     [documentId, mode, modelId, thinking, persistEntry]
   );
 
+  const buildUserMessage = useCallback((userInput: string): string => {
+    const liveContent = editorRef.current?.getContentJSON() ?? null;
+    if (plotLabActive) {
+      const contextBlock = buildPlotLabContext({
+        tabs,
+        activeTab,
+        activeTabLiveContent: liveContent,
+        userMessage: userInput,
+      });
+      return `${contextBlock}\n\n## Message\n${userInput}`;
+    }
+    const contextBlock = buildAIContext({
+      tabs,
+      activeTab,
+      activeTabLiveContent: liveContent,
+      mode: "chat",
+      selection: null,
+      userMessage: userInput,
+    });
+    return `${contextBlock}\n\n## Message\n${userInput}`;
+  }, [activeTab, editorRef, plotLabActive, tabs]);
+
   const handleSubmit = useCallback(() => {
-    if (!characterProfilesComplete) {
+    if (!plotLabActive && !characterProfilesComplete) {
       setError("Complete the Character Questionnaire for every major character before using other agents.");
       return;
     }
@@ -986,22 +1263,123 @@ export default function AIChatSidebar({
       selectionAtSubmit: false,
       originTabId,
     });
-  }, [characterProfilesComplete, input, isStreaming, messages, sendMessages, mode, activeTab, persistEntry, buildUserMessage]);
+  }, [characterProfilesComplete, plotLabActive, input, isStreaming, messages, sendMessages, mode, activeTab, persistEntry, buildUserMessage]);
 
-  function buildUserMessage(userInput: string): string {
-    const liveContent = editorRef.current?.getContentJSON() ?? null;
-    const contextBlock = buildAIContext({
-      tabs,
-      activeTab,
-      activeTabLiveContent: liveContent,
-      mode: "chat",
-      selection: null,
-      userMessage: userInput,
+  const handlePlotLabDecision = useCallback((decisionText: string, sourceAssistantText?: string) => {
+    if (!plotLabActive || !decisionText.trim() || isStreaming) return;
+
+    const originTabId = activeTab.id;
+    const shouldPrepareSave =
+      sourceAssistantText &&
+      isPlotLabConfirmDecision(decisionText) &&
+      isPlotLabStageSummary(sourceAssistantText);
+    const nextMode: Mode = shouldPrepareSave ? "plot_lab_save_preview" : mode;
+    const nextInput = shouldPrepareSave
+      ? [
+          "Prepare this confirmed Plot Lab stage summary for the system-of-record save preview.",
+          "",
+          "## Confirmed writer choice",
+          decisionText,
+          "",
+          "## Levi stage summary",
+          normalizeAssistantDisplayContent(sourceAssistantText),
+        ].join("\n")
+      : decisionText;
+    const userContent = buildUserMessage(nextInput);
+    const userMsg: ChatMessage = { role: "user", content: userContent };
+    const assistantMsg: ChatMessage = { role: "assistant", content: "" };
+    const newMessages = [...messages, userMsg, assistantMsg];
+
+    setMessages(newMessages);
+    setInput("");
+
+    const userEntry: HistoryEntry = { type: "message", role: "user", content: decisionText, mode: nextMode };
+    setHistory((prev) => [...prev, userEntry]);
+    persistEntry(userEntry);
+
+    sendMessages(newMessages.filter((m) => m.content), {
+      selectionAtSubmit: false,
+      originTabId,
+      modeOverride: nextMode,
     });
-    return `${contextBlock}\n\n## Message\n${userInput}`;
-  }
+  }, [activeTab.id, buildUserMessage, isStreaming, messages, mode, persistEntry, plotLabActive, sendMessages]);
+
+  const openPlotLabSave = useCallback((content: string) => {
+    setPlotLabSaveText(stripAssistantTextForSave(content));
+    setPlotLabSaveKind(inferPlotLabSaveKind(content));
+    const episodeMatch = content.match(/episode\s+(\d+)/i);
+    setPlotLabEpisodeNumber(episodeMatch?.[1] ?? "");
+    setPlotLabSaveOpen(true);
+    setError(null);
+  }, []);
+
+  const confirmPlotLabSave = useCallback(async () => {
+    const text = plotLabSaveText.trim();
+    if (!text || isPlotLabSaving) return;
+    const targetType = targetTabTypeForPlotLabSave(plotLabSaveKind);
+    const target = tabs.find((tab) => tab.type === targetType);
+    if (!target) {
+      setError(`Could not find the ${PLOT_LAB_DESTINATION_LABELS[plotLabSaveKind]} tab.`);
+      return;
+    }
+
+    setIsPlotLabSaving(true);
+    setError(null);
+    try {
+      await onFlushPendingSave();
+      const targetLiveContent =
+        target.id === activeTab.id
+          ? editorRef.current?.getContentJSON?.() ?? target.content ?? null
+          : target.content ?? null;
+      const existingTagged = tiptapJsonToTagged(targetLiveContent).trim();
+      const taggedSave = buildPlotLabTaggedSave(plotLabSaveKind, text, plotLabEpisodeNumber);
+      const nextTagged = existingTagged ? `${existingTagged}\n\n${taggedSave}` : taggedSave;
+
+      if (target.id === activeTab.id) {
+        editorRef.current?.setFullContent(nextTagged);
+        await onFlushPendingSave();
+      } else {
+        const res = await fetch(`/api/documents/${documentId}/tabs/${target.id}/content`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: JSON.stringify(taggedTextToTiptapDoc(nextTagged)),
+            forceVersion: true,
+            versionReason: "plot_lab_confirm",
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Could not save Plot Lab decision.");
+        }
+      }
+
+      await onAIJobApplied(target.id);
+      setPlotLabSaveOpen(false);
+      setNotice(`Saved to ${PLOT_LAB_DESTINATION_LABELS[plotLabSaveKind]}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save Plot Lab decision.");
+    } finally {
+      setIsPlotLabSaving(false);
+    }
+  }, [
+    activeTab.id,
+    documentId,
+    editorRef,
+    isPlotLabSaving,
+    onAIJobApplied,
+    onFlushPendingSave,
+    plotLabEpisodeNumber,
+    plotLabSaveKind,
+    plotLabSaveText,
+    tabs,
+  ]);
 
   // ─── Pipeline step helpers ───
+
+  useEffect(() => {
+    if (plotLabActive && activeStep) setActiveStep(null);
+  }, [activeStep, plotLabActive]);
 
   useEffect(() => {
     if (!activeStep) return;
@@ -1086,14 +1464,30 @@ export default function AIChatSidebar({
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-4 py-2.5">
         <div>
-          <h3 className="font-semibold text-indigo-700 leading-tight">AI Assistant</h3>
-          {activeStep && (
+          <h3 className="font-semibold text-indigo-700 leading-tight">{plotLabActive ? "Plot Lab" : "AI Assistant"}</h3>
+          {plotLabActive ? (
+            <p className="text-[10px] text-indigo-500 leading-tight">Levi workspace agent</p>
+          ) : activeStep && (
             <p className="text-[10px] text-indigo-500 leading-tight">
               {getModeLabel(activeStep)}
             </p>
           )}
         </div>
         <div className="flex items-center gap-1">
+          {canUsePlotLab ? (
+            <button
+              type="button"
+              onClick={() => onPlotLabActiveChange(!plotLabActive)}
+              disabled={isStreaming}
+              className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                plotLabActive
+                  ? "bg-indigo-600 text-white"
+                  : "border border-border bg-card text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              Plot Lab
+            </button>
+          ) : null}
           {activeTab.type !== "characters" && (
             <button
               onClick={() => {
@@ -1121,6 +1515,7 @@ export default function AIChatSidebar({
       </div>
 
       {/* ─── Actions (pipeline steps) ─── */}
+      {!plotLabActive && (
       <div className="flex-shrink-0 border-b border-border px-3 py-2">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Actions</span>
@@ -1215,6 +1610,7 @@ export default function AIChatSidebar({
           </div>
         )}
       </div>
+      )}
       {/* ─── Messages / Streaming — takes all remaining space ─── */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
 
@@ -1333,7 +1729,9 @@ export default function AIChatSidebar({
         {/* Empty state */}
         {activeTab.type !== "characters" && history.length === 0 && messages.length === 0 && !isStreaming && (
           <div className="py-8 text-center text-[13px] text-muted-foreground">
-            {"Click an action above to start, or type a prompt below."}
+            {plotLabActive
+              ? "Ask Levi to scan Plot 1 and Predefined Episode 1, then confirm the next story decision one question at a time."
+              : "Click an action above to start, or type a prompt below."}
           </div>
         )}
 
@@ -1363,7 +1761,24 @@ export default function AIChatSidebar({
                 }`}
               >
                 {entry.role === "assistant" ? (
-                  <AssistantMessage content={entry.content} mode={entry.mode} isStreaming={false} />
+                  <div className="space-y-2">
+                    <AssistantMessage
+                      content={entry.content}
+                      mode={entry.mode}
+                      isStreaming={false}
+                      actionsEnabled={i === latestActionableHistoryIndex}
+                      onPlotLabDecision={entry.mode === "plot_lab_chat" ? handlePlotLabDecision : undefined}
+                    />
+                    {entry.mode === "plot_lab_save_preview" && i === latestActionableHistoryIndex && (
+                      <button
+                        type="button"
+                        onClick={() => openPlotLabSave(entry.content)}
+                        className="min-h-11 rounded border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                      >
+                        Save with confirmation
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <div className="whitespace-pre-wrap">{entry.content}</div>
                 )}
@@ -1447,7 +1862,23 @@ export default function AIChatSidebar({
         )}
 
         {/* Live streaming output */}
-        {activeTab.type !== "characters" && isStreaming && streamingText && (
+        {activeTab.type !== "characters" && isStreaming && isPlotLabMode(mode) && (
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-lg border border-border bg-card px-3 py-3 text-sm text-foreground">
+              <div className="flex items-center gap-3">
+                <span className="flex gap-1" aria-hidden="true">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </span>
+                <span className="text-sm leading-6 text-muted-foreground">
+                  Levi is reading the saved context and preparing the next clean decision.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab.type !== "characters" && isStreaming && streamingText && !isPlotLabMode(mode) && (
           <div className="flex justify-start">
             <div className="max-w-[90%] rounded-lg px-3 py-2 text-sm bg-card border border-border text-foreground">
               <AssistantMessage content={streamingText} mode={mode} isStreaming={true} />
@@ -1456,7 +1887,7 @@ export default function AIChatSidebar({
         )}
 
         {/* Waiting indicator */}
-        {activeTab.type !== "characters" && isStreaming && !streamingText && (
+        {activeTab.type !== "characters" && isStreaming && !streamingText && !isPlotLabMode(mode) && (
           <div className="flex items-center gap-2 py-2 text-indigo-600">
             <span className="flex gap-1">
               <span className="h-2 w-2 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -1498,8 +1929,8 @@ export default function AIChatSidebar({
           ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={characterProfilesComplete ? "What would you like to do?" : "Complete character profiles to unlock AI agents."}
-          disabled={isStreaming || !characterProfilesComplete}
+          placeholder={plotLabActive ? "Chat with Levi..." : characterProfilesComplete ? "What would you like to do?" : "Complete character profiles to unlock AI agents."}
+          disabled={isStreaming || (!plotLabActive && !characterProfilesComplete)}
           className={`min-h-0 flex-1 w-full resize-none rounded-lg border px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none transition-colors ${
             isStreaming
               ? "border-border bg-muted text-muted-foreground cursor-not-allowed"
@@ -1520,7 +1951,7 @@ export default function AIChatSidebar({
         />
         <button
           onClick={handleSubmit}
-          disabled={isStreaming || !characterProfilesComplete || !input.trim()}
+          disabled={isStreaming || (!plotLabActive && !characterProfilesComplete) || !input.trim()}
           className="w-full flex-shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition-colors"
         >
           {isStreaming ? "Generating..." : "Send"}
@@ -1543,6 +1974,83 @@ export default function AIChatSidebar({
         </div>
       </div>
       )}
+      {plotLabSaveOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-background p-4 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Confirm system-of-record save</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This will append to {PLOT_LAB_DESTINATION_LABELS[plotLabSaveKind]} after confirmation.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPlotLabSaveOpen(false)}
+                className="text-lg leading-none text-muted-foreground hover:text-foreground"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-muted-foreground">
+                Save as
+                <select
+                  value={plotLabSaveKind}
+                  onChange={(event) => setPlotLabSaveKind(event.target.value as PlotLabSaveKind)}
+                  className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                >
+                  {Object.entries(PLOT_LAB_SAVE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+              {(plotLabSaveKind === "episode_sketch_lock" || plotLabSaveKind === "final_plot_commit") && (
+                <label className="block text-xs font-medium text-muted-foreground">
+                  Episode number
+                  <input
+                    value={plotLabEpisodeNumber}
+                    onChange={(event) => setPlotLabEpisodeNumber(event.target.value.replace(/[^\d]/g, ""))}
+                    className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                    placeholder="Optional"
+                  />
+                </label>
+              )}
+              <label className="block text-xs font-medium text-muted-foreground">
+                Text to save
+                <textarea
+                  value={plotLabSaveText}
+                  onChange={(event) => setPlotLabSaveText(event.target.value)}
+                  onKeyDown={handleTextareaLineMoveKeyDown}
+                  rows={8}
+                  className="mt-1 w-full resize-y rounded border border-border bg-background px-2.5 py-2 text-sm text-foreground"
+                />
+              </label>
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Destination: {PLOT_LAB_DESTINATION_LABELS[plotLabSaveKind]}. This is the double-confirm step before Plot Lab changes a canonical tab.
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPlotLabSaveOpen(false)}
+                  disabled={isPlotLabSaving}
+                  className="rounded border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmPlotLabSave()}
+                  disabled={isPlotLabSaving || !plotLabSaveText.trim()}
+                  className="rounded bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {isPlotLabSaving ? "Saving..." : "Confirm save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1553,21 +2061,102 @@ function AssistantMessage({
   content,
   mode,
   isStreaming,
+  actionsEnabled = true,
+  onPlotLabDecision,
 }: {
   content: string;
   mode: Mode;
   isStreaming: boolean;
+  actionsEnabled?: boolean;
+  onPlotLabDecision?: (decisionText: string, sourceAssistantText?: string) => void;
 }) {
-  void mode;
-  let displayContent = content;
-  if (content.startsWith("[CLARIFY]")) {
-    displayContent = content.replace(/^\[CLARIFY\]\s*/, "");
-  } else if (/^\[(?:H\d|OL|UL|P)]/m.test(content) || content.includes("[CHANGE")) {
-    displayContent = stripTagsForDisplay(content);
-  }
+  const displayContent = normalizeAssistantDisplayContent(content);
   if (!displayContent) return null;
+  const plotLabChoices =
+    mode === "plot_lab_chat" && !isStreaming && actionsEnabled && onPlotLabDecision
+      ? parsePlotLabChoices(displayContent)
+      : null;
+  const quickChoices =
+    mode === "plot_lab_chat" && !isStreaming && actionsEnabled && onPlotLabDecision
+      ? parseInlinePlotLabQuickChoices(displayContent)
+      : [];
+  if (plotLabChoices) {
+    const extraQuickChoices = quickChoices.filter(
+      (quick) => !plotLabChoices.choices.some((choice) => choice.key.toLowerCase() === quick.key.toLowerCase())
+    );
+    return (
+      <div className="space-y-3">
+        {plotLabChoices.prompt && (
+          <div className="whitespace-pre-wrap text-[13px] leading-6 text-foreground">{plotLabChoices.prompt}</div>
+        )}
+        <div className="space-y-2 rounded-md border border-border bg-background/70 p-2">
+          <div className="px-1 text-[11px] font-semibold uppercase text-muted-foreground">Choose next</div>
+          {plotLabChoices.choices.map((choice) => (
+            <button
+              key={choice.key}
+              type="button"
+              onClick={() => onPlotLabDecision?.(choice.response, content)}
+              className="group block min-h-11 w-full rounded-md border border-border bg-background px-3 py-2 text-left transition-colors hover:border-indigo-400 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-indigo-950/30"
+            >
+              <span className="flex items-start gap-2">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
+                  {choice.key}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-foreground">{choice.label}</span>
+                  {choice.detail && (
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{choice.detail}</span>
+                  )}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {plotLabChoices.after && (
+          <div className="whitespace-pre-wrap text-[13px] leading-6 text-muted-foreground">{plotLabChoices.after}</div>
+        )}
+        {onPlotLabDecision && extraQuickChoices.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {extraQuickChoices.map((choice) => (
+              <button
+                key={choice.key}
+                type="button"
+                onClick={() => {
+                  if (choice.response) onPlotLabDecision(choice.response, content);
+                }}
+                className="min-h-11 rounded-md border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                {choice.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (quickChoices.length > 0) {
+    return (
+      <div className="space-y-3">
+        <div className="whitespace-pre-wrap text-[13px] leading-6 text-foreground">{displayContent}</div>
+        <div className="flex flex-wrap gap-2">
+          {quickChoices.map((choice) => (
+            <button
+              key={choice.key}
+              type="button"
+              onClick={() => {
+                if (choice.response) onPlotLabDecision?.(choice.response, content);
+              }}
+              className="min-h-11 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-indigo-400 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-indigo-950/30"
+            >
+              {choice.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="whitespace-pre-wrap">
+    <div className="whitespace-pre-wrap text-[13px] leading-6">
       {displayContent}
       {isStreaming && (
         <span className="inline-block ml-1 h-3 w-1.5 bg-indigo-500 animate-pulse" />

@@ -30,6 +30,10 @@
 //     expanded from.
 
 import type { TabRow } from "@/components/editor/TabRail";
+import {
+  inferPlotLabWorkflowStateFromTagged,
+  renderPlotLabWorkflowContext,
+} from "@/lib/plot-lab/workflow";
 
 export interface BuildContextArgs {
   tabs: TabRow[];
@@ -244,6 +248,7 @@ export function buildAIContext(args: BuildContextArgs): string {
   const episodePlotTab = findTabByType(tabs, "microdrama_plots");
   const refEpisodeTab = findTabByType(tabs, "predefined_episodes");
   const skeletonTab = findTabByType(tabs, "series_skeleton");
+  const plotLabDecisionsTab = findTabByType(tabs, "plot_lab_decisions");
 
   const researchTagged = renderTab(researchTab);
   const seriesOverviewTagged = renderTab(seriesOverviewTab);
@@ -251,6 +256,7 @@ export function buildAIContext(args: BuildContextArgs): string {
   const episodePlotTagged = renderTab(episodePlotTab);
   const refEpisodeTagged = renderTab(refEpisodeTab);
   const skeletonTagged = renderTab(skeletonTab);
+  const plotLabDecisionsTagged = renderTab(plotLabDecisionsTab);
   const logline = extractLogline(seriesOverviewTagged);
 
   const activeTagged = renderTab(activeTab);
@@ -281,6 +287,9 @@ export function buildAIContext(args: BuildContextArgs): string {
 
   // Characters — full always.
   if (charactersTagged) sections.push(`## Characters\n${charactersTagged}`);
+  if (plotLabDecisionsTagged.trim()) {
+    sections.push(`## Plot Lab Decisions\n${plotLabDecisionsTagged}`);
+  }
 
   // Series Skeleton — included in all tabs except predefined_episodes, where
   // skeleton content confuses episode generation by overriding scene-level choices.
@@ -379,6 +388,129 @@ export function buildAIContext(args: BuildContextArgs): string {
   return sections.filter(Boolean).join("\n\n");
 }
 
+export function buildPlotLabContext(args: {
+  tabs: TabRow[];
+  activeTab: TabRow;
+  activeTabLiveContent: string | null;
+  userMessage?: string;
+}): string {
+  const { tabs, activeTab, activeTabLiveContent, userMessage } = args;
+  const sections: string[] = [];
+  const trimmedUserMessage = userMessage?.trim() ?? "";
+  const isLowInformationTurn = /^(hi|hey|hello|yo|test|ok|okay|start\??)$/i.test(trimmedUserMessage);
+
+  const tab = (type: string) => findTabByType(tabs, type);
+  const renderTab = (target: TabRow | undefined): string => {
+    if (!target || target.type === "pipeline_playground") return "";
+    if (target.id === activeTab.id && activeTabLiveContent !== null) {
+      return tiptapJsonToTagged(activeTabLiveContent);
+    }
+    return tiptapJsonToTagged(target.content);
+  };
+  const renderNamed = (type: string, label: string): void => {
+    const tagged = renderTab(tab(type));
+    if (tagged.trim()) sections.push(`## ${label}\n${tagged}`);
+  };
+  const firstEpisodeSection = (tagged: string): H3Section | null => {
+    const sectionsByH3 = splitTabByH3(tagged);
+    if (sectionsByH3.length === 0) return null;
+    return sectionsByH3.find((section) => extractEpisodeNumber(section.title) === 1) ?? sectionsByH3[0];
+  };
+
+  const manifestLines = tabs
+    .filter((t) => !/\(archive\)/i.test(t.title))
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((t) => `- ${t.title} (${t.type})${t.id === activeTab.id ? " <- active" : ""}`)
+    .join("\n");
+  sections.push(`## Plot Lab Workspace\nAgent name: Levi\nDurable system-of-record writes must go through explicit writer confirmation before saving to a tab.\n\n## Document Tabs\n${manifestLines}`);
+
+  sections.push(`## Plot Lab Turn Intent
+- Writer message type: ${isLowInformationTurn ? "low-information greeting/resume check" : "substantive instruction or reply"}.
+- Canonical behavior comes from the Plot Lab single source of truth: visible UI is Levi chat only; workflow and specialist work stay internal unless asked.
+- If the type is low-information, do not advance the workflow and do not lock decisions. Write a 3-4 sentence EP1 grounding summary from the actual saved evidence, but do not use the word "Loaded". Name the actual protagonist, the opening visual promise, the first pressure/desire force, the protagonist's visible dream/ordinary life, and the first consequential request/offer/threat if present. Ask whether this reading is correct or whether the writer wants to add context before starting with the protagonist. The app renders the available actions; do not write inline choices.
+- If Recent Levi Chat is present, use it to resolve short references like "both", "combine", "yes", or "same".
+- For early Plot Lab turns, prefer one EP1-rooted discovery question over multi-option menus. If the writer confirms the first EP1 read or asks to start, do not immediately announce a lock such as "<protagonist> is not X; they are Y." Ask one open protagonist question first, usually about what EP1 makes the writer want to preserve in the protagonist. Do not produce a full multi-character report and do not jump to a pressure-turn menu.
+- Keep early questions open-ended. Do not corner the writer into two narrow story states unless they are already giving very specific answers, resolving a concrete continuity conflict, or explicitly asked for a hard fork. Use specific yes/no only for concrete source facts; use open typed questions for interpretive character work.
+- Character-first setup cadence: get to character quickly before plot mechanics. Normal order is protagonist function -> desire/danger or opposing-force character function -> enforcement/pressure function -> core plot thread. For each character pass, ask at most two useful discovery questions by default, then summarize the working lock and let the app offer continue/revise/lock controls before changing state. Do not ask plot, monetization, runway, or endpoint questions until the protagonist and the next consequential characters are at least lightly characterized.
+- Plot-detail questions require explicit permission. Do not ask what the protagonist does next, who they contact, what exact move the pressure character makes, what happens in a spare minute, deal terms, counter-moves, scene logistics, tactics, or next-beat mechanics unless the writer has agreed to move from character into plot beats. Ask a transition question first: "Do you want to move from character lock into the first plot beat, or stay with character?"
+- Early questions must be grounded in what Plot 1 or Predefined Episode 1 actually shows: visible action, wording, setting, relationship pressure, public reaction, money, status, coercion, injury, or choice. Do not invent hidden receipts, legal exposure, family hostage logic, or new off-page leverage as if it is already evidenced. If a new lever is needed, ask whether to add a new off-page lever before designing it.
+- After the opening confirmation, the next useful move is usually an open protagonist question, such as "What about the protagonist in EP1 feels most important to preserve before we build Plot 1?" or "Why does the opening image show the protagonist in this contradictory state?" Do not turn those into leading lock choices. Buttons are governed by the app-owned controller state.
+- Character questions must be about the character first: want, protection, refusal, pressure behavior, and power language. A question about an enforcement/pressure character should clarify who they are as a presence before asking what plot mechanic they drive.
+- Clickable actions come from typed Plot Lab metadata, not inline chat prose. Do not write reply letters, numbered option lists, or pick-a-menu instructions in the assistant message. End with one clear question; the app renders cards separately.
+- Add context is a UI-owned local action on the first confirmation. Do not treat it as a story decision. If the writer later asks to skip, simplify or step back rather than pushing the same question.
+- Chat history may be empty because the writer cleared it for a test run. Saved tabs still represent project evidence.
+- Plot Lab Decisions is the lock ledger. Episode Sketches, Microdrama Plots, Predefined Episodes, Characters, Beats, and Starting Evidence are draft evidence unless confirmed in Plot Lab Decisions or current chat.
+- Entity resolution: before reasoning from a newly mentioned person, map the reference as existing named character, new named character, new unnamed character/role, relationship label, group/institution, or ambiguous. Do not merge a new role, relative, title, or future character into an existing character unless the writer explicitly maps them or the saved source clearly says they are the same person. If ambiguous, ask the smallest clarification.
+- If the writer explicitly asks for options, the specialist may return structured options; otherwise Stage 1 discovery should stay open-ended and typed-answer first.`);
+
+  renderNamed("series_overview", "Source / Original Research");
+  renderNamed("characters", "Characters");
+  renderNamed("locations", "Locations");
+  renderNamed("beat_sequence", "Current Beats");
+  renderNamed("episode_sketches", "Episode Sketches");
+
+  const finalPlotsTagged = renderTab(tab("microdrama_plots"));
+  const finalPlots = splitTabByH3(finalPlotsTagged);
+  const startingPlot = firstEpisodeSection(finalPlotsTagged);
+  const predefinedTagged = renderTab(tab("predefined_episodes"));
+  const predefined = splitTabByH3(predefinedTagged);
+  const startingEpisode = firstEpisodeSection(predefinedTagged);
+  const decisionsTagged = renderTab(tab("plot_lab_decisions"));
+  const sketchesTagged = renderTab(tab("episode_sketches"));
+  const workflowState = inferPlotLabWorkflowStateFromTagged({
+    decisions: decisionsTagged,
+    episodeSketches: sketchesTagged,
+    finalPlots: finalPlotsTagged,
+  });
+
+  sections.push(renderPlotLabWorkflowContext(workflowState));
+  if (decisionsTagged.trim()) sections.push(`## Plot Lab Decisions\n${decisionsTagged}`);
+  if (startingPlot || startingEpisode) {
+    sections.push([
+      "## Plot Lab Starting Evidence",
+      "Use this first internally. Do not recap these blocks at length unless the writer asks. Start by forming a concise working read, then ask the writer to confirm or tweak one thing at a time.",
+      startingPlot ? `### Microdrama Plot 1\n${startingPlot.content}` : "",
+      startingEpisode ? `### Predefined Episode 1\n${startingEpisode.content}` : "",
+    ].filter(Boolean).join("\n\n"));
+  }
+  if (finalPlots.length > 0) {
+    const latest = finalPlots.slice(-8);
+    sections.push(
+      `## Final Microdrama Plots (${latest.length} latest of ${finalPlots.length})\n${latest.map((s) => s.content).join("\n\n")}`
+    );
+  }
+
+  if (predefined.length > 0) {
+    const latest = predefined.slice(-5);
+    sections.push(
+      `## Written Episodes (${latest.length} latest of ${predefined.length})\n${latest.map((s) => s.content).join("\n\n")}`
+    );
+  }
+
+  const activeTagged = renderTab(activeTab);
+  sections.push(`## Active Tab\n${activeTab.title} (${activeTab.type})\n${activeTagged}`);
+
+  if (userMessage?.trim()) {
+    sections.push(`## Writer Message\n${userMessage.trim()}`);
+  }
+
+  sections.push(`## Plot Lab Routing Contract
+- Use Locations for locked location facts.
+- Use Current Beats for selected beats.
+- Use Characters for character decisions.
+- Use Plot Lab Decisions for locked Plot Lab stage decisions, core contract, character-pressure locks, monetization endpoint locks, runway decisions, and final handoff notes.
+- Use Episode Sketches for 1-2 sentence episode plans before final plot generation.
+- Use Final Microdrama Plots only after the writer confirms a final plot.
+- First scan Microdrama Plot 1 and Predefined Episode 1 when available.
+- Follow the Plot Lab Workflow State internally, but do not expose workflow/state-machine language unless the writer asks how Levi is proceeding. Ask only the question needed to satisfy the current quality gate.
+- Do not move to Episode 2 or beat-building until Stage 1 has locked the opening read, character/relationship/universe inputs, monetization point, and monetization delta.
+- Ask one question at a time. Normal creative chat is allowed, but stage locks must advance through the controller state.
+- Visible answers should be small enough for the writer to respond without scrolling through a report. Prefer one concise frame and one open question.`);
+
+  return sections.filter(Boolean).join("\n\n");
+}
+
 // ─── Pipeline Step Context Builder ───
 //
 // Produces a minimal, step-specific context string for the Multi-Step
@@ -423,6 +555,8 @@ export function buildPipelineStepContext(
   };
 
   const tab = (type: string) => findTabByType(tabs, type);
+  const decisions = render(tab("plot_lab_decisions"), "Plot Lab Decisions");
+  if (decisions) parts.push(decisions);
 
   // Workbook draft (included when non-empty, labeled so model knows it's a draft)
   const workbookContent = workbookLiveContent ?? tab("workbook")?.content ?? null;

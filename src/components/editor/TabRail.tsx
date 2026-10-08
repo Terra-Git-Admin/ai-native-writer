@@ -14,6 +14,8 @@ export type TabType =
   // Multi-Step Episode Pipeline tabs (pipeline positions 7–9).
   | "world_state"
   | "beat_sequence"
+  | "episode_sketches"
+  | "plot_lab_decisions"
   | "story_logic"
   // Pipeline Playground — curation surface (position 10).
   | "pipeline_playground"
@@ -58,6 +60,8 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
   workbook: { label: "Workbook", className: "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300" },
   world_state: { label: "World State", className: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" },
   beat_sequence: { label: "Beats", className: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300" },
+  episode_sketches: { label: "Episode Sketches", className: "bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300" },
+  plot_lab_decisions: { label: "Plot Lab Decisions", className: "bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-700 dark:text-fuchsia-300" },
   story_logic: { label: "Story Logic", className: "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300" },
   pipeline_playground: { label: "Playground", className: "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300" },
   // Legacy aliases — render identically to their post-heal canonical.

@@ -58,6 +58,8 @@ function classify(row: TabRow): CanonicalTabType | "research_legacy" | "archive"
   if (t === "workbook") return "workbook";
   if (t === "world_state") return "world_state";
   if (t === "beat_sequence") return "beat_sequence";
+  if (t === "episode_sketches") return "episode_sketches";
+  if (t === "plot_lab_decisions") return "plot_lab_decisions";
   if (t === "story_logic") return "story_logic";
   if (t === "pipeline_playground") return "pipeline_playground";
   if (t === "research") return "research_legacy";

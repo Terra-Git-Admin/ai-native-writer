@@ -23,6 +23,8 @@ const VALID_TYPES: readonly string[] = [
   "workbook",
   "world_state",
   "beat_sequence",
+  "episode_sketches",
+  "plot_lab_decisions",
   "story_logic",
   "pipeline_playground",
 ];

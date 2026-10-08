@@ -19,6 +19,7 @@ export async function GET() {
       image: users.image,
       role: users.role,
       active: users.active,
+      plotLabAccess: users.plotLabAccess,
       createdAt: users.createdAt,
     })
     .from(users)

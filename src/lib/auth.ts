@@ -69,6 +69,7 @@ function getNextAuth(): AuthExports {
             });
             if (dbUser) {
               session.user.role = dbUser.role;
+              session.user.plotLabAccess = dbUser.plotLabAccess;
             }
           }
           return session;
@@ -113,6 +114,7 @@ const BYPASS_SESSION = {
     email: process.env.ADMIN_EMAIL || "vikas@terra.com",
     name: "Dev User",
     role: "admin" as const,
+    plotLabAccess: true,
   },
   expires: new Date(Date.now() + 86400 * 1000).toISOString(),
 };

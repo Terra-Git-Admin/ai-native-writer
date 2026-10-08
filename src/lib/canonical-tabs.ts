@@ -1,15 +1,15 @@
-// The eleven fixed tabs every document carries. Seeded on doc create and
+// The thirteen fixed tabs every document carries. Seeded on doc create and
 // healed into place for legacy docs via the admin backfill route. Protected:
 // title and type cannot be edited, row cannot be deleted, order is locked.
 //
-// Writers can add custom tabs alongside these eleven; custom tabs are
-// unprotected and live at positions >= 11.
+// Writers can add custom tabs alongside these thirteen; custom tabs are
+// unprotected and live at positions >= 13.
 
 import { nanoid } from "nanoid";
 
 // Bump when CANONICAL_TABS gains or changes tabs. Each doc tops up once on its
 // next open when its stored canonical_tabs_version is below this, then goes quiet.
-export const CURRENT_CANONICAL_TABS_VERSION = 1;
+export const CURRENT_CANONICAL_TABS_VERSION = 3;
 import type { InferInsertModel } from "drizzle-orm";
 import { tabs } from "./db/schema";
 
@@ -23,6 +23,8 @@ export type CanonicalTabType =
   | "workbook"
   | "world_state"
   | "beat_sequence"
+  | "episode_sketches"
+  | "plot_lab_decisions"
   | "story_logic"
   | "pipeline_playground";
 
@@ -135,11 +137,25 @@ export const CANONICAL_TABS: readonly CanonicalTabSpec[] = [
     content: doc([h1("Beats")]),
   },
   {
+    // Plot Lab staging surface for selected 1-2 sentence episode plans before
+    // they are expanded into final Microdrama Plots.
+    type: "episode_sketches",
+    title: "Episode Sketches",
+    position: 9,
+    content: doc([h1("Episode Sketches")]),
+  },
+  {
+    type: "plot_lab_decisions",
+    title: "Plot Lab Decisions",
+    position: 10,
+    content: doc([h1("Plot Lab Decisions")]),
+  },
+  {
     // Multi-Step Episode Pipeline — Step 3 output. Writer locks the causal
     // chain + dramatic role tags from Connect the Story here.
     type: "story_logic",
     title: "Story Logic",
-    position: 9,
+    position: 11,
     content: doc([h1("Story Logic")]),
   },
   {
@@ -147,7 +163,7 @@ export const CANONICAL_TABS: readonly CanonicalTabSpec[] = [
     // plus Connect Story output. Content is PlaygroundData JSON, not Tiptap doc.
     type: "pipeline_playground",
     title: "Playground",
-    position: 10,
+    position: 12,
     content: JSON.stringify({ blocks: { world_state: null, beat_sequence: null, story_logic: null } }),
   },
 ];
@@ -157,7 +173,7 @@ export const CANONICAL_TAB_TYPES: readonly CanonicalTabType[] =
 
 type TabInsert = InferInsertModel<typeof tabs>;
 
-// Build insert rows for all eleven canonical tabs bound to a document. Caller
+// Build insert rows for all twelve canonical tabs bound to a document. Caller
 // is responsible for the actual db.insert — this keeps the seeding logic
 // reusable between new-doc create (POST /api/documents) and legacy-doc heal
 // (GET /api/documents/[id]/tabs).

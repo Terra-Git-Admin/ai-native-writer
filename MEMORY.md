@@ -387,3 +387,167 @@ Decision log and session summaries. Read at every session start.
 - Pitch Lab Start now uses `View` and `Generate`; Generate warns before replacing unshortlisted directions/pilots while preserving shortlisted/promoted pitches.
 - Story Directions now has a compact expandable row UX with per-row Copy/Regenerate/Discard/Generate actions and inline generation progress.
 - The separate Generated tab is removed from the active UI. Only one active generated pilot set is shown under Story Directions; Shortlist remains the durable multi-day improvement workspace.
+
+## Session - 2026-10-01 (Plot Lab V1 local prototype and Monday plan)
+
+- Worked on Plot Lab V1 in clean worktree `D:\codex-global\anw-plot-lab-v1` on branch `feat/plot-lab-v1`; no push/deploy.
+- Built local Plot Lab shell inside ANW: Labs > Plot Lab opens a dedicated main workspace with Levi chat, ANW context summary, story progression, and scratch notes.
+- Added Plot Lab canonical support: `episode_sketches` tab, Plot Lab prompt modes, Plot Lab context builder, and double-confirm save path into canonical tabs.
+- Corrected local env issue: `ENCRYPTION_KEY` length error fixed for local dev; AI provider still not configured locally (`/api/ai/models` empty), so no real AI behavior was verified.
+- Product decisions: Plot Lab should be a guided chat workspace, not a heavy node UI; Levi starts from Microdrama Plot 1 + Predefined Episode 1, asks one selectable decision at a time, uses a 3-decision setup budget, then moves to monetization cliffhanger options and middle beats.
+- Interaction decisions: every Levi question needs easy selectable choices; only the latest actionable assistant message should have buttons; old actions disappear after a decision; stage-summary confirmation triggers system-of-record save, not ordinary chat replies.
+- Added Monday working spec at `docs/plot-lab-monday-planning.md`.
+- Verification: `npm run build` passed after the latest changes; `git diff --check` passed with CRLF warnings only. Browser-click QA via gstack browse remained blocked by local browse packaging.
+- Next priorities: Monday review of the planning doc, then implement latest-action-only gating, stage-summary save trigger, 3-decision budget enforcement, and provider-backed real-AI dogfood on a concrete doc.
+
+## Session - 2026-10-05 (Plot Lab latest-action gating and local readiness)
+
+- Implemented Plot Lab latest-action-only behavior: only the newest actionable Levi assistant message renders choice controls; older choices remain readable but inert.
+- Routed Stage Summary confirm choices into `plot_lab_save_preview`; normal Plot Lab choices stay chat-only and do not open the save modal.
+- Updated Levi prompt rules for exactly 3 setup decisions before monetization endpoints and for Stage Summary-only save confirmation.
+- Local readiness: dev server runs on `http://localhost:3000`; `/docs` returns 200; `/api/auth/session` returns admin dev-bypass user `vikas@terra.com`.
+- AI readiness: `/api/ai/models` returns configured OpenAI model `gpt-5.2`; no paid real-AI generation was run without explicit approval.
+- Verification: `npm run lint` passed with warnings only; `npm run build` passed.
+
+## Session - 2026-10-06 (Plot Lab character-first correction)
+
+- User flagged that Levi was still going down one coercion/mechanics track too early and that option labels were not understandable as story choices.
+- Decision: Plot Lab setup is now character-first, not pressure-mechanics-first. Levi should lock protagonist function, then the next consequential character, then the core plot thread before drilling deeper into specific coercion mechanics.
+- Added 2:1 setup cadence to the canonical cockpit spec and Levi prompt: two questions/locks grounded in visible EP1 evidence, then one broader soul/core question, then back to evidence.
+- Tightened prompt/context rules so off-page mechanics like receipts, license exposure, hostage logic, or legal angles must be labeled as new additions rather than treated as EP1 evidence.
+- Hardened Plot Lab choice rendering to dedupe repeated option keys in the latest option block and show compact visible detail when a label alone is unclear.
+- Verification: `npm run lint` passed with existing warnings only; `npm run build` passed. No paid real-AI generation, push, deploy, or production write was run.
+
+## Session - 2026-10-06 (Plot Lab closeout for next session)
+
+- Current source of truth: `docs/plot-lab-levi-cockpit-spec.md`. It supersedes the older Plot Lab product contract and prompt-plan docs wherever they conflict.
+- Current local state: Plot Lab remains local-only on branch `feat/plot-lab-v1`; no push, deploy, production write, migration, or paid real-AI dogfood was run.
+- Implemented locally: simplified Levi right pane, resizable chat, stable final-state choice rendering, latest-message-only choices, deduped repeated options, compact visible option detail, character-first prompt/context rules, and automatic hidden specialist calls for explicit Plot 1/soul/paywall/runway requests.
+- Product decision for resume: early Plot Lab must start from character function and visible EP1 evidence. The next useful flow is protagonist lock -> next consequential character -> core plot thread -> visual paywall/runway. Do not jump straight into one coercion/legal mechanics branch.
+- Next priority: run an approved real-AI dogfood on the EP1 seed flow and tune from actual model output. Tests should cover `hey`, Expand Plot 1, Lock/Tweak, 2:1 cadence, unclear options, no repeated buttons, no "Loaded", no multi-character dump, and no invented off-page receipts unless explicitly marked as a new story addition.
+
+## Session - 2026-10-06 (Plot Lab streaming UX correction)
+
+- User flagged that Plot Lab still felt shallow in UI: the right context pane may be unnecessary, font/readability felt off, and streamed prose turning into buttons created a weird state shift.
+- Decision: Plot Lab should not morph live streaming text into action cards. During Plot Lab generation, show a stable working state; render the final answer and choices only when complete.
+- Changed Plot Lab right rail into an on-demand Context drawer so the main workspace stays focused on Levi + current decision.
+- Updated Plot Lab answer rendering to separate prose from a stable "Choose next" action block with cleaner line-height and full-width option cards.
+- External reference product is not present in the repo; use Vikas's shared screenshots only as visual direction, not as an implementation dependency.
+- Follow-up decision after reference screenshots: keep ANW tabs as the durable artifact layer, but redesign Plot Lab as a three-pane workflow with tabs on the left, editor/artifact canvas in the center, and a guided Levi cockpit on the right.
+- Added `docs/plot-lab-levi-cockpit-spec.md` as the controlling next implementation contract: state table, card types, data contract, save targets, implementation slices, and dogfood criteria.
+
+## Session - 2026-10-05 (Plot Lab UX/product correction)
+
+- User feedback: Levi chat UX is subpar in prototype state; reroll accumulated old/new options, some options rendered with subject only, questions/answers were clubbed together, monetization/E2 options overreached without character/relationship clarity, and post-save next steps were unclear.
+- Product decision: Plot Lab needs a clear contract across use cases: source scan, consequential character discovery, character/relationship clarity, monetization endpoint design, immediate E2 runway, and compact E2-E5 sketches after save.
+- Added `docs/plot-lab-product-contract.md` as the working contract for Levi behavior, user actions, option hygiene, reroll semantics, custom merge answers, and post-save handoff.
+- Updated Levi prompt to ask about consequential pilot characters such as Ming before using them in monetization, treat custom typed merges as first-class decisions, and gate monetization/E2 options on immediate wants/pressure.
+- Hardened Plot Lab choice parsing so rerolls render only the latest option block, story cards are capped at 4, and subject-only options do not become clickable cards.
+- Added `docs/plot-lab-levi-prompt-plan.md`, grounded in local `microdrama-expert` research and `microdrama.cc`, to plan the next full Levi prompt rewrite around state ledgers, question policy, option policy, monetization endpoint policy, E2 runway policy, save handoff, and dogfood acceptance tests.
+
+## Session - 2026-10-05 (Levi partner build-out)
+
+- Implemented the Levi partner plan as a local v1 slice: Levi is now prompted as an expert microdrama brainstorming partner with judgment, bounded pushback, mixed response modes, artifact-first stage recovery, and final-plot handoff after sketches.
+- Added `plot_lab_decisions` as a canonical protected tab, bumped canonical tab version to 3, and threaded the type through tab badges, tab APIs, inference, healing, splitting, context, and Plot Lab save routing.
+- Plot Lab workspace now shows a light phase strip inferred from locked artifacts and a Decisions context card; locked stage summaries save into Plot Lab Decisions by default.
+- Updated Plot Lab docs to make the new source of truth explicit: Plot Lab Decisions first, then supporting tabs and chat history.
+- Verification: `npm run lint` passed with warnings only; `npm run build` passed; `git diff --check` had CRLF warnings only; localhost `/docs`, auth session, and AI models smoke checks passed. No paid real-AI generation, push, or deploy was run.
+
+## Session - 2026-10-05 (Levi assumption-level gates)
+
+- Tightened Levi prompt flow so low-information greetings only resume context; `continue` proceeds into gated work instead of showing options immediately.
+- Added assumption ladder: locked decisions, draft evidence, grounded inference, open questions, and workflow actions.
+- Required Levi to ask 1-2 core-thread questions and confirm a working core-thread lock before core options; character immediate motivations must be clarified before Episode 2 options.
+- Added Plot Lab turn-intent context so cleared chat history is not mistaken for an empty project, and Episode Sketches remain draft evidence unless confirmed in Plot Lab Decisions.
+
+## Session - 2026-10-05 (Levi paywall-first plan)
+
+- Decision: Plot Lab V1 should optimize for locking the first-pack visual paywall endpoint before drafting Episode 2.
+- Levi operating model for next implementation: evidence check -> current-read confirmation -> character truth -> core thread lock -> visual paywall design -> paywall endpoint lock -> episode runway -> E2 -> E2-E5 sketches -> final plots.
+- Question policy: use a 2:1 mix of shown Episode 1 evidence questions and unshown engine/paywall questions; avoid vague theory-checklist prompts.
+- Paywall questions should be visual and causal: freeze-frame, physical loss, leverage object, on-screen power shift, and paid answer.
+- Documented the next-session propagation plan in `docs/plot-lab-levi-prompt-plan.md` and updated the product contract to make paywall-first the current version's primary outcome.
+
+## Session - 2026-10-05 (Closeout - Plot Lab paywall-first propagation)
+
+- Closed the session with Plot Lab still local-only on `D:\codex-global\anw-plot-lab-v1`, branch `feat/plot-lab-v1`; no push, deploy, cloud mutation, or paid real-AI generation was run.
+- Tomorrow's entry point is the paywall-first propagation plan: update Levi prompt/context/UI/stage model so it locks character truth and visual paywall before E2.
+- Canonical order to resume from: evidence check -> current-read confirmation -> character truth -> core thread lock -> visual paywall design -> paywall endpoint lock -> episode runway -> E2 -> E2-E5 sketches -> final plots.
+- Docs updated this session: Plot Lab prompt plan, Plot Lab product contract, project memory, canonical ANW status/backlog/global backlog, and Codex global session log.
+
+## Session - 2026-10-06 (Final handoff - supersedes paywall-first closeout)
+
+- This is the latest Plot Lab handoff. It supersedes the 2026-10-05 paywall-first closeout wherever there is conflict.
+- Start next session from `docs/plot-lab-levi-cockpit-spec.md`.
+- Current local worktree: `D:/codex-global/anw-plot-lab-v1` on branch `feat/plot-lab-v1`.
+- Localhost details from last verified setup: dev URL `http://localhost:3000`; docs page `http://localhost:3000/docs`; dev bypass user `vikas@terra.com` had admin access; `/api/ai/models` returned configured OpenAI model `gpt-5.2`.
+- Current product direction: character-first and EP1-grounded. Levi should move protagonist function -> next consequential character -> core plot thread -> visual paywall/runway.
+- Do not resume by drilling into one coercion/legal mechanics branch or by treating off-page receipts/hostages/license threats as EP1 evidence.
+- Next quality gate: approved real-AI dogfood on the EP1 seed flow, checking `hey`, Expand Plot 1, Lock/Tweak, 2:1 cadence, no "Loaded", no long recap, no multi-character dump, no repeated buttons, no unclear options, and no invented off-page mechanics unless labeled as a new story addition.
+
+## Session - 2026-10-06 (Plot Lab latest localhost handoff)
+
+- This is the latest Plot Lab starting point for tomorrow; it supersedes older paywall-first and "next consequential character" wording where they conflict.
+- Current local workspace: `D:/codex-global/anw-plot-lab-v1`, branch `feat/plot-lab-v1`; localhost `http://localhost:3000`; docs `http://localhost:3000/docs`; dev bypass admin `vikas@terra.com`.
+- Current Levi prompt/seed label: `Plot Lab: Levi Chat Orchestrator v3.1`.
+- Current workflow is generic role-slot controlled: `protagonist -> primary_counterpart -> operator_pressure (optional/skippable) -> relationship_core -> monetization_bridge -> plot_thread`.
+- Controller owns first confirmation, Add Context, role order, three-question caps, checkpoint buttons, plot-detail permission, and monetization gating; Levi carries creative nuance in prose, not a semantic parser.
+- Latest docs updated for resume: `docs/plot-lab-levi-cockpit-spec.md`, `docs/plot-lab-product-contract.md`, `docs/plot-lab-levi-prompt-plan.md`, and `docs/plot-lab-monday-planning.md`.
+- Latest verification before handoff: `npm run lint`, `npm run build`, and `git diff --check` passed with only existing warnings/CRLF notices.
+- Not yet done: approved real-AI dogfood on the EP1 seed flow after the v3.1 generic role-slot implementation.
+
+## Session - 2026-10-07 (Plot Lab lock/review implementation)
+
+- Latest Plot Lab source of truth remains `docs/plot-lab-levi-cockpit-spec.md`; older product/prompt/Monday docs now point to the 2026-10-07 v3.3 handoff.
+- Implemented locally on `D:/codex-global/anw-plot-lab-v1`, branch `feat/plot-lab-v1`; no push, deploy, migration, production write, or paid real-AI generation was run.
+- Current Levi prompt/seed label: `Plot Lab: Levi Chat Orchestrator v3.3`.
+- Current workflow: `protagonist -> primary_counterpart -> operator_pressure (optional/skippable) -> relationship_core -> monetization_bridge -> monetization_lock_review -> premise_bridge -> plot_thread`.
+- Product correction from dogfood: default to two useful questions per role, then show app-owned `Lock and move on`, `Continue here`, and `Revise` controls before the state changes. This prevents repetitive narrow questioning while still allowing extra context when the writer asks for it.
+- Monetization correction: EP1 facts are launch conditions, not a guarantee that the exact EP1 character posture persists until the later paid moment. Levi must review/lock the monetization endpoint, then ask what character evolution, relationship shift, new consequential character, or in-between pressure earns that endpoint before building runway beats.
+- Lock saving: checkpoint locks write into stable editable sections in `Plot Lab Decisions` (`Character Locks`, `Relationship / Pressure Chain`, `Monetization Endpoint`, `EP1 -> Monetization Bridge`) and open that tab after save.
+- UI/debug correction: keep the admin panel minimal and human-readable: phase, focus, waiting-for state, save target, locks, next move, repetition warning, feedback/debug export status, and save status. `Reroll options` is visible on rerollable choice moments.
+- Verification after implementation: `npm run lint` and `npm run build` passed with pre-existing warnings only. Browser click-through dogfood of the lock-save tab flow and approved real-AI dogfood remain to be done.
+
+## Session - 2026-10-07 (Plot Lab mini-agent orchestration v4.0)
+
+- Upgraded Plot Lab from regex-triggered hidden specialist prose to controller-routed mini-agent orchestration.
+- Added a structured specialist brief contract and phase context packs so each agent receives controller objective, relevant `Plot Lab Decisions`, EP1/source evidence, recent chat, and current writer move.
+- Added Character Analyst and Premise Bridge specialist modes; upgraded source, paywall, and runway prompts to JSON transport while keeping Levi as concise visible renderer.
+- Updated Plot Lab chat UI to prefer structured option metadata, show reroll only for AI-generated story option sets, save specialist lock candidates when available, and include active mini-agent/locked context in debug.
+- Updated Plot Lab docs to v4.0 and the mini-agent architecture. Verification: `npm run lint`, `npm run build`, and `git diff --check` passed with existing warnings/CRLF notices only.
+
+## Session - 2026-10-07 (Plot Lab docs cleanup)
+
+- `docs/plot-lab-levi-cockpit-spec.md` remains the only current Plot Lab source of truth.
+- Added `docs/plot-lab-docs-index.md` to make the doc hierarchy explicit: cockpit spec is current; product contract, prompt plan, and Monday planning are archived background.
+- Clarified that `docs/plot-lab-monday-planning.md` is a historical scratchpad, not a weekly planning process or live implementation contract.
+- Updated the cockpit spec with the v4.0 context contract, feedback logging policy, mandatory phase-exit rule, mini-agent implementation status, and completed lint/build/diff-check verification.
+
+## Session - 2026-10-07 (Plot Lab feedback fixes)
+
+- Fixed the failed dogfood handoff: `Lock and move on` now saves first, shows an app-owned `Saved to Plot Lab Decisions / Next focus` assistant bubble, then asks Levi for the next focus as a separate assistant bubble.
+- Corrected Plot Lab controller `waitingFor` fallback so character work no longer reports `runway_ready` outside actual plot-gate/runway state.
+- Added admin-only `Clear decisions` test control to reset only the active doc's `Plot Lab Decisions` tab to its default heading.
+- Verification: `npm run lint` and `npm run build` passed with pre-existing warnings only.
+
+## Session - 2026-10-07 (Plot Lab action-button architecture fix)
+
+- Dogfood export `D:/plotpix/Levi/plot-lab-debug-2026-10-07T12-28-26-052Z.json` showed the first protagonist question had inline option wording and no structured choices.
+- Root cause: opening confirmation advanced into protagonist discovery with `buttonPolicy: none`, and the second Levi prose-rendering pass could rewrite structured choices back into inline prose.
+- Fix: discovery, transition, monetization, premise bridge, and plot-runway story turns now use `story_choices`; specialists must return concise button options; story-choice turns render visible text directly from the specialist `visibleFrame` + `question`, with options/reroll owned by the UI.
+- Updated the cockpit spec to make action-button rendering the architecture rule, not a local patch. Verification: `npm run lint` and `npm run build` passed with pre-existing warnings only.
+
+## Future Note - 2026-10-07 (Post-EP1 universe mode)
+
+- Separate future direction, not part of the current Plot Lab fix: after EP1 is finished and locked, the product may need a different "universe" mode that builds the story world and then helps generate interesting events inside that universe.
+- This likely needs a different process and chat UX from the current EP1-to-monetization lock workflow; revisit separately after the current Plot Lab interaction/state issues are fixed.
+
+## Session - 2026-10-07 (Closeout - Plot Lab v4.1 plan)
+
+- Project: `D:/codex-global/anw-plot-lab-v1`, branch `feat/plot-lab-v1`; all work remains local-only with no push, deploy, migration, cloud mutation, or production prompt publish.
+- Latest dogfood analyzed: `D:/plotpix/Levi/plot-lab-debug-2026-10-07T13-00-10-211Z.json`.
+- Completed this closeout: updated the canonical cockpit spec and docs index so tomorrow starts from the v4.1 interaction/state plan; added an error note for the choice/state regressions.
+- Current canonical doc: `docs/plot-lab-levi-cockpit-spec.md`. Start next session from its `Next Implementation Plan`.
+- Tomorrow's implementation priorities: option-only reroll with frozen question state; `Type my own answer` button; mandatory app-owned lock/review controls; question-vector planning to stop repeated same-vector prompts; post-monetization one-way state gate; source-grounding audit; hide internal A/B/C option keys.
+- The separate post-EP1 "universe mode" idea was captured for later and should not be mixed into the current fix.
+- Verification not rerun after the docs-only closeout edits. Last code verification before this closeout remained `npm run lint`, `npm run build`, and `git diff --check` passing with pre-existing warnings/CRLF notices.

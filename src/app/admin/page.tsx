@@ -12,6 +12,7 @@ interface User {
   image: string | null;
   role: "admin" | "user";
   active: boolean;
+  plotLabAccess: boolean;
   createdAt: string;
 }
 
@@ -102,6 +103,15 @@ export default function AdminPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active: !currentActive }),
+    });
+    fetchData();
+  };
+
+  const togglePlotLabAccess = async (userId: string, currentAccess: boolean) => {
+    await fetch(`/api/admin/users/${userId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plotLabAccess: !currentAccess }),
     });
     fetchData();
   };
@@ -213,7 +223,11 @@ export default function AdminPage() {
         {/* Users Tab */}
         {tab === "users" && (
           <div className="space-y-2">
-            {users.map((user) => (
+            {users.map((user) => {
+              const hasPlotLabAccess = user.role === "admin" || user.plotLabAccess;
+              const canTogglePlotLabAccess = user.id !== session.user.id && user.role !== "admin";
+
+              return (
               <div
                 key={user.id}
                 className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
@@ -250,6 +264,11 @@ export default function AdminPage() {
                   >
                     {user.role}
                   </span>
+                  {hasPlotLabAccess && (
+                    <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                      {user.role === "admin" ? "Plot Lab admin" : "Plot Lab"}
+                    </span>
+                  )}
                   {user.id !== session.user.id && (
                     <>
                       <button
@@ -270,11 +289,24 @@ export default function AdminPage() {
                       >
                         {user.active ? "Deactivate" : "Activate"}
                       </button>
+                      {canTogglePlotLabAccess && (
+                        <button
+                          onClick={() => togglePlotLabAccess(user.id, user.plotLabAccess)}
+                          className={`text-xs ${
+                            user.plotLabAccess
+                              ? "text-red-600 hover:text-red-800"
+                              : "text-indigo-600 hover:text-indigo-800"
+                          }`}
+                        >
+                          {user.plotLabAccess ? "Disable Plot Lab" : "Enable Plot Lab"}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
             {users.length === 0 && (
               <p className="py-8 text-center text-muted-foreground">No users yet</p>
             )}
