@@ -18,7 +18,7 @@ type TurnStatus = "running" | "complete" | "failed";
 type AutoPipelineStep = "idle" | "beats" | "dialogue" | "draft" | "complete" | "failed";
 
 const DEFAULT_DIALOGUE_DESIGN_INSTRUCTION =
-  "Build a source-bound dialogue plan from the finalized key beats. Preserve the target plot facts and order; do not add new characters, questions, conflicts, or scene events.";
+  "Build a source-bound dialogue plan from the finalized key beats and editable prompt source. Preserve the prompt facts and order; do not add new characters, questions, conflicts, or scene events.";
 
 function newLabRunId(): string {
   return `predef-lab-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -218,8 +218,19 @@ function latestCompleteTurn(turns: LabTurn[], stage: TurnStage): LabTurn | null 
 function countDialogueLines(text: string): number {
   return text
     .split("\n")
-    .filter((line) => /^\s*[A-Z][A-Z0-9 .'-]*(?:\s*\(V\.?O\.?\))?\s*:/.test(line))
+    .filter((line) => /^\s*[A-Z][A-Z0-9 .'-]*(?:\s*\([^)]*\))?\s*:/.test(line))
     .length;
+}
+
+const DEFAULT_PROMPT_BOX_INSTRUCTION =
+  "Write Episode in the same microdrama format (about 1 min long episode). Follow the given outline for the plot above. Have approx 12 lines of dialogue (or internal monologues) in the episode. Dialogues and internal monologues should escalate.";
+
+function buildPromptBoxValue(selectedPlot: SectionOption): string {
+  return `Target Episode:
+${selectedPlot.content.trim()}
+
+Instruction:
+${DEFAULT_PROMPT_BOX_INSTRUCTION}`;
 }
 
 function contentFingerprint(value: string | null | undefined): string {
@@ -256,21 +267,23 @@ function buildSourceSnapshotSignature({
 }
 
 export function buildEpisodeSourceContract({
-  selectedPlot,
+  promptText,
   beatPlan,
 }: {
-  selectedPlot: SectionOption;
+  promptText: string;
   beatPlan: string;
 }): string {
   return `Authority:
 - This contract is the factual boundary for Dialogue Design and Draft.
-- Target Plot facts, participants, event order, explicit line order, objects, and ending state are source truth.
-- Approved Key Beats may compress or clarify the Target Plot, but they do not authorize new characters, new conflicts, new questions, or new scene events unless the Target Plot already implies them.
+- The editable Prompt box is source truth. It contains the target episode outline plus any writer edits, emphasis, skips, or focus notes for this Lab run.
+- Do not use the saved Microdrama Plot text as a hidden override. The selected dropdown episode is provenance only after the Prompt box is populated.
+- Prompt facts, participants, event order, explicit line order, objects, and ending state are source truth.
+- Approved Key Beats may compress or clarify the Prompt box, but they do not authorize new characters, new conflicts, new questions, or new scene events unless the Prompt already implies them.
 - Dialogue Design may plan pressure, turn-taking, interruption, silence, subtext, and line jobs only inside this boundary.
 - Draft must ignore any Dialogue Design detail that adds unsupported facts, extra interrogations, new participants, or reordered source events.
 
-Target Plot:
-${selectedPlot.content.trim()}
+Editable Prompt:
+${promptText.trim() || "(none)"}
 
 Approved Key Beats:
 ${beatPlan.trim() || "(none yet)"}`;
@@ -278,33 +291,28 @@ ${beatPlan.trim() || "(none yet)"}`;
 
 function buildContext({
   mode,
-  selectedPlot,
   selectedPredefs,
-  originalInstruction,
+  promptText,
   turnInstruction,
   beatPlan,
   dialogueDesign,
   draft,
 }: {
   mode: LabMode;
-  selectedPlot: SectionOption;
   selectedPredefs: SectionOption[];
-  originalInstruction: string;
+  promptText: string;
   turnInstruction: string;
   beatPlan: string;
   dialogueDesign: string;
   draft: string;
 }): string {
   const sourceContract = buildEpisodeSourceContract({
-    selectedPlot,
+    promptText,
     beatPlan,
   });
 
   if (mode === "predef_lab_dialogue_design") {
-    return `## Original Writer Instruction
-${originalInstruction.trim() || "(none)"}
-
-## Current Turn Instruction
+    return `## Current Turn Instruction
 ${turnInstruction.trim() || "(none)"}
 
 ## Episode Source Contract
@@ -323,17 +331,11 @@ ${dialogueDesign.trim() || "(none yet)"}
 The Characters tab is intentionally excluded. Use the Episode Source Contract as the hard factual boundary, and selected previous predefined episodes only for voice, continuity, relationship state, and knowledge state.`;
   }
 
-  return `## Original Writer Instruction
-${originalInstruction.trim() || "(none)"}
-
-## Current Turn Instruction
+  return `## Current Turn Instruction
 ${turnInstruction.trim() || "(none)"}
 
 ## Episode Source Contract
 ${sourceContract}
-
-## Target Plot
-${selectedPlot.content}
 
 ## Selected Previous Predefined Episodes
 ${selectedPredefs.length > 0 ? selectedPredefs.map((s) => s.content).join("\n\n") : "(none selected)"}
@@ -385,6 +387,7 @@ export default function PredefinedLabStageWorkspace({
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [contextSnapshotSignature, setContextSnapshotSignature] = useState<string | null>(null);
   const predefPickerRef = useRef<HTMLDivElement | null>(null);
+  const promptLoadedPlotIdRef = useRef<string | null>(null);
   const labRunIdRef = useRef(newLabRunId());
 
   useEffect(() => {
@@ -471,6 +474,17 @@ export default function PredefinedLabStageWorkspace({
   const missingPredefHeadings = predefOptions.length === 0 && hasBodyContent(predefTagged);
 
   const selectedPredefKey = selectedPredefIds.join("|");
+
+  useEffect(() => {
+    if (!selectedPlotId) {
+      setInstruction("");
+      promptLoadedPlotIdRef.current = null;
+      return;
+    }
+    if (!selectedPlot || promptLoadedPlotIdRef.current === selectedPlotId) return;
+    setInstruction(buildPromptBoxValue(selectedPlot));
+    promptLoadedPlotIdRef.current = selectedPlotId;
+  }, [selectedPlot, selectedPlotId]);
 
   useEffect(() => {
     if (!selectedPlotId) {
@@ -643,9 +657,8 @@ export default function PredefinedLabStageWorkspace({
     const priorDraft = latestDraft?.output ?? "";
     const context = buildContext({
       mode,
-      selectedPlot: activeSelectedPlot,
       selectedPredefs: activeSelectedPredefs,
-      originalInstruction: instruction,
+      promptText: instruction,
       turnInstruction: userInstruction,
       beatPlan: priorBeatPlan,
       dialogueDesign: priorDialogueDesign,
@@ -663,12 +676,12 @@ export default function PredefinedLabStageWorkspace({
         episodeNumber: episode.episodeNumber,
         chars: episode.content.length,
       })),
-      originalInstructionChars: instruction.trim().length,
+      promptBoxChars: instruction.trim().length,
       turnInstructionChars: userInstruction.trim().length,
       beatPlanChars: priorBeatPlan.length,
       dialogueDesignChars: priorDialogueDesign.length,
       sourceContractChars: buildEpisodeSourceContract({
-        selectedPlot: activeSelectedPlot,
+        promptText: instruction,
         beatPlan: priorBeatPlan,
       }).length,
       draftChars: priorDraft.length,
@@ -796,7 +809,7 @@ export default function PredefinedLabStageWorkspace({
               labRunId: labRunIdRef.current,
               labTurnId: turnId,
               turnIndex: completedTurn.version,
-              targetPlotText: activeSelectedPlot.content,
+              targetPlotText: instruction,
               targetPlotSectionUid: activeSelectedPlot.sectionUid,
               writerInstruction: instruction,
               modelId,
@@ -869,7 +882,7 @@ export default function PredefinedLabStageWorkspace({
       await runTurn({
         turnStage: "beats",
         mode: "predef_lab_beats",
-        userInstruction: instruction || "Build key beats from the selected context.",
+        userInstruction: "Build key beats from the editable prompt source.",
       });
     });
   }
@@ -883,7 +896,7 @@ export default function PredefinedLabStageWorkspace({
     const beat = await runTurn({
       turnStage: "beats",
       mode: "predef_lab_beats",
-      userInstruction: instruction || "Build key beats from the selected context.",
+      userInstruction: "Build key beats from the editable prompt source.",
       visibleStage: "draft",
       skipInputWarnings: true,
     });
@@ -1259,14 +1272,17 @@ export default function PredefinedLabStageWorkspace({
           )}
 
           <label className="block">
-            <span className="text-sm font-medium text-foreground">Instruction</span>
+            <span className="text-sm font-medium text-foreground">Prompt</span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+              Loaded from the selected plot for this Lab run only. Edit the target episode, emphasis, skips, or instruction here; it will not change the saved Microdrama Plots tab.
+            </span>
             <textarea
               value={instruction}
               onChange={(e) => setInstruction(e.target.value)}
               onKeyDown={handleTextareaLineMoveKeyDown}
               disabled={isStreaming}
-              placeholder="Example: Keep blocking simple. Make Taiga panic comic. Sakura should not know Taiga yet."
-              className="mt-1 h-28 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-emerald-500 focus:outline-none"
+              placeholder="Select a Microdrama Plot to load an editable prompt."
+              className="mt-2 h-64 min-h-56 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground focus:border-emerald-500 focus:outline-none disabled:opacity-60"
             />
           </label>
         </div>
@@ -1289,7 +1305,7 @@ export default function PredefinedLabStageWorkspace({
           </label>
           <button
             type="button"
-            disabled={!selectedPlot || isStreaming}
+            disabled={!selectedPlot || !instruction.trim() || isStreaming}
             onClick={buildInitialBeats}
             className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -1351,7 +1367,7 @@ export default function PredefinedLabStageWorkspace({
               ? "First draft generated from auto-run. Review it below, or add a change request and rerun."
               : autoPipelineStartedAt
                 ? "Auto-run is building your first draft. The generated draft will appear here."
-                : "Add an instruction below, or generate the episode draft from the approved pipeline context."
+                : "Add a change request below, or generate the episode draft from the approved pipeline context."
             : stage === "dialogue"
               ? "Key beats are finalized. Build a dialogue design, then approve it for episode drafting."
               : "Key beat generation will appear here."}
@@ -1625,11 +1641,11 @@ export default function PredefinedLabStageWorkspace({
     const composerLabel = isDraftStage
       ? latestDraft
         ? "What should change in the episode draft?"
-        : "Instruction for episode draft"
+        : "Change request for episode draft"
       : isDialogueStage
         ? latestDialogue
           ? "What should change in the dialogue design?"
-          : "Instruction for dialogue design"
+          : "Change request for dialogue design"
         : "What should change in the key beats?";
     const composerPlaceholder = isDraftStage
       ? latestDraft

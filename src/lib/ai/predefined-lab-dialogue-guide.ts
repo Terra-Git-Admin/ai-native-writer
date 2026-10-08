@@ -15,11 +15,16 @@ Prioritize:
 - continuity-aware voice from the selected previous predefined episodes
 - interruption, silence, evasion, and physical behavior when speech would over-explain
 - lines that reveal what a character wants, knows, hides, fears, or refuses to admit
+- visible human reactions before or between important lines
+- correct emotion target: panic, anger, affection, fear, and contempt should be aimed at the right person or threat
+- identity through behavior, speech rhythm, restraint, status, and what the character refuses to say
 
 Avoid:
 - generic greetings and repeated reactions
 - explaining emotions already visible in action
 - adding new story events during a dialogue polish pass
+- turning urgency with allies into hostility unless the source explicitly supports it
+- packing several plot facts into one line just to satisfy a dialogue count
 - copying character voice, premise, or scene pattern from external reference material`;
 
 export const DEFAULT_PREDEFINED_LAB_DIALOGUE_REFERENCE_PACK = `Use this as hidden craft calibration, not story context.
