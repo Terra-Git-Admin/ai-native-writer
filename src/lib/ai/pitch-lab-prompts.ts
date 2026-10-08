@@ -1,4 +1,5 @@
-// Pitch Lab prompt version 2.14, updated 2026-10-08.
+// Pitch Lab prompt version 2.15, updated 2026-10-08.
+// Changelog 2026-10-08: add a relationship-status trope guard for contract marriage, fake dating, arranged marriage, and secret spouse scenarios.
 // Changelog 2026-10-08: add a trope-agnostic plausibility guard so named tropes must cause, solve, or worsen the Episode 1 problem.
 // Changelog 2026-10-08: simplify Pitch Lab rules so trope inputs produce convincing Episode 1 microdrama scenarios instead of rule-heavy seed mechanics.
 // Changelog 2026-10-08: add hidden story-engine mapping so tropes and broad instructions choose logical surfaces before seeds.
@@ -48,6 +49,8 @@ Creative rule: if the writer gives a trope, relationship, character, setting, or
 
 Trope plausibility: when a writer names a trope, use it only where the trope naturally causes the Episode 1 problem, solves the problem, or makes the problem worse in a way the viewer understands immediately. If the trope can be removed and the scenario still works, choose a better scenario.
 
+Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+
 SETTING DEFAULT
 If the writer does not specify geography or culture, do not default to US/Western names, courts, police procedure, corporate luxury, engagement-party rituals, or city markers. Keep the setting location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. If a culture is specified by the writer or source, follow that instead.
 
@@ -63,6 +66,8 @@ Your job is not to write finished pitch paragraphs or pilot loglines. Your job i
 Only creative rule: if the writer gives a trope, relationship, character, setting, or broad instruction, pitch convincing Episode 1 microdrama scenarios from it. Keep the ideas simple, emotionally legible, easy to visualize, and commercially playable. Do not turn the trope into a checklist or taxonomy.
 
 Trope plausibility: when a writer names a trope, use it only where the trope naturally causes the Episode 1 problem, solves the problem, or makes the problem worse in a way the viewer understands immediately. If the trope can be removed and the scenario still works, choose a better scenario.
+
+Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
 
 At this stage, return selectable idea seeds, not full plotted episodes. Each seed should feel like the beginning of a show a writer could immediately expand: a clear heroine, a clear opposing lead or force, a vivid arena, and a simple reason the situation could explode in Episode 1.
 
@@ -106,6 +111,7 @@ Use the source as inspiration, but pitch new Episode 1 microdrama scenarios. Do 
 Creative direction:
 - If the writer gives a trope, use it as the core of the scenario.
 - If a trope is named, it must naturally cause, solve, or worsen the Episode 1 problem. If the scenario still works without the trope, choose a better scenario.
+- For relationship-status tropes such as contract marriage, fake dating, arranged marriage, or secret spouse, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
 - If the writer gives characters, a relationship, setting, culture, or exclusion, respect it.
 - Keep each idea simple enough to understand in one read.
 - Make each idea feel like it could open Episode 1 of a vertical microdrama series.
@@ -169,6 +175,8 @@ Only creative rule: pitch a convincing microdrama scenario for Episode 1. If the
 
 Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the logline still works without the trope, choose a better logline.
 
+Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+
 Setting default: if the selected seed and writer instruction do not specify geography or culture, keep the pilots location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Avoid automatic US/Western names, institutions, social rituals, legal procedure, and luxury markers unless the source or writer asks for them.
 
 Quality standard: each option should make ordinary human sense on first read, open on a watchable situation, and leave the viewer wanting Episode 2. Avoid clever logic if it makes the premise harder to feel.
@@ -203,6 +211,7 @@ For each of the ${PITCH_LAB_IDEA_COUNT} pitch options:
 - Use the selected seed as the starting point.
 - If a trope is present, make it central to the Episode 1 scenario.
 - If the scenario still works without the trope, choose a better scenario.
+- For relationship-status tropes such as contract marriage, fake dating, arranged marriage, or secret spouse, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
 - Keep the logline simple, visual, and emotionally convincing.
 - Make the four options distinct, not cosmetic rewrites.
 - ideaText must read like a simple Episode 1 logline, roughly 35-65 words, not a pitch paragraph.
@@ -238,6 +247,8 @@ If the writer gives a trope, relationship, character, setting, or broad instruct
 
 Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the scenario still works without the trope, choose a better scenario.
 
+Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+
 ${input.generationType === "adaptation" ? `Adaptation source rule:
 Use the source as inspiration for what feels compelling, but output new Episode 1 scenarios rather than analysis or renamed copies.
 
@@ -251,6 +262,8 @@ export function buildPitchLabRefinementSystemPrompt(framework: string): string {
 Only creative rule: revise the pitch into a convincing Episode 1 microdrama scenario. If a trope is present, make it feel natural and easy to understand. Keep the output simple, visual, emotionally clear, and commercially pitchable.
 
 Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the pitch still works without the trope, change the scenario.
+
+Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
