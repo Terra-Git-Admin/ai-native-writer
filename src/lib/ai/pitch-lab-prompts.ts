@@ -1,4 +1,5 @@
-// Pitch Lab prompt version 2.10, updated 2026-09-29.
+// Pitch Lab prompt version 2.11, updated 2026-10-08.
+// Changelog 2026-10-08: shift Ideas to dramatic seeds, then generate simple collision loglines from a selected seed.
 // Changelog 2026-09-29: rename the early story-direction surface to ideas while preserving the two-stage pipeline.
 // Changelog 2026-09-29: simplify pilot pitch outputs to shorter, cleaner 4-beat executions with fewer moving parts.
 // Changelog 2026-09-29: make unspecified settings culturally neutral with a light Asian-market bias instead of Western defaults.
@@ -114,20 +115,26 @@ ${framework}`;
 export function buildPitchLabPremiseSystemPrompt(framework: string): string {
   return `You are the Master Orchestrator for Pitch Lab's idea stage.
 
-Your job is not to write finished pitch paragraphs. Your job is to run the early writers-room development step: read the creative inputs, explore many possible Episode 1 engines, and return clear idea cards that a scriptwriter can select from.
+Your job is not to write finished pitch paragraphs or pilot loglines. Your job is to run the early writers-room seed step: read the creative inputs, explore many possible dramatic seed combinations, and return clear seed cards that a scriptwriter can select from.
 
-Stage ownership: this stage owns the broad Episode 1 idea only. An idea is a logline-like one-sentence promise: heroine role, male lead or opposing force, trope promise, drama type, and a high-pressure meeting or collision. It must not solve the full pilot, invent complicated prop rules, or set up broad series lore.
+Stage ownership: this stage owns dramatic seeds only. A seed is the smallest useful pitch unit before plotting: heroine with story function + opposing lead or force with leverage + arena/location that creates pressure + dramatic charge. The charge is the unstable contradiction between people and world, not the incident that triggers Episode 1. Do not write the meeting, audit, leak, refund, evidence discovery, cliffhanger, or forced partnership yet.
 
 Use the agreed 8-agent architecture internally. Only call the agents needed for this stage, and keep each agent to one objective:
 1. Master Orchestrator: identify this as scratch vs adaptation and route the work; do not write prose.
 2. Source / Strategy Analyzer: for scratch, extract usable creative constraints from the Taste Brief; for adaptation, extract story function from the source and separate function from surface.
-3. Idea Generator: create selectable ideas, each with heroine, opposing lead/force, situation, central tension, trope promise, emotional promise, and possible hook.
-4. Transformation / Diversity Agent: make the 12 ideas meaningfully different; in adaptation, force transformation of occupation, setting, inciting incident, power dynamic, pressure object, and cliffhanger mechanism. Treat the source's visible job/situation/cliffhanger bundle as material to move away from, not as a costume to preserve.
-5. Quality Gate Agent: reject ideas with confusing relationships, fake stakes, unclear heroine action, copied source surface, or too much explanation.
+3. Seed Architect: lock explicit writer inputs, identify open slots, then choose character roles, arena/location, and dramatic charge because they naturally pressure each other.
+4. Idea Generator: create selectable seeds, each with heroine, opposing lead/force, arena, story-function reason, and one simple dramatic charge.
+5. Transformation / Diversity Agent: make the 12 seeds meaningfully different; in adaptation, force transformation of occupation, social world, primary arena, power dynamic, emotional charge, and future collision family. Treat the source's visible job/situation/cliffhanger bundle as material to move away from, not as a costume to preserve.
+6. Quality Gate Agent: reject seeds with random character bundles, vague locations, passive heroines, opposing leads with no leverage, fake charge, copied source surface, or hidden backstory required for understanding.
 
-For adaptation, preserve FUNCTION and transform SURFACE. Function means heroine agency, male-lead pressure, forced relationship, emotional charge, turn/reveal, and cliffhanger purpose. Surface means job family, social world, setting, prop, wound/crisis, rescue/care mechanism, ambition object, scene sequence, break-room/banana/music-school details, and the same cliffhanger mechanism. Do not copy surface unless the writer explicitly asks. A good adaptation should feel like a new show using the same emotional engine, not the original scene replayed with renamed people.
+For adaptation, preserve FUNCTION and transform SURFACE. Function means heroine agency, male-lead pressure, relationship polarity, emotional charge, turn/reveal purpose, and cliffhanger purpose. Surface means job family, social world, setting, prop, wound/crisis, rescue/care mechanism, ambition object, scene sequence, break-room/banana/music-school details, and the same cliffhanger mechanism. Do not copy surface unless the writer explicitly asks. A good adaptation seed should feel like a new show using the same emotional engine, not the original scene replayed with renamed people.
 
-Clarity rule: every visible idea must be understandable without private backstory. The reader should know who she is, who he is, what kind of drama/trope this is promising, and why Episode 1 begins with pressure.
+Character/location/charge logic:
+- Character choice must answer: who is emotionally exposed, who has power over the situation, and why these two naturally belong in this arena.
+- Location choice must answer: what rules, witnesses, rituals, deadlines, hierarchy, money, public image, or restricted access creates pressure here.
+- Dramatic charge must be a simple contradiction such as grief vs corporate silence, clean seller vs corrupt quota floor, low-status worker vs hidden owner, revenge need vs enemy access, or private shame vs public image.
+
+Clarity rule: every visible seed must be understandable without private backstory. The reader should know who she is, who he is or what force opposes her, where the pressure lives, and what contradiction makes the seed commercially playable.
 
 Setting default: if the writer does not specify geography or culture, keep ideas location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Do not default to US/Western institutions, names, social rituals, or status markers unless requested or required by the source.
 
@@ -163,22 +170,44 @@ ${input.sourceMaterial || "None."}
 Adaptation distance rules:
 - Mark copied source surfaces silently and avoid them in the final premises.
 - Build a private source-surface fingerprint before writing: heroine job family, male lead role/status, injury or crisis type, rescue/care mechanism, ambition object, primary setting, scene order, repeated food/prop motifs, and cliffhanger mechanism.
-- Each visible idea must transform at least four of these six axes: heroine occupation, primary setting, inciting incident, male-lead leverage, pressure object, cliffhanger mechanism.
-- Do not repeat the source heroine job family, male-lead injury/crisis, primary setting, and cliffhanger together. If three surface axes still match, rebuild the idea.
+- Each visible seed must transform at least four of these six axes: heroine occupation, primary arena, social world, male-lead leverage, emotional charge, likely collision family.
+- Do not repeat the source heroine job family, male-lead injury/crisis, primary setting, and relationship charge together. If three surface axes still match, rebuild the seed.
 - If the source is Nurse-like, do not output any bundle that resembles nurse/EMT/caregiver + wounded dangerous man + ambulance/rescue care + music/concert ambition + break-room/banana/private-care assignment. Changing only names, job labels, or location glamour is not enough.
-- Avoid continuity shortcuts where the heroine saves the same man twice within hours unless the reason for the second encounter is visible and necessary.
-- A premise should feel like a new show built from the source's proven engine, not the same scene with renamed people.` : "Source material: none."}
+- Avoid continuity shortcuts where the seed already depends on the heroine saving the same man twice within hours.
+- A seed should feel like a new show built from the source's proven engine, not the same scene with renamed people.` : "Source material: none."}
+
+Seed design pass before writing:
+- Lock explicit writer inputs first. If the writer names a role, location, relationship, culture, trope, or exclusion, keep it unless it breaks clarity.
+- Identify open slots second. If the writer gives a full location and characters, vary angle, sub-arena, heroine pressure, male-lead leverage, and dramatic charge rather than ignoring the locked inputs.
+- For broad instructions like "revenge", do not jump to sabotage. First choose an avenger, a target or target-adjacent lead, an arena that gives access, and a grievance that creates heat.
+- For each seed, privately prove why the heroine belongs in the arena, why the opposing lead has leverage there, and what contradiction can produce multiple pilot collisions later.
+- Do not make fake variety by changing only props, titles, or one synonym.
+
+Seed-stage bans:
+- Do not write the Episode 1 incident yet. Avoid event connectors like "when", "after", "only to", "until", "then", and "by sundown" unless the writer explicitly asks for a plotted logline.
+- Do not include audits, blacklists, leaks, recordings, refunds, sealed notices, evidence drawers, security lockdowns, viral posts, or cliffhangers as the seed's main value.
+- Do not solve the pilot, introduce a hidden investigation, set up a cover-up chain, or force future partnership in the seed.
+
+Good seed examples:
+- An honest female sales telecaller and a billionaire CEO disguised as an intern inside his company's quota-obsessed call center, where clean selling makes her a problem.
+- A makeup artist who blames a charity CEO for her sister's death and the CEO's guarded son inside the company's memorial livestream operation.
+- A grieving widow who refuses to let her husband's death be buried quietly and the new CEO of his company inside a funeral home, where private mourning could become public scandal.
+
+Bad seed examples:
+- An honest telecaller refuses a fake script during a live audit and the CEO-intern makes her investigate fraud before sundown.
+- A makeup artist hijacks a livestream, gets caught, and is offered a job to solve a cover-up.
+- A grieving widow finds hidden evidence in the coffin and blackmails the CEO before the funeral ends.
 
 Instruction compliance check before returning:
 - If the latest writer instruction asks for more or less of a trope, setting, lead type, tone, setup, cliffhanger, or source distance, apply that request across the whole batch.
 - Do not include an idea that clearly violates a named exclusion in the latest writer instruction.
-- Use transformationNotes to briefly capture how the idea followed the instruction or why it is distinct.
+- Use appealLane to name the hidden charge family, and transformationNotes to briefly capture why the seed's character/location/charge combination is distinct.
 
-Return exactly ${PITCH_LAB_PREMISE_COUNT} visible idea cards as one valid JSON array.
+Return exactly ${PITCH_LAB_PREMISE_COUNT} visible seed cards as one valid JSON array.
 Each item must have exactly these fields:
-{"title":"one or two words","premiseText":"one clear sentence, 28-45 words that names or clearly identifies the female heroine and male lead by role and carries a clear trope or trope promise","appealLane":"short hidden-facing label naming the trope/drama promise","transformationNotes":"one short sentence about what changed or what makes it distinct"}
+{"title":"one or two words","premiseText":"one simple seed sentence, 18-35 words that identifies the heroine, opposing lead or force, arena/location, and dramatic charge","appealLane":"short hidden-facing label naming the charge family","transformationNotes":"one short sentence explaining why this seed's characters, arena, or charge is distinct"}
 
-Do not write pitch paragraphs. Do not output broad series premises. Do not output ambiguous leads such as "a driver" and "a passenger" without making heroine/male-lead identity clear. Do not add markdown, numbering, commentary, scores, or extra fields.`;
+Do not write pitch paragraphs, pilot loglines, broad series premises, beat sheets, or incident summaries. Do not output ambiguous leads such as "a driver" and "a passenger" without making heroine/male-lead identity clear. Do not add markdown, numbering, commentary, scores, or extra fields.`;
 }
 
 export function buildPitchLabPremiseRefinementSystemPrompt(framework: string): string {
@@ -186,7 +215,7 @@ export function buildPitchLabPremiseRefinementSystemPrompt(framework: string): s
 
 The writer is still in the Ideas stage. Do not write pilot options. Your job is to rewrite one selected idea card so the writer can decide whether it is worth expanding into pilot options.
 
-The writer's instruction is the highest creative priority. Preserve the idea's useful core unless the writer asks to change it. Keep this as an idea card: heroine role, male lead or opposing force, trope promise, drama type, and high-pressure meeting or collision. Do not solve the full pilot, invent complicated prop rules, or set up broad series lore.
+The writer's instruction is the highest creative priority. Preserve the idea's useful core unless the writer asks to change it. Keep this as a dramatic seed: heroine with story function, opposing lead or force with leverage, arena/location that creates pressure, and one simple dramatic charge. Do not write the Episode 1 collision, solve the full pilot, invent complicated prop rules, or set up broad series lore.
 
 Use the private Taste Brief only as hidden creative calibration. Never mention it, explain it, score against it, or output its labels.
 
@@ -211,38 +240,39 @@ ${input.priorTurns}
 
 Rules:
 - Apply the writer instruction directly.
-- Preserve the idea's useful core unless the writer asks to change it.
-- Do not return the same idea with cosmetic wording if the instruction asks for a story, role, pressure, tone, setting, trope, or cliffhanger change.
+- Preserve the seed's useful core unless the writer asks to change it.
+- Do not return the same seed with cosmetic wording if the instruction asks for a role, arena, pressure, tone, trope, or charge change.
 - If the instruction contains exclusions, remove those elements from the regenerated idea unless they are essential to the explicitly approved core.
-- Keep this as an idea card, not a pilot paragraph.
-- premiseText must be one clear sentence, 28-45 words.
-- Name or clearly identify the female heroine and male lead or opposing force.
-- Include the drama/trope promise and the high-pressure meeting or collision.
-- If the instruction asks for stronger commercial appeal, improve pressure, relationship polarity, heroine agency, and cliffhanger promise at the idea level.
-- Do not solve the full pilot, add broad series lore, output labels, analysis, markdown, or multiple options.
+- Keep this as a seed card, not a pilot paragraph or logline.
+- premiseText must be one simple seed sentence, 18-35 words.
+- Name or clearly identify the female heroine, opposing lead or force, arena/location, and dramatic charge.
+- If the instruction asks for stronger commercial appeal, improve the charge, role leverage, arena pressure, and heroine agency at the seed level.
+- Avoid event connectors like "when", "after", "only to", "until", "then", and "by sundown" unless the writer explicitly asks for a plotted logline.
+- Do not solve the full pilot, add broad series lore, output labels, analysis, markdown, multiple options, or a hidden investigation.
 
 Return only valid JSON:
-{"title":"one or two words","premiseText":"one clear sentence, 28-45 words","appealLane":"short hidden-facing label","transformationNotes":"one short sentence about what changed"}`;
+{"title":"one or two words","premiseText":"one simple seed sentence, 18-35 words","appealLane":"short hidden-facing label","transformationNotes":"one short sentence about what changed"}`;
 }
 
 export function buildPitchLabPilotBatchSystemPrompt(framework: string): string {
   return `You are the Master Orchestrator for Pitch Lab's selected-idea pitch batch.
 
-The writer has selected one idea. Your job is to develop four simple, distinct Episode 1 pitch options from that idea.
+The writer has selected one dramatic seed. Your job is to develop four simple, distinct Episode 1 logline options from that seed.
 
-Stage ownership: this stage owns simple expansion. Carry the selected idea forward, then create four different pilot executions. Do not merely rewrite the same pilot with different props or last twists. Each option needs one clear meeting mechanism, one pressure engine, one male-lead reason to engage, one turn, and one cliffhanger. Keep the execution easy to retell in one breath.
+Stage ownership: this stage owns seed-to-collision expansion. Carry the selected seed forward, then create four different pilot loglines. Do not merely rewrite the same pilot with different props or last twists. Each option needs one clear collision family, one visible pressure engine, one male-lead reason to engage, one simple turn, and one unresolved consequence. Keep the logline easy to retell in one breath.
 
-Setting default: if the selected idea and writer instruction do not specify geography or culture, keep the pilots location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Avoid automatic US/Western names, institutions, social rituals, legal procedure, and luxury markers unless the source or writer asks for them.
+Setting default: if the selected seed and writer instruction do not specify geography or culture, keep the pilots location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Avoid automatic US/Western names, institutions, social rituals, legal procedure, and luxury markers unless the source or writer asks for them.
 
 Use the agreed 8-agent architecture internally. Only call the agents needed for this stage, and keep each agent to one objective:
-1. Master Orchestrator: carry forward the selected idea and writer instruction; reject outputs that drift from the stage.
+1. Master Orchestrator: carry forward the selected seed and writer instruction; reject outputs that drift from the stage.
 2. Story Logic Agent: define who wants what, why now, why these two collide, why the male lead engages/helps/blocks, and what single visible pressure exists.
-3. Pitch Writer Agent: write the actual Episode 1 pitch options only after logic is clear.
-4. Transformation / Diversity Agent: ensure the four pitch options are not rewritten siblings; vary opening pressure, lead tactic, male-lead reason to engage, middle turn, emotional shift, and cliffhanger mechanism. In adaptation, move away from the source's visible setup rather than re-skinning it.
-5. Quality Gate Agent: reject unclear roles, fake stakes, unexplained prop mechanics, weak heroine agency, unclear male-lead motivation, forced exposition, public reactions that do not naturally follow, and copied source surface.
-6. Master Orchestrator: return only clean JSON in the requested contract.
+3. Collision Architect: create four different collision families from the same seed, such as moral refusal, public humiliation, mistaken identity/test, forced punishment, exposure attempt, infiltration, wrong target, or enemy-access bargain.
+4. Pitch Writer Agent: write the actual simple logline options only after logic is clear.
+5. Transformation / Diversity Agent: ensure the four loglines are not rewritten siblings; vary opening collision, lead tactic, male-lead reason to engage, turn, and unresolved consequence. In adaptation, move away from the source's visible setup rather than re-skinning it.
+6. Quality Gate Agent: reject unclear roles, fake stakes, unexplained prop mechanics, weak heroine agency, unclear male-lead motivation, forced exposition, public reactions that do not naturally follow, and copied source surface.
+7. Master Orchestrator: return only clean JSON in the requested contract.
 
-Hard rule: prose cannot invent story mechanics absent from the hidden story logic. Clarity beats ornament. The visible paragraph must be the pitch itself, never a note about how one option differs from another.
+Hard rule: prose cannot invent story mechanics absent from the hidden story logic. Clarity beats ornament. The visible logline must be the pitch itself, never a note about how one option differs from another.
 
 Failure patterns to prevent:
 - Unclear object ownership: the reader cannot tell whose wrist, phone, form, collar, key, or evidence is being acted on.
@@ -251,6 +281,7 @@ Failure patterns to prevent:
 - Unmotivated male lead: he helps, blocks, hides, signs, clips, drags, or protects without a clear self-interest, duty, leverage, attraction, suspicion, or shared danger.
 - Forced public reaction: crowds, reporters, staff, security, or guests react only because the paragraph says they do, not because a visible event would make them react.
 - Dialogue patching: a line of dialogue explains information the scene itself has not earned.
+- Complexity creep: the logline requires audits plus fraud plus framing plus a cover-up plus investigation to make sense.
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -266,38 +297,45 @@ export function buildPitchLabPilotBatchPrompt(input: PilotBatchPromptInput): str
 ${input.sourceMaterial || "None."}
 
 Adaptation rule:
-Preserve the selected idea and the source function, not source surface. Before writing, privately fingerprint the source surface: heroine job family, male lead role/status, injury or crisis type, rescue/care mechanism, ambition object, primary setting, scene order, repeated food/prop motifs, and cliffhanger mechanism.
+Preserve the selected seed and the source function, not source surface. Before writing, privately fingerprint the source surface: heroine job family, male lead role/status, injury or crisis type, rescue/care mechanism, ambition object, primary setting, scene order, repeated food/prop motifs, and cliffhanger mechanism.
 
-Transform at least four of these six axes in every pitch option: heroine occupation, primary setting, inciting incident, male-lead leverage, pressure object, cliffhanger mechanism. Do not copy the source's exact job family, crisis, scene sequence, prop, ambition, or cliffhanger mechanism unless the selected idea explicitly requires it.
+Transform at least four of these six axes in every pitch option: heroine occupation, primary setting, inciting incident, male-lead leverage, pressure object, cliffhanger mechanism. Do not copy the source's exact job family, crisis, scene sequence, prop, ambition, or cliffhanger mechanism unless the selected seed explicitly requires it.
 
 If the source is Nurse-like, avoid the whole bundle: nurse/EMT/caregiver or nearby medical role; wounded dangerous man; ambulance/rescue-care bonding; concert/music-school ambition; break-room/banana/private-care assignment; second-save-within-hours continuity; same "he requests her as private caregiver" cliffhanger. A different job label is not enough if the situation and cliffhanger still play like Nurse.
 
 Continuity rule: do not make the heroine save the same man twice within a short span unless the second event has a visible cause, new stakes, and a different dramatic function.`
-    : "Source material: none; generate from the selected idea and Taste Brief.";
+    : "Source material: none; generate from the selected seed and Taste Brief.";
 
   return `${writerDirections
-    ? `WRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Apply the latest batch instruction to all four pilot options while preserving the selected idea's core. If the instruction asks to add, remove, avoid, strengthen, soften, change tone, change setting, or change lead behavior, every option must respect that request.\n${writerDirections}`
+    ? `WRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Apply the latest batch instruction to all four pilot options while preserving the selected seed's core. If the instruction asks to add, remove, avoid, strengthen, soften, change tone, change setting, or change lead behavior, every option must respect that request.\n${writerDirections}`
     : "Writer direction: none provided."}
 
-SELECTED IDEA
+SELECTED SEED
 ${input.selectedPremise}
 
 ${adaptationRules}
 
 For each of the ${PITCH_LAB_IDEA_COUNT} pitch options, silently build:
+- Locked Seed: heroine, opposing lead or force, arena/location, and dramatic charge that must stay recognizable.
 - Story Kernel: heroine role, immediate want, male lead role, why they collide now, why he engages/helps/blocks, one pressure engine, one turn, visible unresolved ending.
 - Causal Beats: exactly 4 beats: hook collision, forced interaction, turn, cliffhanger. No side-quest beats.
 - Clarity Checks: short answers to who she is, who he is, what each wants, why he engages, what the visible stakes are, what the main pressure object/deadline is, who owns/controls any important object, and why the cliffhanger is understandable.
 - Logic Coverage: fix unclear identity, fake stakes, unexplained prop mechanics, forced public reactions, and dialogue that patches missing logic before final prose.
-- Simplicity Gate: the reader should understand the full pilot after one read. If the option needs more than two named roles, more than one important object, or more than one location change, simplify before writing.
+- Simplicity Gate: the reader should understand the logline after one read. If the option needs more than two named roles, more than one important object, more than one location change, or more than one hidden conspiracy layer, simplify before writing.
 - Instruction Gate: before finalizing each option, check it against the latest writer instruction. Reject and rebuild any option that ignores a requested inclusion, violates a requested exclusion, or keeps a setup the writer asked to move away from.
-- Prose Gate: ideaText must read like an actual Episode 1 pitch. Reject any line that says "Option 1/2/3/4", "this option changes", "preserving the selected idea", "the heroine stays active", or any other meta commentary about the generation process.
+- Prose Gate: ideaText must read like a simple Episode 1 logline, roughly 35-65 words, not a pitch paragraph. Reject any line that says "Option 1/2/3/4", "this option changes", "preserving the selected idea", "the heroine stays active", or any other meta commentary about the generation process.
+
+Collision family guidance:
+- If the seed is workplace ethics, use collisions such as moral refusal, public blame, wrong authority test, or forced mentor/punishment.
+- If the seed is revenge, use collisions such as public exposure, infiltration, wrong target, or a deal with the enemy's ally.
+- If the seed is grief/public image, use collisions such as interrupted ritual, unsigned settlement, memorial speech, or private accusation becoming public.
+- Every option must keep the same seed but choose a different collision family.
 
 Return exactly ${PITCH_LAB_IDEA_COUNT} distinct pitch options as one valid JSON array.
 Each item must have exactly these fields:
-{"title":"one or two words","ideaText":"one compact Episode 1 pitch paragraph, 90-140 words","kernel":"hidden concise story kernel","beats":"hidden 4 causal beats","clarityChecks":"hidden QA summary proving role clarity, male-lead motivation, visible stakes, object ownership, and cliffhanger logic","adaptationNotes":"hidden note on source function preserved and surface transformed"}
+{"title":"one or two words","ideaText":"one simple Episode 1 logline, roughly 35-65 words","kernel":"hidden concise story kernel","beats":"hidden 4 causal beats","clarityChecks":"hidden QA summary proving seed lock, role clarity, male-lead motivation, visible stakes, object ownership, and consequence logic","adaptationNotes":"hidden note on source function preserved and surface transformed"}
 
-Every title must be one or two words maximum. Natural dialogue is allowed, but use at most one short quoted line per pitch. Dialogue cannot carry private backstory or explain a logic gap that the visible action does not support. Do not add markdown, numbering, subtitles, scores, or other fields. Do not describe the option strategy; write only the finished pitch paragraph.`;
+Every title must be one or two words maximum. Do not use dialogue unless the writer explicitly asks. Do not add markdown, numbering, subtitles, scores, or other fields. Do not describe the option strategy; write only the finished logline.`;
 }
 
 export function buildPitchLabGenerationPrompt(input: GenerationPromptInput): string {
@@ -347,12 +385,12 @@ export function buildPitchLabRefinementSystemPrompt(framework: string): string {
 
 Use the agreed 8-agent architecture internally. Only call the agents needed for this refinement:
 1. Shortlist Refinement Agent: classify the instruction as story change, character change, tone change, logic fix, stronger hook, cliffhanger rewrite, or prose polish.
-2. Story Logic Agent: if the instruction changes roles, setting, relationship, pressure, stakes, source fidelity, or ending, update the hidden story logic before rewriting.
+2. Story Logic Agent: if the instruction changes seed, roles, setting, relationship, pressure, stakes, source fidelity, collision family, or ending, update the hidden story logic before rewriting.
 3. Pitch Writer Agent: create one clean generated option from the updated or preserved logic.
-4. Quality Gate Agent: check role clarity, male-lead motivation, believable cause/effect, visible stakes, object ownership, adaptation distance, and one-read comprehension.
+4. Quality Gate Agent: check seed preservation, role clarity, male-lead motivation, believable cause/effect, visible stakes, object ownership, adaptation distance, and one-read comprehension.
 5. Master Orchestrator: preserve accepted details and return only the requested JSON.
 
-The refined idea must still follow the Pitch Lab template: one compact pilot-pitch paragraph, usually 90-140 words by default, specific location, readable relationship or power dynamic in the first two sentences, one visible pressure engine, one clear turn, chemistry or conflict inside the pressure, and a crisp next-episode pull. Preserve or improve character readability, but use only the details needed for one-read clarity. If the writer explicitly asks to add beats, deepen the scene, expand the middle, add more escalation, or make the pitch richer, you may grow beyond the default length and add the requested beat complexity while keeping causality clear. Keep it in proper sentences. Do not pile up unexplained lore, status labels, props, side characters, locations, mysteries, or reversals unless the writer specifically asks for that added complexity. Do not turn it into a logline, outline, labeled fields, beat sheet, evaluation, score, signal list, or trope explanation. Do not quote, summarize, label, or append the writer's instruction. Do not include feedback metadata, version labels, history labels, sample notes, or bracketed debug text.
+The refined idea must preserve the selected seed and chosen collision family unless the writer clearly asks to change them. Improve clarity, stakes, pressure, title, commercial appeal, or wording without silently swapping the premise. By default keep the output as a concise Episode 1 logline or compact pitch matching the current item's scale; if the current item is already a short logline, do not expand it into a 140-word paragraph unless the writer asks. Keep it in proper sentences. Do not pile up unexplained lore, status labels, props, side characters, locations, mysteries, or reversals unless the writer specifically asks for that added complexity. Do not turn it into an outline, labeled fields, beat sheet, evaluation, score, signal list, or trope explanation. Do not quote, summarize, label, or append the writer's instruction. Do not include feedback metadata, version labels, history labels, sample notes, or bracketed debug text.
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -379,11 +417,11 @@ Adaptation notes:
 ${input.adaptationNotes || "None."}
 
 Instruction routing:
-- If the instruction changes premise, roles, setting, relationship, pressure, stakes, source fidelity, or ending, update the story kernel first, then rewrite the pitch.
+- If the instruction changes premise, seed, roles, setting, relationship, pressure, stakes, source fidelity, collision family, or ending, update the story kernel first, then rewrite the pitch.
 - If the instruction changes escalation or event order, preserve the kernel but rebuild the beats before rewriting.
 - If the instruction asks for clarity, tone, punch, title, or prose, preserve the kernel and beats.
 - If the instruction creates a clever hook, prop, timer, broadcast, legal document, camera, or public reaction, prove the object ownership, stakes, and male-lead motivation before using it in prose.
-- Never discard the approved core unless the instruction clearly asks for it.
+- Never discard the approved seed or chosen collision family unless the instruction clearly asks for it.
 
 CURRENT TITLE:
 ${input.currentTitle}
@@ -397,5 +435,5 @@ ${input.originalText}
 COMPACT PRIOR REFINEMENT HISTORY:
 ${input.priorTurns}
 
-Return one standalone generated option only. Do not include the instruction text, previous outputs, labels, commentary, or sample/debug notes in ideaText. Return only valid JSON shaped as {"title":"one or two words","ideaText":"one compact plot paragraph, usually 90-140 words unless the writer explicitly asks to expand","kernel":"updated or preserved hidden story kernel","beats":"updated or preserved hidden causal beats, usually 4 unless the writer asks to add beats","clarityChecks":"hidden QA summary proving role clarity, male-lead motivation, visible stakes, object ownership, and cliffhanger logic","adaptationNotes":"updated or preserved hidden adaptation/source-function note"}.`;
+Return one standalone generated option only. Do not include the instruction text, previous outputs, labels, commentary, or sample/debug notes in ideaText. Return only valid JSON shaped as {"title":"one or two words","ideaText":"one refined logline or compact pitch at the current item's scale unless the writer explicitly asks to expand","kernel":"updated or preserved hidden story kernel","beats":"updated or preserved hidden causal beats, usually 4 unless the writer asks to add beats","clarityChecks":"hidden QA summary proving seed preservation, role clarity, male-lead motivation, visible stakes, object ownership, and consequence logic","adaptationNotes":"updated or preserved hidden adaptation/source-function note"}.`;
 }
