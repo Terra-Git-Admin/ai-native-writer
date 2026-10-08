@@ -20,6 +20,7 @@ import VersionHistory from "@/components/editor/VersionHistory";
 import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
+import PlotLabWorkspace from "@/components/labs/PlotLabWorkspace";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -71,6 +72,12 @@ interface ExportEpisodeOption {
   label: string;
 }
 
+interface PlotLabAccessState {
+  canUsePlotLab: boolean;
+  canUsePlotLabTesterTools: boolean;
+  reason: string;
+}
+
 function getExportEpisodeOptions(contentJson: string | null): ExportEpisodeOption[] {
   const tagged = tiptapJsonToTagged(contentJson ?? null);
   if (!tagged) return [];
@@ -108,6 +115,12 @@ export default function DocumentPage() {
     useState<NodeJS.Timeout | null>(null);
 
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false);
+  const [plotLabActive, setPlotLabActive] = useState(false);
+  const [plotLabAccess, setPlotLabAccess] = useState<PlotLabAccessState>({
+    canUsePlotLab: false,
+    canUsePlotLabTesterTools: false,
+    reason: "loading",
+  });
   const [pipelineBranch, setPipelineBranch] = useState<PipelineBranch>("monetization");
 
   const [commentSidebarOpen, setCommentSidebarOpen] = useState(false);
@@ -197,6 +210,42 @@ export default function DocumentPage() {
     if (typeof window === "undefined") return;
     window.localStorage.setItem("aiSidebarWidth", String(aiSidebarWidth));
   }, [aiSidebarWidth]);
+  useEffect(() => {
+    if (!doc?.id || !session?.user) {
+      setPlotLabAccess({
+        canUsePlotLab: false,
+        canUsePlotLabTesterTools: false,
+        reason: "unauthenticated",
+      });
+      setPlotLabActive(false);
+      return;
+    }
+
+    let cancelled = false;
+    fetch(`/api/plot-lab/access?documentId=${encodeURIComponent(doc.id)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Plot Lab access check failed (${res.status})`);
+        return (await res.json()) as PlotLabAccessState;
+      })
+      .then((access) => {
+        if (cancelled) return;
+        setPlotLabAccess(access);
+        if (!access.canUsePlotLab) setPlotLabActive(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlotLabAccess({
+          canUsePlotLab: false,
+          canUsePlotLabTesterTools: false,
+          reason: "error",
+        });
+        setPlotLabActive(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doc?.id, session?.user]);
   const startAiSidebarDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -898,7 +947,9 @@ export default function DocumentPage() {
                 disabled={predefinedLabOpen}
                 onClick={() => {
                   if (predefinedLabOpen) return;
-                  setAiSidebarOpen(!aiSidebarOpen);
+                  const nextOpen = !aiSidebarOpen;
+                  setAiSidebarOpen(nextOpen);
+                  setPlotLabActive(false);
                   if (!aiSidebarOpen) {
                     setCommentSidebarOpen(false);
                     setVersionHistoryOpen(false);
@@ -909,12 +960,12 @@ export default function DocumentPage() {
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   predefinedLabOpen
                     ? "cursor-not-allowed text-muted-foreground opacity-45"
-                    : aiSidebarOpen
+                    : aiSidebarOpen && !plotLabActive
                     ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
                     : "text-muted-foreground hover:bg-muted"
                 }`}
               >
-                AI Assistant
+                {plotLabAccess.canUsePlotLab ? "AI / Plot Lab" : "AI"}
               </button>
             </>
           )}
@@ -940,6 +991,7 @@ export default function DocumentPage() {
                       await handlePredefinedLabRefreshTabs();
                     }
                     setPredefinedLabOpen(nextOpen);
+                    setPlotLabActive(false);
                     setAiSidebarOpen(false);
                     setCommentSidebarOpen(false);
                     setVersionHistoryOpen(false);
@@ -965,13 +1017,32 @@ export default function DocumentPage() {
                 >
                   Pitch Lab
                 </button>
-                <button
-                  type="button"
-                  disabled
-                  className="w-full cursor-not-allowed rounded px-3 py-2 text-left text-sm text-muted-foreground opacity-60"
-                >
-                  Plot Lab
-                </button>
+                {plotLabAccess.canUsePlotLab && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      setPlotLabActive(true);
+                      setAiSidebarOpen(true);
+                      setPredefinedLabOpen(false);
+                      setCommentSidebarOpen(false);
+                      setVersionHistoryOpen(false);
+                      setPromptsOpen(false);
+                      setResearchAgentOpen(false);
+                      setOutsidersPanelRequest(null);
+                      setQualityPanelRequest(null);
+                      setNarrativeScanOpen(false);
+                      setPlotScanOpen(false);
+                    }}
+                    className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                      aiSidebarOpen && plotLabActive
+                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    Plot Lab
+                  </button>
+                )}
               </div>
             </details>
           )}
@@ -1242,7 +1313,29 @@ export default function DocumentPage() {
           </div>
         )}
 
-        {commentSidebarOpen && !predefinedLabOpen && (
+        {!predefinedLabOpen && aiSidebarOpen && plotLabActive && plotLabAccess.canUsePlotLab && activeTab && (
+          <PlotLabWorkspace
+            documentId={doc.id}
+            tabs={tabs}
+            activeTab={activeTab}
+            editorRef={editorRef}
+            modelId={selectedModelId}
+            thinking={thinkingEnabled}
+            isAdmin={isAdmin}
+            canUseTesterTools={plotLabAccess.canUsePlotLabTesterTools}
+            onFlushPendingSave={async () => {
+              await editorRef.current?.flushPendingSave?.();
+            }}
+            onTabsChange={handleTabsChange}
+            onOpenTab={handleTabSwitch}
+            onClose={() => {
+              setAiSidebarOpen(false);
+              setPlotLabActive(false);
+            }}
+          />
+        )}
+
+        {commentSidebarOpen && !predefinedLabOpen && !plotLabActive && (
           <div className="w-80 border-l border-border bg-muted">
             <CommentSidebar
               documentId={doc.id}
@@ -1273,7 +1366,7 @@ export default function DocumentPage() {
             />
           </div>
         )}
-        {aiSidebarOpen && activeTab && (
+        {aiSidebarOpen && !plotLabActive && activeTab && (
           <div
             className="relative shrink-0 border-l border-border bg-muted"
             style={{ width: aiSidebarWidth }}
@@ -1293,6 +1386,8 @@ export default function DocumentPage() {
               thinking={thinkingEnabled}
               isAdmin={isAdmin}
               pipelineBranch={pipelineBranch}
+              plotLabActive={plotLabActive}
+              canUsePlotLab={plotLabAccess.canUsePlotLab}
               aiJob={aiJob}
               onAIJobApplied={handleAIJobApplied}
               onFlushPendingSave={async () => {
@@ -1300,6 +1395,9 @@ export default function DocumentPage() {
               }}
               onSetModel={(id) => setSelectedModelId(id)}
               onSetThinking={(enabled) => setThinkingEnabled(enabled)}
+              onPlotLabActiveChange={(next) => {
+                setPlotLabActive(Boolean(next && plotLabAccess.canUsePlotLab));
+              }}
               onSetTitle={(newTitle) => {
                 setTitle(newTitle);
                 fetch(`/api/documents/${params.id}`, {

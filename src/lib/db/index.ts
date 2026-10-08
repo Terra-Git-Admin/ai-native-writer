@@ -202,6 +202,14 @@ export function getDb(): DB {
       logEvent("db.migration.defensive.canonical_tabs_version_added", {});
     }
 
+    const userCols = sqlite.pragma("table_info(users)") as Array<{ name: string }>;
+    if (!userCols.some((c) => c.name === "plot_lab_access")) {
+      sqlite.exec(
+        "ALTER TABLE `users` ADD `plot_lab_access` integer NOT NULL DEFAULT 0"
+      );
+      logEvent("db.migration.defensive.plot_lab_access_added", {});
+    }
+
     const db = fileStats(dbPath);
     const wal = fileStats(`${dbPath}-wal`);
     const storageMode = getDbStorageMode(dbPath);

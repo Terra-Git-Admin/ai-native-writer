@@ -83,7 +83,7 @@ export function insertMissingCanonicalTabs(
   }
 
   let repositioned = 0;
-  let trailingPos = 11;
+  let trailingPos = CANONICAL_TABS.length;
 
   for (const row of allRows) {
     const targetPos = canonicalPositionMap.has(row.type)

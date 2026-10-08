@@ -40,6 +40,9 @@ export async function PUT(
   if (body.active !== undefined) {
     updates.active = body.active;
   }
+  if (body.plotLabAccess !== undefined) {
+    updates.plotLabAccess = Boolean(body.plotLabAccess);
+  }
 
   if (Object.keys(updates).length > 0) {
     await db.update(users).set(updates).where(eq(users.id, id));

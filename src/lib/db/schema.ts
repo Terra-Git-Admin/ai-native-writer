@@ -9,6 +9,9 @@ export const users = sqliteTable("users", {
   emailVerified: integer("email_verified", { mode: "timestamp" }),
   role: text("role", { enum: ["admin", "user"] }).notNull().default("user"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  plotLabAccess: integer("plot_lab_access", { mode: "boolean" })
+    .notNull()
+    .default(false),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

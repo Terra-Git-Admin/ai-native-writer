@@ -25,17 +25,35 @@ import {
   PREDEFINED_LAB_DIALOGUE_DESIGN_PROMPT,
   PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
   PREDEFINED_LAB_ITERATE_PROMPT,
+  PLOT_LAB_CHAT_SYSTEM_PROMPT,
+  PLOT_LAB_CHARACTER_ANALYST_SYSTEM_PROMPT,
+  PLOT_LAB_CONTINUITY_AUDIT_SYSTEM_PROMPT,
+  PLOT_LAB_FINAL_PLOT_SYSTEM_PROMPT,
+  PLOT_LAB_PAYWALL_ARCHITECT_SYSTEM_PROMPT,
+  PLOT_LAB_PREMISE_BRIDGE_SYSTEM_PROMPT,
+  PLOT_LAB_RUNWAY_SKETCH_SYSTEM_PROMPT,
+  PLOT_LAB_SAVE_PREVIEW_SYSTEM_PROMPT,
+  PLOT_LAB_SOURCE_SOUL_SCAN_SYSTEM_PROMPT,
+  PLOT_LAB_UNIVERSE_BUILDER_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 import {
   getActivePredefinedLabDialogueGuide,
   getActivePredefinedLabDialogueReferencePack,
 } from "@/lib/ai/predefined-lab-dialogue-guide";
+import {
+  getPlotLabAccess,
+  isPlotLabStage2Enabled,
+  isPlotLabStage2Mode,
+} from "@/lib/plot-lab/access";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
   | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
   | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth"
-  | "predef_lab_beats" | "predef_lab_dialogue_design" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass";
+  | "predef_lab_beats" | "predef_lab_dialogue_design" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass"
+  | "plot_lab_chat" | "plot_lab_source_soul_scan" | "plot_lab_character_analyst" | "plot_lab_continuity_audit"
+  | "plot_lab_paywall_architect" | "plot_lab_premise_bridge" | "plot_lab_universe_builder" | "plot_lab_runway_sketch"
+  | "plot_lab_save_preview" | "plot_lab_final_plot";
 
 const FALLBACK_PROMPTS: Record<Mode, string> = {
   edit: EDIT_SYSTEM_PROMPT,
@@ -56,6 +74,16 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   predef_lab_draft: PREDEFINED_LAB_DRAFT_PROMPT,
   predef_lab_iterate: PREDEFINED_LAB_ITERATE_PROMPT,
   predef_lab_dialogue_pass: PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
+  plot_lab_chat: PLOT_LAB_CHAT_SYSTEM_PROMPT,
+  plot_lab_source_soul_scan: PLOT_LAB_SOURCE_SOUL_SCAN_SYSTEM_PROMPT,
+  plot_lab_character_analyst: PLOT_LAB_CHARACTER_ANALYST_SYSTEM_PROMPT,
+  plot_lab_continuity_audit: PLOT_LAB_CONTINUITY_AUDIT_SYSTEM_PROMPT,
+  plot_lab_paywall_architect: PLOT_LAB_PAYWALL_ARCHITECT_SYSTEM_PROMPT,
+  plot_lab_premise_bridge: PLOT_LAB_PREMISE_BRIDGE_SYSTEM_PROMPT,
+  plot_lab_universe_builder: PLOT_LAB_UNIVERSE_BUILDER_SYSTEM_PROMPT,
+  plot_lab_runway_sketch: PLOT_LAB_RUNWAY_SKETCH_SYSTEM_PROMPT,
+  plot_lab_save_preview: PLOT_LAB_SAVE_PREVIEW_SYSTEM_PROMPT,
+  plot_lab_final_plot: PLOT_LAB_FINAL_PLOT_SYSTEM_PROMPT,
 };
 const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "edit",
@@ -76,6 +104,16 @@ const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "predef_lab_draft",
   "predef_lab_iterate",
   "predef_lab_dialogue_pass",
+  "plot_lab_chat",
+  "plot_lab_source_soul_scan",
+  "plot_lab_character_analyst",
+  "plot_lab_continuity_audit",
+  "plot_lab_paywall_architect",
+  "plot_lab_premise_bridge",
+  "plot_lab_universe_builder",
+  "plot_lab_runway_sketch",
+  "plot_lab_save_preview",
+  "plot_lab_final_plot",
 ]);
 
 const ADMIN_ONLY_MODES: ReadonlySet<Mode> = new Set<Mode>([
@@ -94,14 +132,36 @@ const PREDEFINED_LAB_DIALOGUE_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "predef_lab_dialogue_design",
   "predef_lab_dialogue_pass",
 ]);
+const PLOT_LAB_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "plot_lab_chat",
+  "plot_lab_source_soul_scan",
+  "plot_lab_character_analyst",
+  "plot_lab_continuity_audit",
+  "plot_lab_paywall_architect",
+  "plot_lab_premise_bridge",
+  "plot_lab_universe_builder",
+  "plot_lab_runway_sketch",
+  "plot_lab_save_preview",
+  "plot_lab_final_plot",
+]);
 
 async function getSystemPrompt(mode: Mode): Promise<string> {
   const row = await db.query.prompts.findFirst({
     where: eq(prompts.id, mode),
   });
-  const source = row?.content ? "db" : "fallback";
+  const useCodePrompt = PLOT_LAB_MODES.has(mode) && process.env.NODE_ENV !== "production";
+  const dbDiffersFromCode = Boolean(row?.content && row.content !== FALLBACK_PROMPTS[mode]);
+  const source = useCodePrompt ? "code_dev" : row?.content ? "db" : "fallback";
   logTrace("ai.edit.prompt_resolved", { mode, source });
-  return row?.content || FALLBACK_PROMPTS[mode];
+  if (PLOT_LAB_MODES.has(mode) && dbDiffersFromCode) {
+    logTrace("ai.edit.plot_lab_prompt_db_differs_from_code", {
+      mode,
+      source,
+      dbLength: row?.content?.length ?? 0,
+      codeLength: FALLBACK_PROMPTS[mode].length,
+    });
+  }
+  return useCodePrompt ? FALLBACK_PROMPTS[mode] : row?.content || FALLBACK_PROMPTS[mode];
 }
 
 export async function POST(req: Request) {
@@ -142,6 +202,18 @@ export async function POST(req: Request) {
   const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
   if (ADMIN_ONLY_MODES.has(safeMode) && !isAdmin) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+  }
+  if (PLOT_LAB_MODES.has(safeMode)) {
+    if (!documentId) {
+      return new Response(JSON.stringify({ error: "documentId is required" }), { status: 400 });
+    }
+    if (isPlotLabStage2Mode(safeMode) && !isPlotLabStage2Enabled()) {
+      return new Response(JSON.stringify({ error: "Plot Lab Stage 2 is not enabled" }), { status: 403 });
+    }
+    const plotLabAccess = await getPlotLabAccess(session, { documentId });
+    if (!plotLabAccess.canUsePlotLab) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+    }
   }
 
   if (PERSONA_DEPENDENT_MODES.has(safeMode) && !documentId) {

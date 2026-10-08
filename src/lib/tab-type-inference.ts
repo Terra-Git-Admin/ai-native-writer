@@ -9,6 +9,8 @@ export type InferredTabType =
   | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
+  | "episode_sketches"
+  | "plot_lab_decisions"
   | "workbook"
   | "research";
 
@@ -38,6 +40,12 @@ export function inferTabType(rawTitle: string): InferredTab {
   }
   if (/^microdrama\s*plots?\b/.test(t) || /^episode\s*plots?\b/.test(t) || /^plots?\b/.test(t)) {
     return { type: "microdrama_plots", sequenceNumber: null };
+  }
+  if (/^episode\s*sketch(es)?\b/.test(t) || /^plot\s*sketch(es)?\b/.test(t)) {
+    return { type: "episode_sketches", sequenceNumber: null };
+  }
+  if (/^plot\s*lab\s*decisions?\b/.test(t) || /^runway\s*decisions?\b/.test(t)) {
+    return { type: "plot_lab_decisions", sequenceNumber: null };
   }
   if (/^workbook\b/.test(t)) {
     return { type: "workbook", sequenceNumber: null };
