@@ -17,6 +17,7 @@ import NarrativeScanPanel from "@/components/ai/NarrativeScanPanel";
 import PlotScanPanel from "@/components/ai/PlotScanPanel";
 import CommentSidebar from "@/components/comments/CommentSidebar";
 import VersionHistory from "@/components/editor/VersionHistory";
+import TextToSpeechButton from "@/components/editor/TextToSpeechButton";
 import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
@@ -1063,6 +1064,12 @@ export default function DocumentPage() {
             >
               Export
             </button>
+          )}
+          {isAdmin && activeTab?.type === "predefined_episodes" && (
+            <TextToSpeechButton
+              cancelKey={activeTabId}
+              getText={() => editorRef.current?.getFullText() ?? ""}
+            />
           )}
           <details className={`relative ${predefinedLabOpen ? "pointer-events-none opacity-45" : ""}`}>
             <summary className="cursor-pointer list-none rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors marker:hidden hover:bg-muted">
