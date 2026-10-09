@@ -437,7 +437,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
     },
     getFullText() {
       if (!editor) return "";
-      return editor.state.doc.textContent;
+      return editor.getText({ blockSeparator: "\n" });
     },
     getContentJSON() {
       if (!editor) return null;
