@@ -87,7 +87,11 @@ export async function POST(req: Request) {
   const ideaText = typeof body?.ideaText === "string" ? cleanPitchIdeaText(body.ideaText) : "";
   const instruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
   const turnIndex = typeof body?.turnIndex === "number" && Number.isInteger(body.turnIndex) ? body.turnIndex : null;
-  if (!ideaId || !ideaText) return NextResponse.json({ error: "Idea text is required." }, { status: 400 });
+  const feedback = body?.feedback && typeof body.feedback === "object" && !Array.isArray(body.feedback)
+    ? body.feedback as { rating?: unknown; reason?: unknown }
+    : null;
+  if (!ideaId) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
+  if (!ideaText && !feedback) return NextResponse.json({ error: "Idea text is required." }, { status: 400 });
   if (title && !isValidPitchLabTitle(title)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
   if (!workspace) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
@@ -95,6 +99,25 @@ export async function POST(req: Request) {
   if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an idea before refining." }, { status: 404 });
 
   const envelope = parsePitchIdeaEnvelope(idea.ideaText);
+  if (feedback) {
+    const rating = feedback.rating === "up" || feedback.rating === "down" ? feedback.rating : null;
+    const reason = typeof feedback.reason === "string" ? feedback.reason.trim().slice(0, 1000) : "";
+    if (!rating) return NextResponse.json({ error: "Choose thumbs up or thumbs down." }, { status: 400 });
+    if (rating === "down" && !reason) return NextResponse.json({ error: "Add a reason for thumbs down." }, { status: 400 });
+    const storedEnvelope = serializePitchIdeaEnvelope({
+      ...envelope,
+      feedback: {
+        rating,
+        reason: rating === "down" ? reason : undefined,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+    await db.update(pitchIdeas).set({
+      ideaText: storedEnvelope,
+      updatedAt: new Date(),
+    }).where(eq(pitchIdeas.id, ideaId));
+    return NextResponse.json({ ideaText: storedEnvelope, currentText: envelope.currentText, title: idea.title, isPlaceholder: idea.title.startsWith(PITCH_LAB_SAMPLE_TITLE_PREFIX) });
+  }
   if (turnIndex !== null && !instruction) {
     if (idea.status === "premise") return NextResponse.json({ error: "Generated option not found." }, { status: 404 });
     const turn = envelope.turns[turnIndex];
@@ -208,6 +231,7 @@ export async function POST(req: Request) {
     premiseId: envelope.premiseId,
     batchId: envelope.batchId,
     batchNumber: envelope.batchNumber,
+    feedback: envelope.feedback,
     generatedAt: envelope.generatedAt,
     shortlistedAt: envelope.shortlistedAt,
     kernel: envelope.kernel,

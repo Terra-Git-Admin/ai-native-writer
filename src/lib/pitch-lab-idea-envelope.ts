@@ -13,6 +13,11 @@ export type PitchIdeaEnvelope = {
   originalText: string;
   currentText: string;
   turns: PitchIdeaTurn[];
+  feedback?: {
+    rating: "up" | "down";
+    reason?: string;
+    updatedAt: string;
+  };
   premise?: string;
   premiseId?: string;
   batchId?: string;
@@ -63,10 +68,20 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
           })
           .filter((turn): turn is PitchIdeaTurn => Boolean(turn))
       : [];
+    const feedbackRecord = isRecord(parsed.feedback) ? parsed.feedback : null;
+    let feedback: PitchIdeaEnvelope["feedback"];
+    if (feedbackRecord?.rating === "up" || feedbackRecord?.rating === "down") {
+      feedback = {
+        rating: feedbackRecord.rating,
+        reason: typeof feedbackRecord.reason === "string" ? feedbackRecord.reason.trim() : undefined,
+        updatedAt: typeof feedbackRecord.updatedAt === "string" ? feedbackRecord.updatedAt : "",
+      };
+    }
     return {
       originalText,
       currentText: cleanPitchIdeaText(parsed.currentText),
       turns,
+      feedback,
       premise: typeof parsed.premise === "string" ? parsed.premise : undefined,
       premiseId: typeof parsed.premiseId === "string" ? parsed.premiseId : undefined,
       batchId: typeof parsed.batchId === "string" ? parsed.batchId : undefined,
@@ -88,6 +103,13 @@ export function serializePitchIdeaEnvelope(envelope: PitchIdeaEnvelope): string 
     originalText: cleanPitchIdeaText(envelope.originalText),
     currentText: cleanPitchIdeaText(envelope.currentText),
     turns: envelope.turns.map((turn) => ({ ...turn, ideaText: cleanPitchIdeaText(turn.ideaText) })),
+    feedback: envelope.feedback
+      ? {
+          rating: envelope.feedback.rating,
+          reason: envelope.feedback.reason?.trim() || undefined,
+          updatedAt: envelope.feedback.updatedAt,
+        }
+      : undefined,
     premise: envelope.premise,
     premiseId: envelope.premiseId,
     batchId: envelope.batchId,
