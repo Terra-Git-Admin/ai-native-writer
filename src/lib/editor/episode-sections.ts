@@ -1,5 +1,6 @@
 export interface EpisodeSection {
   index: number;
+  number: number;
   label: string;
   text: string;
   contentHash: string;
@@ -25,8 +26,13 @@ function hashText(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
-function isEpisodeHeading(node: TiptapNode, text: string): boolean {
-  return node.type === "heading" && /^episode\s*\d\b/i.test(text.trim());
+function episodeHeadingNumber(node: TiptapNode, text: string): number | null {
+  if (node.type !== "heading") return null;
+
+  const match = text.trim().match(/^episode\s*(\d+)\b/i);
+  if (!match) return null;
+
+  return Number(match[1]);
 }
 
 export function extractEpisodeSections(contentJson: string | null): EpisodeSection[] {
@@ -41,6 +47,7 @@ export function extractEpisodeSections(contentJson: string | null): EpisodeSecti
 
   const episodes: EpisodeSection[] = [];
   let label = "";
+  let number = 0;
   let lines: string[] = [];
 
   const flush = () => {
@@ -48,6 +55,7 @@ export function extractEpisodeSections(contentJson: string | null): EpisodeSecti
     const text = lines.join("\n").trim();
     episodes.push({
       index: episodes.length,
+      number,
       label,
       text,
       contentHash: hashText(text),
@@ -58,9 +66,11 @@ export function extractEpisodeSections(contentJson: string | null): EpisodeSecti
     const text = textOf(node).trim();
     if (!text) continue;
 
-    if (isEpisodeHeading(node, text)) {
+    const episodeNumber = episodeHeadingNumber(node, text);
+    if (episodeNumber != null) {
       flush();
       label = text;
+      number = episodeNumber;
       lines = [text];
       continue;
     }

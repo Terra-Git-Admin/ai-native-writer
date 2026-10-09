@@ -54,7 +54,7 @@ function episodeCacheKey(cancelKey: string | null, episode: EpisodeSection): str
 }
 
 function compactEpisodeLabel(episode: EpisodeSection): string {
-  return `Ep ${episode.index}`;
+  return `Ep ${episode.number}`;
 }
 
 export default function TextToSpeechButton({
