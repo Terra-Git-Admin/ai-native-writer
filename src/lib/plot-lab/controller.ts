@@ -92,6 +92,21 @@ export type PlotLabQuestionVector =
   | "monetization_delta"
   | "lock_review";
 
+export type PlotLabFrameworkSlot =
+  | "opening_read"
+  | "screen_promise"
+  | "world_effect"
+  | "relationship_conversion"
+  | "new_door_new_cost"
+  | "pressure_style"
+  | "power_rule"
+  | "arena"
+  | "engine_secret"
+  | "paid_image"
+  | "earned_change"
+  | "lock_review"
+  | "stage_1_complete";
+
 export type PlotLabRoleSlot =
   | "protagonist"
   | "primary_counterpart"
@@ -120,6 +135,7 @@ export interface PlotLabTurnPlan {
   phase: PlotLabConversationPhase;
   focus: PlotLabFocusId;
   questionVector: PlotLabQuestionVector;
+  frameworkSlot: PlotLabFrameworkSlot;
   questionMode: PlotLabQuestionMode;
   actions: PlotLabAction[];
   allowModelOptions: boolean;
@@ -142,6 +158,7 @@ export interface PlotLabControllerState {
   pendingRoleClarification: PlotLabRoleSlot | null;
   monetizationStatus: PlotLabSlotStatus;
   questionVector: PlotLabQuestionVector;
+  frameworkSlot: PlotLabFrameworkSlot;
   waitingFor: string;
   plotDetailAllowed: boolean;
   questionMode: PlotLabQuestionMode;
@@ -592,6 +609,7 @@ export function renderPlotLabControllerDirective(state: PlotLabControllerState):
     `- Pending role clarification: ${state.pendingRoleClarification ?? "none"}`,
     `- Monetization/paywall status: ${state.monetizationStatus}`,
     `- Question vector: ${state.questionVector}`,
+    `- Framework slot: ${state.frameworkSlot}`,
     `- Current-focus question count before this answer: ${state.questionsInFocus} / ${state.maxQuestionsPerFocus}`,
     `- Completed focuses: ${state.completedFocuses.length ? state.completedFocuses.map((focus) => FOCUS_LABELS[focus]).join(", ") : "none"}`,
     `- Checkpoint pending: ${state.checkpointPending ? "yes" : "no"}`,
@@ -611,7 +629,8 @@ export function renderPlotLabControllerDirective(state: PlotLabControllerState):
     "- If turn kind is character_board_summary: summarize protagonist + primary counterpart + operator/world pressure + relationship/core in 2-4 sentences and ask whether to move into plot/monetization or stay at character level. The app renders fixed controls.",
     "- If turn kind is monetization_bridge: summarize the EP1 big thread, character soul board, and relationship/pressure chain, then ask exactly one open monetization/paywall-point question. Return structured endpoint options only when Allow model options is yes. Do not ask a first plot beat or scene-mechanics question yet.",
     "- If turn kind is monetization_review: restate the current monetization candidate in one sentence and ask for approval, revision, or reroll. Do not move into plot runway yet.",
-    "- If turn kind is premise_bridge: treat the monetization point as a later point in time. Ask one open universe/pressure/delta question about what must become true before the endpoint feels earned. Do not ask for first-beat tactics yet.",
+    "- If turn kind is premise_bridge and Framework slot is earned_change: treat the monetization point as a later point in time. Ask one open universe/pressure/delta question about what must become true before the endpoint feels earned. Do not ask for first-beat tactics yet.",
+    "- If turn kind is premise_bridge and Framework slot is lock_review: do not ask a new discovery question. Restate the bridge candidate compactly so the app-owned lock/revise/reroll controls can handle the next action.",
     "- If turn kind is stage_1_complete: state that Stage 1 is locked through monetization and stop. Do not propose beats, runway, Episode 2, episode sketches, or next scene mechanics.",
     "- If turn kind is plot_gate: build the episode runway only after the monetization/paywall point and premise bridge have been approved. Do not use Day 1 / Day 2 framing unless the writer explicitly asks for it as scratch brainstorming.",
     "- Scope answers to the question just asked. Do not globalize a local answer into the whole story engine.",
@@ -704,21 +723,47 @@ function skipCurrentRole(
   );
 }
 
-function buildState(input: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">): PlotLabControllerState {
+type PlotLabStateInput = Omit<PlotLabControllerState, "focusType" | "currentFocus" | "frameworkSlot" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">;
+type PlotLabPlannedStateInput = PlotLabStateInput & { frameworkSlot: PlotLabFrameworkSlot };
+
+function frameworkSlotForState(state: PlotLabStateInput): PlotLabFrameworkSlot {
+  if (state.assistantTurnKind === "opening_read") return "opening_read";
+  if (state.assistantTurnKind === "stage_1_complete") return "stage_1_complete";
+  if (state.questionVector === "lock_review") return "lock_review";
+  if (state.questionVector === "monetization_endpoint") return "paid_image";
+  if (state.questionVector === "monetization_delta") return "earned_change";
+  if (state.focusId === "protagonist") {
+    return state.questionsInFocus <= 0 ? "screen_promise" : "world_effect";
+  }
+  if (state.focusId === "primary_counterpart") {
+    return state.questionsInFocus <= 0 ? "relationship_conversion" : "new_door_new_cost";
+  }
+  if (state.focusId === "operator_pressure") {
+    return state.questionsInFocus <= 0 ? "pressure_style" : "power_rule";
+  }
+  if (state.focusId === "relationship_core") {
+    return state.questionsInFocus <= 0 ? "arena" : "engine_secret";
+  }
+  return "lock_review";
+}
+
+function buildState(input: PlotLabStateInput): PlotLabControllerState {
   const focusType = FOCUS_TYPES[input.focusId];
   const stage2Enabled = process.env.NEXT_PUBLIC_PLOT_LAB_STAGE2_ENABLED === "true";
   const plotDetailAllowed = stage2Enabled && (input.assistantTurnKind === "plot_gate" || input.phase === "plot_thread");
-  const turnPlan = buildTurnPlan(input);
+  const frameworkSlot = frameworkSlotForState(input);
+  const plannedInput = { ...input, frameworkSlot };
+  const turnPlan = buildTurnPlan(plannedInput);
 
   return {
-    ...input,
+    ...plannedInput,
     focusType,
     currentFocus: FOCUS_LABELS[input.focusId],
     waitingFor: waitingFor(input),
     plotDetailAllowed,
     turnPlan,
-    allowedNextMove: allowedNextMove(input),
-    forbiddenMoves: forbiddenMoves(input, plotDetailAllowed),
+    allowedNextMove: allowedNextMove(plannedInput),
+    forbiddenMoves: forbiddenMoves(plannedInput, plotDetailAllowed),
   };
 }
 
@@ -835,18 +880,12 @@ function withCustomAnswer(actions: PlotLabAction[]): PlotLabAction[] {
     : [...actions, CUSTOM_ANSWER_ACTION];
 }
 
-function shouldAllowModelOptions(state: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">): boolean {
+function shouldAllowModelOptions(state: PlotLabPlannedStateInput): boolean {
   if (state.questionMode === "requested_options") return true;
-  if (state.questionMode !== "typed") return false;
-  return (
-    state.assistantTurnKind === "discovery_question" ||
-    state.assistantTurnKind === "transition_next_focus" ||
-    state.assistantTurnKind === "monetization_bridge" ||
-    state.assistantTurnKind === "premise_bridge"
-  );
+  return false;
 }
 
-function buildTurnPlan(state: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">): PlotLabTurnPlan {
+function buildTurnPlan(state: PlotLabPlannedStateInput): PlotLabTurnPlan {
   const allowModelOptions = shouldAllowModelOptions(state);
   let actions: PlotLabAction[] = [];
 
@@ -871,6 +910,7 @@ function buildTurnPlan(state: Omit<PlotLabControllerState, "focusType" | "curren
     phase: state.phase,
     focus: state.focusId,
     questionVector: state.questionVector,
+    frameworkSlot: state.frameworkSlot,
     questionMode: state.questionMode,
     actions,
     allowModelOptions,
@@ -918,7 +958,7 @@ function broadenedQuestionVector(state: Pick<PlotLabControllerState, "focusId" |
   return state.questionVector;
 }
 
-function allowedNextMove(state: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">): string {
+function allowedNextMove(state: PlotLabPlannedStateInput): string {
   if (state.assistantTurnKind === "opening_read") {
     return "Give a 3-4 sentence EP1 grounding read, then ask if the reading is correct or if the writer wants to add context.";
   }
@@ -933,6 +973,9 @@ function allowedNextMove(state: Omit<PlotLabControllerState, "focusType" | "curr
   }
   if (state.assistantTurnKind === "monetization_bridge") {
     return "Summarize EP1 big thread + character soul board + relationship/pressure chain, then ask what the monetization/paywall point should be. No first plot beat yet.";
+  }
+  if (state.assistantTurnKind === "premise_bridge" && state.frameworkSlot === "lock_review") {
+    return "Restate the universe/premise bridge candidate in 1-2 sentences and wait for Lock / Revise / Reroll. Do not ask another bridge or outside-force question.";
   }
   if (state.assistantTurnKind === "premise_bridge") {
     return "Zoom out from EP1 to the later monetization point. Ask what story-world, pressure, power, or character-condition shift makes the endpoint feel earned.";
@@ -959,36 +1002,36 @@ function allowedNextMove(state: Omit<PlotLabControllerState, "focusType" | "curr
     return "Ask a different, simpler EP1-grounded question from another angle. Do not rephrase the same question.";
   }
   if (state.questionVector === "character_anchor") {
-    return "Ask for the current focus's core story function or story promise. Keep it craft-facing, concrete, and light; no therapy language.";
+    return "Framework slot screen_promise: ask what viewers should count on from the protagonist on screen. Keep it craft-facing, concrete, and light; no therapy language.";
   }
   if (state.questionVector === "spark_in_world") {
-    return "Ask why the protagonist's visible spark, pleasure, or promise matters inside the story world; do not turn it into another threat/status mechanics question.";
+    return "Framework slot world_effect: ask what trouble, opportunity, or world reaction the protagonist's visible promise creates; do not turn it into another threat/status mechanics question.";
   }
   if (state.questionVector === "external_pressure") {
     return "Ask what visible pressure, status shift, public collision, or story-world trouble makes the prior answer matter on screen. Do not ask another internal-psychology variant.";
   }
   if (state.questionVector === "relationship_function") {
-    return "Ask what this person changes in the protagonist's life, status, danger, desire, or available choices.";
+    return "Framework slot relationship_conversion: ask what this person becomes in the protagonist's life after EP1 changes the relationship.";
   }
   if (state.questionVector === "choice_space") {
-    return "Ask what new desire, danger, protection, temptation, or choice space this relationship opens. Do not repeat public status labeling.";
+    return "Framework slot new_door_new_cost: ask what door, access, temptation, or protection opens because of this person and what it costs. Do not repeat public status labeling.";
   }
   if (state.questionVector === "power_language") {
-    return "Ask what power language, vibe, or pressure style this operator embodies on screen. Keep it concrete and non-therapeutic.";
+    return "Framework slot pressure_style: ask how this operator makes pressure visible on screen. Keep it concrete and non-therapeutic.";
   }
   if (state.questionVector === "world_rule") {
-    return "Ask what world rule the operator's presence proves. Avoid repeating the same character-pressure question.";
+    return "Framework slot power_rule: ask what rule of power the operator's presence proves. Avoid repeating the same character-pressure question.";
   }
   if (state.questionVector === "world_pressure") {
-    return "Ask what larger world, family system, status rule, institution, danger, pleasure, or pressure ecology EP1 opens.";
+    return "Framework slot arena: ask what larger arena EP1 opens. Do not ask what unresolved secret keeps pressure going yet.";
   }
   if (state.questionVector === "unresolved_ecology") {
-    return "Ask what unresolved force, appetite, danger, or secret in the larger world can keep generating microdrama before monetization.";
+    return "Framework slot engine_secret: ask what unresolved force, appetite, danger, or secret in the larger world can keep generating microdrama before monetization.";
   }
   return "Ask one open EP1-rooted discovery question. No plot mechanics yet.";
 }
 
-function waitingFor(state: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">): string {
+function waitingFor(state: PlotLabStateInput): string {
   if (state.questionMode === "requested_options") return "choose_option";
   if (state.questionMode === "fixed_actions") {
     if (state.assistantTurnKind === "opening_read") return "answer";
@@ -1009,14 +1052,14 @@ function waitingFor(state: Omit<PlotLabControllerState, "focusType" | "currentFo
 }
 
 function forbiddenMoves(
-  state: Omit<PlotLabControllerState, "focusType" | "currentFocus" | "waitingFor" | "plotDetailAllowed" | "turnPlan" | "allowedNextMove" | "forbiddenMoves">,
+  state: PlotLabPlannedStateInput,
   plotDetailAllowed: boolean
 ): string[] {
   const base = [
     "Do not expose workflow labels.",
     "Do not ask more than one question.",
     "Do not invent UI buttons; the app renders them.",
-    "Discovery questions should stay open and writer-led; structured options are answer starters, not narrow choice menus.",
+    "Discovery questions should stay open and writer-led; structured options are only for explicit requested-options turns.",
   ];
 
   if (state.assistantTurnKind === "monetization_bridge") {
@@ -1038,6 +1081,14 @@ function forbiddenMoves(
   }
 
   if (state.assistantTurnKind === "premise_bridge") {
+    if (state.frameworkSlot === "lock_review") {
+      return [
+        ...base,
+        "Do not ask a new question.",
+        "Do not ask which outside-facing force, public audience, or pressure lane matters; the writer has already answered the bridge.",
+        "Do restate the candidate compactly and let the app render Lock / Revise / Reroll.",
+      ];
+    }
     return [
       ...base,
       "Do not ask for first plot beat tactics, room logistics, exact counter-moves, texts/calls, deal terms, or Episode 2 yet.",

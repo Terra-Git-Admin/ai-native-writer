@@ -93,6 +93,7 @@ interface PlotLabMessageMeta {
     focus: string;
     turnKind: string;
     questionVector: string;
+    frameworkSlot: string;
     questionMode: string;
     questionCount: string;
     waitingFor: string;
@@ -350,11 +351,66 @@ function renderBriefAsAssistantText(brief: PlotLabSpecialistBrief | null): strin
   ].filter(Boolean).join("\n\n"));
 }
 
+function renderReviewAssistantText(brief: PlotLabSpecialistBrief | null): string {
+  if (!brief) return "";
+  return cleanAssistantText([
+    brief.visibleFrame?.trim(),
+    brief.lockCandidate?.text?.trim(),
+  ].filter(Boolean).join("\n\n"));
+}
+
 function auditQuestionNeeded(auditBrief: string): string {
   const match = auditBrief.match(/Question needed:\s*(.+)$/im);
   if (!match?.[1]) return "";
   const question = match[1].replace(/^<none>|^none$/i, "").trim();
   return question.includes("?") ? question : "";
+}
+
+function auditVerdict(auditBrief: string): "pass" | "needs_tweak" | "block" | "unknown" {
+  const match = auditBrief.match(/Verdict:\s*\*?\*?(Pass|Needs tweak|Block)/i);
+  const verdict = match?.[1]?.toLowerCase();
+  if (verdict === "pass") return "pass";
+  if (verdict === "needs tweak") return "needs_tweak";
+  if (verdict === "block") return "block";
+  return "unknown";
+}
+
+function hasLockAction(state: PlotLabControllerState): boolean {
+  return state.turnPlan.actions.some((action) => action.kind === "lock_current");
+}
+
+function isLockReviewTurn(state: PlotLabControllerState): boolean {
+  return hasLockAction(state) || state.waitingFor === "approve_lock";
+}
+
+function isDeterministicReviewTurn(state: PlotLabControllerState): boolean {
+  return isLockReviewTurn(state) || state.phase === "stage_1_complete";
+}
+
+function hasInlineMenu(text: string): boolean {
+  return /\b(?:[abc]|\d)\)|\b(?:A|B|C)\s*[-:]/.test(text);
+}
+
+function isSafeAuditQuestion(question: string): boolean {
+  const trimmed = question.trim();
+  return Boolean(trimmed) && trimmed.includes("?") && !hasInlineMenu(trimmed);
+}
+
+function stripVisibleQuestions(text: string): string {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .filter((paragraph) => !paragraph.includes("?"));
+  return paragraphs.join("\n\n").trim();
+}
+
+function reviewFallbackText(brief: PlotLabSpecialistBrief | null, assistantText: string): string {
+  return cleanAssistantText([
+    brief?.visibleFrame?.trim(),
+    brief?.lockCandidate?.text?.trim(),
+    assistantText.split("?")[0]?.trim(),
+  ].filter(Boolean)[0] ?? "");
 }
 
 function controllerSnapshot(state: PlotLabControllerState): NonNullable<PlotLabMessageMeta["controllerSnapshot"]> {
@@ -363,6 +419,7 @@ function controllerSnapshot(state: PlotLabControllerState): NonNullable<PlotLabM
     focus: state.currentFocus,
     turnKind: state.assistantTurnKind,
     questionVector: state.questionVector,
+    frameworkSlot: state.frameworkSlot,
     questionMode: state.questionMode,
     questionCount: `${state.questionsInFocus}/${state.maxQuestionsPerFocus}`,
     waitingFor: state.waitingFor,
@@ -411,6 +468,7 @@ export default function PlotLabWorkspace({
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const widthRef = useRef(DEFAULT_WIDTH);
+  const plotLabDecisionsContentRef = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -454,16 +512,24 @@ export default function PlotLabWorkspace({
 
   const plotLabDecisionsTab = tabs.find((tab) => tab.type === "plot_lab_decisions") ?? null;
 
-  const saveDecisionLock = useCallback(async (assistantText: string, meta?: PlotLabMessageMeta) => {
+  useEffect(() => {
+    plotLabDecisionsContentRef.current = plotLabDecisionsTab?.content ?? null;
+  }, [plotLabDecisionsTab?.content]);
+
+  const saveDecisionLock = useCallback(async (
+    assistantText: string,
+    meta?: PlotLabMessageMeta,
+    stateForSave: PlotLabControllerState = controllerState
+  ) => {
     if (!plotLabDecisionsTab) {
       setLockSaveStatus("error");
       setLockSaveMessage("Plot Lab Decisions tab not found.");
       return false;
     }
 
-    const sectionTitle = decisionSectionTitle(controllerState);
-    const blockTitle = decisionBlockTitle(controllerState);
-    const existingTagged = tiptapJsonToTagged(plotLabDecisionsTab.content ?? null);
+    const sectionTitle = decisionSectionTitle(stateForSave);
+    const blockTitle = decisionBlockTitle(stateForSave);
+    const existingTagged = tiptapJsonToTagged(plotLabDecisionsContentRef.current);
     const lockText = meta?.specialistBrief?.lockCandidate?.text?.trim() || assistantText;
     const nextTagged = upsertDecisionBlock(existingTagged, sectionTitle, blockTitle, lockText);
     const content = JSON.stringify(taggedTextToTiptapDoc(nextTagged));
@@ -492,6 +558,7 @@ export default function PlotLabWorkspace({
         ? { ...tab, content, updatedAt: new Date() }
         : tab
     ));
+    plotLabDecisionsContentRef.current = content;
     await onOpenTab(plotLabDecisionsTab.id);
     setLockSaveStatus("saved");
     setLockSaveMessage(`Saved to ${plotLabDecisionsTab.title} / ${sectionTitle}.`);
@@ -526,6 +593,7 @@ export default function PlotLabWorkspace({
         ? { ...tab, content, updatedAt: new Date() }
         : tab
     ));
+    plotLabDecisionsContentRef.current = content;
     await onOpenTab(plotLabDecisionsTab.id);
     setLockSaveStatus("saved");
     setLockSaveMessage(`${plotLabDecisionsTab.title} cleared for testing.`);
@@ -601,10 +669,21 @@ export default function PlotLabWorkspace({
     try {
       await onFlushPendingSave();
       const liveContent = editorRef.current?.getContentJSON() ?? null;
+      const plotLabDecisionsContent = plotLabDecisionsContentRef.current ?? plotLabDecisionsTab?.content ?? null;
+      const contextTabs = plotLabDecisionsTab
+        ? tabs.map((tab) =>
+            tab.id === plotLabDecisionsTab.id
+              ? { ...tab, content: plotLabDecisionsContent }
+              : tab
+          )
+        : tabs;
+      const activeTabLiveContent = activeTab.type === "plot_lab_decisions"
+        ? plotLabDecisionsContent
+        : liveContent;
       const contextBlock = buildPlotLabContext({
-        tabs,
+        tabs: contextTabs,
         activeTab,
-        activeTabLiveContent: liveContent,
+        activeTabLiveContent,
         userMessage: prompt,
       });
       const recentChat = renderRecentChat(nextMessages);
@@ -614,9 +693,7 @@ export default function PlotLabWorkspace({
         ? messageSource[messageSource.length - 1]
         : null;
       const decisionsTagged = plotLabDecisionsTab
-        ? plotLabDecisionsTab.id === activeTab.id && liveContent !== null
-          ? tiptapJsonToTagged(liveContent)
-          : tiptapJsonToTagged(plotLabDecisionsTab.content ?? null)
+        ? tiptapJsonToTagged(plotLabDecisionsContent)
         : "";
       const runtimeInput = renderPlotLabRuntimeInput({
         controllerState: plannedControllerState,
@@ -729,8 +806,22 @@ export default function PlotLabWorkspace({
       if (auditQuestion && specialistBrief) {
         specialistBrief = {
           ...specialistBrief,
-          question: auditQuestion,
-          options: plannedControllerState.turnPlan.allowModelOptions ? specialistBrief.options : [],
+          question: isSafeAuditQuestion(auditQuestion) ? auditQuestion : "",
+          options: plannedControllerState.turnPlan.allowModelOptions && isSafeAuditQuestion(auditQuestion) ? specialistBrief.options : [],
+        };
+      }
+      if (isDeterministicReviewTurn(plannedControllerState) && specialistBrief) {
+        specialistBrief = {
+          ...specialistBrief,
+          question: "",
+          options: [],
+        };
+      }
+      if (auditVerdict(auditBrief) !== "pass" && auditBrief && specialistBrief && !specialistBrief.question && !isDeterministicReviewTurn(plannedControllerState)) {
+        specialistBrief = {
+          ...specialistBrief,
+          visibleFrame: "Let me ask that from a cleaner angle.",
+          options: [],
         };
       }
 
@@ -738,6 +829,8 @@ export default function PlotLabWorkspace({
 
       let assistantText = plannedControllerState.turnPlan.allowModelOptions
         ? renderBriefAsAssistantText(specialistBrief)
+        : isDeterministicReviewTurn(plannedControllerState)
+          ? renderReviewAssistantText(specialistBrief)
         : "";
 
       if (!assistantText) {
@@ -769,21 +862,36 @@ export default function PlotLabWorkspace({
 
         assistantText = cleanAssistantText(await readAIStream(res));
       }
+      if (isDeterministicReviewTurn(plannedControllerState) && assistantText.includes("?")) {
+        assistantText = stripVisibleQuestions(assistantText) || reviewFallbackText(specialistBrief, assistantText);
+      }
+      if (
+        auditVerdict(auditBrief) !== "pass" &&
+        auditBrief &&
+        !isDeterministicReviewTurn(plannedControllerState) &&
+        hasInlineMenu(assistantText)
+      ) {
+        assistantText = reviewFallbackText(specialistBrief, assistantText) || "Let me ask that from a cleaner angle.";
+      }
       if (assistantText) {
+        const assistantMeta: PlotLabMessageMeta = {
+          source: "ai",
+          specialistMode: specialistRoute.mode,
+          specialistBrief,
+          specialistParseError,
+          auditBrief,
+          structuredActions,
+          controllerSnapshot: controllerSnapshot(plannedControllerState),
+          turnPlan: plannedControllerState.turnPlan,
+        };
         setMessages([...contextualizedNextMessages, {
           role: "assistant",
           content: assistantText,
-          meta: {
-            source: "ai",
-            specialistMode: specialistRoute.mode,
-            specialistBrief,
-            specialistParseError,
-            auditBrief,
-            structuredActions,
-            controllerSnapshot: controllerSnapshot(plannedControllerState),
-            turnPlan: plannedControllerState.turnPlan,
-          },
+          meta: assistantMeta,
         }]);
+        if (plannedControllerState.phase === "stage_1_complete") {
+          void saveDecisionLock(assistantText, assistantMeta, plannedControllerState);
+        }
         setControllerState(advanceController ? commitPlotLabAssistantTurn(plannedControllerState) : plannedControllerState);
       } else {
         setControllerState(plannedControllerState);
@@ -794,7 +902,7 @@ export default function PlotLabWorkspace({
       setIsStreaming(false);
       setStreamingText("");
     }
-  }, [activeTab, controllerState, documentId, editorRef, input, isStreaming, messages, modelId, onFlushPendingSave, plotLabDecisionsTab, tabs, thinking]);
+  }, [activeTab, controllerState, documentId, editorRef, input, isStreaming, messages, modelId, onFlushPendingSave, plotLabDecisionsTab, saveDecisionLock, tabs, thinking]);
 
   const handleAction = useCallback(async (action: PlotLabAction, latestAssistantText: string, latestMeta?: PlotLabMessageMeta) => {
     if (isStreaming) return;
@@ -889,9 +997,13 @@ export default function PlotLabWorkspace({
 
   const exportDebugJson = useCallback(() => {
     const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
+    const plotLabDecisionsTagged = plotLabDecisionsTab
+      ? tiptapJsonToTagged(plotLabDecisionsContentRef.current ?? plotLabDecisionsTab.content ?? null)
+      : "";
     const payload = {
       exportedAt: new Date().toISOString(),
       documentId,
+      plotLabDecisions: plotLabDecisionsTagged,
       state: {
         currentState: STATE_LABELS[controllerState.phase] ?? controllerState.phase,
         currentFocus: FOCUS_LABELS[controllerState.focusId] ?? controllerState.currentFocus,
