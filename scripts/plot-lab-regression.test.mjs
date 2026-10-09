@@ -27,16 +27,16 @@ function testTypedDiscovery() {
 
   assert.equal(discovery.phase, "protagonist_discovery");
   assert.equal(discovery.turnPlan.questionMode, "typed");
-  assert.equal(discovery.turnPlan.allowModelOptions, true);
+  assert.equal(discovery.turnPlan.allowModelOptions, false);
   assert.deepEqual(discovery.turnPlan.actions.map((action) => action.kind), ["custom_answer"]);
 }
 
 function testStage1DiscoveryOptionsAcrossPipeline() {
   const protagonistQ1 = planPlotLabAssistantTurn(createInitialPlotLabControllerState(), "Yes, this is right");
-  assert.equal(protagonistQ1.turnPlan.allowModelOptions, true);
+  assert.equal(protagonistQ1.turnPlan.allowModelOptions, false);
 
   const protagonistQ2 = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(protagonistQ1), "Her joy in music");
-  assert.equal(protagonistQ2.turnPlan.allowModelOptions, true);
+  assert.equal(protagonistQ2.turnPlan.allowModelOptions, false);
 
   const primaryQ1 = planPlotLabAssistantTurn({
     ...protagonistQ1,
@@ -45,7 +45,7 @@ function testStage1DiscoveryOptionsAcrossPipeline() {
     focusIndex: 1,
     questionsInFocus: 0,
   }, "next");
-  assert.equal(primaryQ1.turnPlan.allowModelOptions, true);
+  assert.equal(primaryQ1.turnPlan.allowModelOptions, false);
 
   const relationshipQ1 = planPlotLabAssistantTurn({
     ...protagonistQ1,
@@ -54,7 +54,7 @@ function testStage1DiscoveryOptionsAcrossPipeline() {
     focusIndex: 3,
     questionsInFocus: 0,
   }, "next");
-  assert.equal(relationshipQ1.turnPlan.allowModelOptions, true);
+  assert.equal(relationshipQ1.turnPlan.allowModelOptions, false);
 
   const monetizationGate = {
     ...createInitialPlotLabControllerState(),
@@ -66,7 +66,7 @@ function testStage1DiscoveryOptionsAcrossPipeline() {
     questionMode: "fixed_actions",
   };
   const monetizationPlanned = planPlotLabAssistantTurn(monetizationGate, "Move into plot");
-  assert.equal(monetizationPlanned.turnPlan.allowModelOptions, true);
+  assert.equal(monetizationPlanned.turnPlan.allowModelOptions, false);
 
   const checkpointPlanned = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(protagonistQ2), "This is the answer");
   assert.equal(checkpointPlanned.assistantTurnKind, "checkpoint_summary");
@@ -92,8 +92,32 @@ function testStructuredOptionsBecomeActions() {
     risks: [],
   }, discovery.turnPlan);
 
-  assert.deepEqual(actions.map((action) => action.kind), ["requested_option", "requested_option"]);
-  assert.deepEqual(actions.map((action) => action.label), ["Escape hatch", "Public self"]);
+  assert.deepEqual(actions, []);
+
+  const requestedTurnPlan = {
+    ...discovery.turnPlan,
+    questionMode: "requested_options",
+    allowModelOptions: true,
+  };
+  const requestedActions = specialistOptionsToActions({
+    specialist: "plot_lab_character_analyst",
+    status: "needs_input",
+    objective: "",
+    lockedContextUsed: [],
+    evidenceUsed: [],
+    recommendedMove: "show_options",
+    visibleFrame: "",
+    question: "What should this mean?",
+    options: [
+      { label: "Escape hatch", detail: "Music is the way out.", response: "Music is her escape hatch." },
+      { label: "Public self", detail: "Music exposes the version of her the world cannot own.", response: "Music is her public self." },
+    ],
+    lockCandidate: null,
+    risks: [],
+  }, requestedTurnPlan);
+
+  assert.deepEqual(requestedActions.map((action) => action.kind), ["requested_option", "requested_option"]);
+  assert.deepEqual(requestedActions.map((action) => action.label), ["Escape hatch", "Public self"]);
 
   const openingActions = specialistOptionsToActions({
     specialist: "plot_lab_source_soul_scan",
@@ -165,10 +189,12 @@ function testLowSignalAndFeedbackDoNotAdvanceQuestionCount() {
 function testDistinctStage1Vectors() {
   const protagonistQ1 = planPlotLabAssistantTurn(createInitialPlotLabControllerState(), "Yes, this is right");
   assert.equal(protagonistQ1.questionVector, "character_anchor");
+  assert.equal(protagonistQ1.frameworkSlot, "screen_promise");
 
   const protagonistQ1Committed = commitPlotLabAssistantTurn(protagonistQ1);
   const protagonistQ2 = planPlotLabAssistantTurn(protagonistQ1Committed, "Her joy in music");
   assert.equal(protagonistQ2.questionVector, "spark_in_world");
+  assert.equal(protagonistQ2.frameworkSlot, "world_effect");
 
   const primaryQ1 = planPlotLabAssistantTurn({
     ...protagonistQ1,
@@ -178,9 +204,11 @@ function testDistinctStage1Vectors() {
     questionsInFocus: 0,
   }, "next");
   assert.equal(primaryQ1.questionVector, "relationship_function");
+  assert.equal(primaryQ1.frameworkSlot, "relationship_conversion");
 
   const primaryQ2 = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(primaryQ1), "Hiro draws attention");
   assert.equal(primaryQ2.questionVector, "choice_space");
+  assert.equal(primaryQ2.frameworkSlot, "new_door_new_cost");
 
   const operatorQ1 = planPlotLabAssistantTurn({
     ...protagonistQ1,
@@ -190,9 +218,60 @@ function testDistinctStage1Vectors() {
     questionsInFocus: 0,
   }, "next");
   assert.equal(operatorQ1.questionVector, "power_language");
+  assert.equal(operatorQ1.frameworkSlot, "pressure_style");
 
   const operatorQ2 = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(operatorQ1), "Ming is polite pressure");
   assert.equal(operatorQ2.questionVector, "world_rule");
+  assert.equal(operatorQ2.frameworkSlot, "power_rule");
+}
+
+function testFrameworkSlotsDriveRelationshipMonetizationAndBridge() {
+  const base = planPlotLabAssistantTurn(createInitialPlotLabControllerState(), "Yes, this is right");
+  const relationshipQ1 = planPlotLabAssistantTurn({
+    ...base,
+    phase: "relationship_discovery",
+    focusId: "relationship_core",
+    focusIndex: 3,
+    questionsInFocus: 0,
+  }, "next");
+  assert.equal(relationshipQ1.questionVector, "world_pressure");
+  assert.equal(relationshipQ1.frameworkSlot, "arena");
+
+  const relationshipQ2 = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(relationshipQ1), "Casino as public empire");
+  assert.equal(relationshipQ2.questionVector, "unresolved_ecology");
+  assert.equal(relationshipQ2.frameworkSlot, "engine_secret");
+
+  const monetizationGate = {
+    ...createInitialPlotLabControllerState(),
+    phase: "plot_transition_gate",
+    focusId: "plot",
+    focusIndex: 4,
+    assistantTurnKind: "character_board_summary",
+    questionVector: "lock_review",
+    questionMode: "fixed_actions",
+  };
+  const monetization = planPlotLabAssistantTurn(monetizationGate, "Move into plot");
+  assert.equal(monetization.frameworkSlot, "paid_image");
+
+  const premiseDiscovery = planPlotLabAssistantTurn({
+    ...monetization,
+    phase: "monetization_lock_review",
+    assistantTurnKind: "monetization_review",
+    questionVector: "lock_review",
+    questionMode: "fixed_actions",
+    waitingFor: "approve_lock",
+  }, "Lock this");
+  assert.equal(premiseDiscovery.phase, "premise_bridge");
+  assert.equal(premiseDiscovery.frameworkSlot, "earned_change");
+  assert.equal(premiseDiscovery.turnPlan.allowModelOptions, false);
+  assert.deepEqual(premiseDiscovery.turnPlan.actions.map((action) => action.kind), ["custom_answer"]);
+
+  const premiseReview = planPlotLabAssistantTurn(premiseDiscovery, "Vincent's empire shows cracks");
+  assert.equal(premiseReview.phase, "premise_bridge");
+  assert.equal(premiseReview.frameworkSlot, "lock_review");
+  assert.equal(premiseReview.turnPlan.allowModelOptions, false);
+  assert.deepEqual(premiseReview.turnPlan.actions.map((action) => action.kind), ["lock_current", "revise_current", "reroll_options", "custom_answer"]);
+  assert.equal(premiseReview.allowedNextMove.startsWith("Restate the universe/premise bridge candidate"), true);
 }
 
 function testStage1TypedQuestionsAreAudited() {
@@ -256,6 +335,15 @@ async function testPrivateReleaseGateStaticWiring() {
   assert.equal(workspace.includes("contextBlock"), true);
   assert.equal(workspace.includes("plotLabDecisions"), true);
   assert.equal(workspace.includes("priorUserMessage?.meta?.contextSnapshot"), true);
+  assert.equal(workspace.includes("saveDecisionLock(assistantText, assistantMeta, plannedControllerState)"), true);
+  assert.equal(workspace.includes("stripVisibleQuestions(assistantText)"), true);
+  assert.equal(workspace.includes("function isLockReviewTurn"), true);
+  assert.equal(workspace.includes("isDeterministicReviewTurn(plannedControllerState)"), true);
+  assert.equal(workspace.includes("renderReviewAssistantText(specialistBrief)"), true);
+  assert.equal(workspace.includes("frameworkSlot"), true);
+  assert.equal(workspace.includes("plotLabDecisionsContentRef.current"), true);
+  assert.equal(workspace.includes("plotLabDecisions: plotLabDecisionsTagged"), true);
+  assert.equal(workspace.includes("activeTabLiveContent = activeTab.type === \"plot_lab_decisions\""), true);
 }
 
 async function testNoProseChoiceParser() {
@@ -280,6 +368,7 @@ testRequestedOptions();
 testAnswerQualityClassification();
 testLowSignalAndFeedbackDoNotAdvanceQuestionCount();
 testDistinctStage1Vectors();
+testFrameworkSlotsDriveRelationshipMonetizationAndBridge();
 testStage1TypedQuestionsAreAudited();
 testStage1CompleteIsTerminal();
 await testNoProseChoiceParser();

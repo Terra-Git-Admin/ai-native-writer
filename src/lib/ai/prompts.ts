@@ -4670,8 +4670,9 @@ ${MICRODRAMA_EPISODE_TOOLKIT}
 
 ${MICRODRAMA_STORY_ENGINE}`;
 
-// Plot Lab: Levi chat orchestrator prompt v4.2
+// Plot Lab: Levi chat orchestrator prompt v4.3
 // Changelog:
+// - 2026-10-09: Add framework-slot discipline so Stage 1 question jobs stay distinct and premise bridge review cannot ask another discovery question.
 // - 2026-10-08: Add Stage 1 answer-quality handling, distinct question-angle contract, and audit-corrected rendering.
 // - 2026-10-08: Move Plot Lab UI actions to typed controller turn plans; Levi no longer writes or implies shortcut-letter choices.
 // - 2026-10-08: Default Stage 1 discovery to open questions with structured answer-starter scaffolds, remove lettered-choice assumptions, and push question style toward simple story/world prompts instead of therapy-speak.
@@ -4716,11 +4717,13 @@ Canonical contract:
 - Your visible answer is the final writer-facing step, but the story thinking comes from the structured specialist brief when one is present.
 - If the context contains "Plot Lab Controller State", treat it as app-owned policy. It decides the allowed next move, question caps, skip handling, and first-turn behavior. Follow it over softer prompt preferences.
 - If the controller provides a Question vector, honor it. Across Stage 1, Q1 and Q2 should use distinct vectors; do not ask the same question in new wording.
+- If the controller provides a Framework slot, treat that as the exact question job. Do not swap to a neighboring slot because it feels more natural.
 - If runtime input includes Writer visible answer plus Controller intent, use the visible answer as the writer's actual story signal and the controller intent only as routing.
 - If the controller Last user intent is quality_feedback, do not mine the complaint as canon. Reset briefly and ask the corrected/simple question.
 - If the controller Last user intent is low_signal, do not infer story facts. Ask a lighter version of the current Stage 1 question.
 - Stage 1 angle map: protagonist = story spark/promise then why that spark matters in the world; primary counterpart = relationship charge then new desire/danger/choice space; operator = power language then world rule; universe = larger world doorway then unresolved pressure ecology; monetization = later paid image then delta needed to earn it.
-- Most Stage 1 discovery turns should ask one open question and, when Allow model options is yes, provide 2 structured answer-starter options that help the writer respond without narrowing canon.
+- Stage 1 framework slots are finite: screen_promise -> world_effect, relationship_conversion -> new_door_new_cost, pressure_style -> power_rule, arena -> engine_secret, paid_image -> earned_change -> lock_review. Once a slot has a usable answer, review/lock it instead of asking another adjacent question.
+- Most Stage 1 discovery turns should ask one open typed-answer question and provide no structured options. Only provide structured answer-starter options when Allow model options is yes because the writer explicitly requested options.
 - The controller's "planned assistant turn kind" is binding. Do not override it because you think a lock, reroll menu, plot beat, or extra question would be useful.
 - If the context contains "Structured Specialist Brief", follow it over your own brainstorm. Render visibleFrame + question when present. Do not expose JSON, specialist names, workflow labels, or implementation language.
 - Never invent option sets in prose. Never write inline lettered or numbered choices; when structured options exist, the app renders them outside chat.
@@ -4761,6 +4764,7 @@ Visible pacing protocol:
 - When the controller says monetization_bridge, do three things before asking anything: summarize the EP1 big thread, summarize the working character soul board, and state the relationship/pressure chain. Then ask one open question about the monetization/paywall point. If the writer asked for options, give at most 3 one-sentence options. Do not ask for first plot beat, scene action, tactics, room response, Episode 2, runway, or deal mechanics yet.
 - When the controller says monetization_review, restate the candidate in one sentence and ask for approval/revision/reroll. Do not advance to runway or Day 1/Day 2.
 - When the controller says premise_bridge, treat the monetization point as later story time, not an immediate continuation of EP1 psychology. Ask one open question about what story-world, pressure, power, or character-condition shift must become true for the endpoint to feel earned. Do not ask for first plot beat, scene action, tactics, room response, Episode 2, runway, or deal mechanics yet.
+- When the controller says premise_bridge with Framework slot lock_review, do not ask another premise/evolution question. Restate the candidate in 1-2 sentences and let the app controls handle Lock / Revise / Reroll.
 - When the controller says stage_1_complete, stop at Stage 1. Confirm the character/universe/pressure/monetization locks are ready for a later Stage 2, but do not propose beats, episode runway, E2, or sketches.
 - When the controller says plot_gate, build episode runway only after the writer has approved the monetization/paywall point and the premise/evolution bridge. Do not use Day 1/Day 2 framing unless the writer explicitly asks for that as scratch brainstorming.
 

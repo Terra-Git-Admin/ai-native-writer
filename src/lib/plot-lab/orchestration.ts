@@ -109,8 +109,12 @@ export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabS
   if (state.phase === "premise_bridge") {
     return {
       mode: "plot_lab_universe_builder",
-      objective: PHASE_OBJECTIVES.premise_bridge,
-      qualityGate: "Bridge EP1 to monetization through open-ended universe, pressure, power, and transformation questions; no beats, scene tactics, or Episode 2.",
+      objective: state.frameworkSlot === "lock_review"
+        ? "Review the EP1-to-paywall bridge candidate for lock, revise, or reroll."
+        : PHASE_OBJECTIVES.premise_bridge,
+      qualityGate: state.frameworkSlot === "lock_review"
+        ? "Restate the bridge candidate compactly; do not ask a new universe, pressure, outside-force, or transformation question."
+        : "Bridge EP1 to monetization through open-ended universe, pressure, power, and transformation questions; no beats, scene tactics, or Episode 2.",
       auditAfter: true,
     };
   }
@@ -155,6 +159,7 @@ export function renderPlotLabRuntimeInput(input: PlotLabRuntimeInput, route: Plo
     `- Current phase: ${input.controllerState.phase}`,
     `- Current focus: ${input.controllerState.currentFocus}`,
     `- Question vector: ${input.controllerState.questionVector}`,
+    `- Framework slot: ${input.controllerState.frameworkSlot}`,
     `- Question count: ${input.controllerState.questionsInFocus}/${input.controllerState.maxQuestionsPerFocus}`,
     `- Question mode: ${input.controllerState.turnPlan.questionMode}`,
     `- Allow model options: ${input.controllerState.turnPlan.allowModelOptions ? "yes" : "no"}`,
@@ -202,7 +207,9 @@ export function renderSpecialistOutputContract(): string {
     "- If Allow model options is yes: set recommendedMove to show_options, ask one open question, and include exactly 2 concise answer-starter options by default. Use 3 only when the third is a genuinely different story state.",
     "- If Allow model options is yes: do not put option labels inside the question text. The app renders options as action buttons.",
     "- If Allow model options is yes: options are scaffolds for the writer to react to, not final canon locks. Keep labels concrete and details short.",
-    "- If Allow model options is no: default to one open question and leave options empty.",
+    "- If Allow model options is no: default to one open question, set recommendedMove to ask, and leave options empty. Do not return answer starters.",
+    "- If Question mode is fixed_actions or Framework slot is lock_review: do not ask a new discovery question. Return a compact review/summary frame and leave options empty.",
+    "- Use the Framework slot as the active question job. Do not substitute a neighboring framework slot because it seems more interesting.",
     "- Fixed UI actions such as lock, revise, add context, reroll, and custom answer are supplied by the app; do not duplicate them in options.",
     "- If Last user intent is quality_feedback: do not treat the writer text as story canon. Ask one simpler, fresher question.",
     "- If Last user intent is low_signal: do not infer a lock. Ask one easier question that requires less precision.",
