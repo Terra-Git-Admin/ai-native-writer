@@ -67,6 +67,7 @@ interface PlotLabFeedbackEvent {
     responseSource: string;
     lockedContextUsed: string[];
   };
+  contextSnapshot: PlotLabMessageMeta["contextSnapshot"] | null;
   createdAt: string;
 }
 
@@ -98,6 +99,27 @@ interface PlotLabMessageMeta {
     lastUserIntent: PlotLabUserIntent;
   };
   turnPlan?: PlotLabTurnPlan;
+  contextSnapshot?: {
+    capturedAt: string;
+    activeTab: {
+      id: string;
+      title: string;
+      type: string;
+    };
+    documentTabs: Array<{
+      id: string;
+      title: string;
+      type: string;
+      position: number;
+      isActive: boolean;
+    }>;
+    contextBlock: string;
+    plotLabDecisions: string;
+    recentChat: string;
+    controllerDirective: string;
+    specialistMode: PlotLabSpecialistMode;
+    runtimeInput: string;
+  };
 }
 
 type PlotLabMessage = ChatMessage & {
@@ -614,6 +636,36 @@ export default function PlotLabWorkspace({
           response: action.response,
         })),
       }, specialistRoute);
+      const contextSnapshot: NonNullable<PlotLabMessageMeta["contextSnapshot"]> = {
+        capturedAt: new Date().toISOString(),
+        activeTab: {
+          id: activeTab.id,
+          title: activeTab.title,
+          type: activeTab.type,
+        },
+        documentTabs: tabs
+          .slice()
+          .sort((a, b) => a.position - b.position)
+          .map((tab) => ({
+            id: tab.id,
+            title: tab.title,
+            type: tab.type,
+            position: tab.position,
+            isActive: tab.id === activeTab.id,
+          })),
+        contextBlock,
+        plotLabDecisions: decisionsTagged,
+        recentChat,
+        controllerDirective,
+        specialistMode: specialistRoute.mode,
+        runtimeInput,
+      };
+      const contextualizedNextMessages = nextMessages.map((message, index) =>
+        appendUserMessage && index === nextMessages.length - 1 && message.role === "user"
+          ? { ...message, meta: { ...message.meta, contextSnapshot } }
+          : message
+      );
+      if (appendUserMessage) setMessages(contextualizedNextMessages);
 
       const specialistRes = await fetch("/api/ai/edit", {
         method: "POST",
@@ -718,7 +770,7 @@ export default function PlotLabWorkspace({
         assistantText = cleanAssistantText(await readAIStream(res));
       }
       if (assistantText) {
-        setMessages([...nextMessages, {
+        setMessages([...contextualizedNextMessages, {
           role: "assistant",
           content: assistantText,
           meta: {
@@ -808,6 +860,7 @@ export default function PlotLabWorkspace({
     const note = rating === "down"
       ? window.prompt("Optional note for this Plot Lab response", "")?.trim() ?? ""
       : "";
+    const priorUserMessage = [...messages.slice(0, messageIndex)].reverse().find((message) => message.role === "user");
     setFeedbackEvents((current) => [
       ...current,
       {
@@ -828,6 +881,7 @@ export default function PlotLabWorkspace({
           responseSource: messages[messageIndex]?.meta?.source ?? "ai",
           lockedContextUsed: messages[messageIndex]?.meta?.specialistBrief?.lockedContextUsed ?? [],
         },
+        contextSnapshot: priorUserMessage?.meta?.contextSnapshot ?? null,
         createdAt: new Date().toISOString(),
       },
     ]);
@@ -865,6 +919,7 @@ export default function PlotLabWorkspace({
           selectedAction: message.meta?.selectedAction ?? null,
           controllerSnapshot: message.meta?.controllerSnapshot ?? null,
           turnPlan: message.meta?.turnPlan ?? null,
+          contextSnapshot: message.meta?.contextSnapshot ?? null,
         })),
       messages,
       feedback: feedbackEvents,
@@ -1041,7 +1096,7 @@ export default function PlotLabWorkspace({
                       ))}
                     </div>
                   )}
-                  {!isUser && isAdmin ? (
+                  {!isUser && canUseTestingTools ? (
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
