@@ -250,6 +250,12 @@ async function testPrivateReleaseGateStaticWiring() {
   assert.equal(sidebar.includes("canUsePlotLab"), true);
   assert.equal(workspace.includes("Start over"), true);
   assert.equal(workspace.includes("canUseTesterTools"), true);
+  assert.equal(workspace.includes("!isUser && canUseTestingTools"), true);
+  assert.equal(workspace.includes("contextSnapshot"), true);
+  assert.equal(workspace.includes("runtimeInput"), true);
+  assert.equal(workspace.includes("contextBlock"), true);
+  assert.equal(workspace.includes("plotLabDecisions"), true);
+  assert.equal(workspace.includes("priorUserMessage?.meta?.contextSnapshot"), true);
 }
 
 async function testNoProseChoiceParser() {
