@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { AlertTriangle, CheckCircle, ChevronDown, Loader2, Pencil, RefreshCw, Save, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle, ChevronDown, Download, Loader2, Pencil, RefreshCw, Save, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { cleanPitchIdeaText, parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
@@ -64,9 +64,11 @@ type GeneratedBatch = {
   ideas: Idea[];
 };
 
+type PitchSource = { type: string; sourceDocumentId?: string | null; title?: string | null; textSnapshot?: string | null };
+
 type WorkspaceResponse = {
-  workspace?: { brief?: string | null; adaptationStyle?: "close" | "loose" | null } | null;
-  sources?: { type: string; sourceDocumentId?: string | null; textSnapshot?: string | null }[];
+  workspace?: { id?: string; brief?: string | null; adaptationStyle?: "close" | "loose" | null; createdAt?: string | Date | null; updatedAt?: string | Date | null } | null;
+  sources?: PitchSource[];
   ideas?: Idea[];
 };
 
@@ -161,6 +163,8 @@ export default function PitchLabStudioPage() {
   const [docDropdownOpen, setDocDropdownOpen] = useState(false);
   const [docsLoading, setDocsLoading] = useState(true);
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [workspaceSnapshot, setWorkspaceSnapshot] = useState<WorkspaceResponse["workspace"]>(null);
+  const [sourceSnapshots, setSourceSnapshots] = useState<PitchSource[]>([]);
   const [pilotInstructionId, setPilotInstructionId] = useState<string | null>(null);
   const [pilotInstructionDrafts, setPilotInstructionDrafts] = useState<Record<string, string>>({});
   const [pilotGenerationTasks, setPilotGenerationTasks] = useState<Record<string, PilotGenerationTask>>({});
@@ -229,9 +233,11 @@ export default function PitchLabStudioPage() {
       .then((r) => r.ok ? r.json() as Promise<WorkspaceResponse> : null)
       .then((data) => {
         if (!data?.workspace) return;
+        setWorkspaceSnapshot(data.workspace);
         setBrief(data.workspace.brief ?? "");
         setAdaptationStyle(data.workspace.adaptationStyle ?? "loose");
         const sources = Array.isArray(data.sources) ? data.sources : [];
+        setSourceSnapshots(sources);
         const writerSource = sources.find((source) => source.type === "writer_doc");
         const pasted = sources.find((source) => source.type === "pasted_text" && !source.textSnapshot?.startsWith("Source URL:"));
         const external = sources.find((source) => source.type === "pasted_text" && source.textSnapshot?.startsWith("Source URL:"));
@@ -286,6 +292,7 @@ export default function PitchLabStudioPage() {
   const compactButtonClass = "inline-flex min-h-9 min-w-16 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition duration-150 active:scale-[0.98] hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
   const compactPrimaryButtonClass = "inline-flex min-h-9 min-w-16 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition duration-150 active:scale-[0.98] hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
   const iconButtonClass = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition duration-150 active:scale-[0.98] hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
+  const feedbackButtonClass = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-transparent text-muted-foreground/60 transition duration-150 active:scale-[0.98] hover:border-border hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-50";
 
   function ctaLabel(label: string, loading = false) {
     return loading ? (
@@ -445,6 +452,88 @@ export default function PitchLabStudioPage() {
     } catch {
       setCopyTarget(null);
     }
+  }
+
+  function ideaFeedback(idea: Idea) {
+    return parsePitchIdeaEnvelope(idea.ideaText).feedback;
+  }
+
+  async function saveIdeaFeedback(idea: Idea, rating: "up" | "down") {
+    const currentFeedback = ideaFeedback(idea);
+    const reason = rating === "down"
+      ? window.prompt("Why is this not good?", currentFeedback?.rating === "down" ? currentFeedback.reason ?? "" : "")?.trim() ?? ""
+      : "";
+    if (rating === "down" && !reason) {
+      setError("Add a reason for thumbs down.");
+      return;
+    }
+    setError(null);
+    setPendingIdeaAction(`${idea.id}:feedback`);
+    try {
+      const response = await fetch("/api/pitch-lab/ideas/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ideaId: idea.id,
+          feedback: { rating, reason },
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || "Could not save feedback.");
+      setIdeas((current) => current.map((item) => item.id === idea.id ? { ...item, ideaText: data.ideaText } : item));
+      setPremiseNotice((current) => ({ ...current, [idea.id]: rating === "up" ? "Liked" : "Feedback saved" }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save feedback.");
+    } finally {
+      setPendingIdeaAction(null);
+    }
+  }
+
+  function exportPitchLabRcaJson() {
+    const exportedAt = new Date().toISOString();
+    const payload = {
+      exportedAt,
+      workspace: {
+        id: workspaceSnapshot?.id ?? null,
+        brief,
+        generationMode,
+        adaptationStyle,
+        createdAt: workspaceSnapshot?.createdAt ?? null,
+        updatedAt: workspaceSnapshot?.updatedAt ?? null,
+      },
+      sources: sourceSnapshots,
+      ideas: ideas.map((idea) => {
+        const envelope = parsePitchIdeaEnvelope(idea.ideaText);
+        return {
+          id: idea.id,
+          title: displayTitle(idea.title),
+          status: idea.status,
+          promotedDocumentId: idea.promotedDocumentId ?? null,
+          updatedAt: idea.updatedAt ?? null,
+          text: cleanPitchIdeaText(envelope.currentText),
+          originalText: cleanPitchIdeaText(envelope.originalText),
+          feedback: envelope.feedback ?? null,
+          premise: envelope.premise ?? null,
+          premiseId: envelope.premiseId ?? null,
+          batchId: envelope.batchId ?? null,
+          batchNumber: envelope.batchNumber ?? null,
+          generatedAt: envelope.generatedAt ?? null,
+          shortlistedAt: envelope.shortlistedAt ?? null,
+          turns: envelope.turns,
+          kernel: envelope.kernel ?? null,
+          beats: envelope.beats ?? null,
+          clarityChecks: envelope.clarityChecks ?? null,
+          adaptationNotes: envelope.adaptationNotes ?? null,
+        };
+      }),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `pitch-lab-rca-${exportedAt.replace(/[:.]/g, "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   function togglePilotExpanded(id: string) {
@@ -1295,6 +1384,8 @@ export default function PitchLabStudioPage() {
             const isDiscarding = pendingIdeaAction === `${idea.id}:discarded`;
             const text = currentIdeaText(idea);
             const envelope = parsePitchIdeaEnvelope(idea.ideaText);
+            const feedback = envelope.feedback;
+            const isSavingFeedback = pendingIdeaAction === `${idea.id}:feedback`;
             const pilotTask = pilotGenerationTasks[idea.id];
             const isGeneratingThis = Boolean(pilotTask);
             const isRegeneratingThis = ideaRegenerationTask?.ideaId === idea.id;
@@ -1352,6 +1443,12 @@ export default function PitchLabStudioPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2 md:w-[18rem] md:shrink-0">
+                    <button type="button" onClick={() => void saveIdeaFeedback(idea, "up")} disabled={Boolean(pendingIdeaAction) || isRegeneratingThis} aria-label={`Mark ${displayTitle(idea.title)} good`} aria-pressed={feedback?.rating === "up"} title="Good idea" className={`${feedbackButtonClass} ${feedback?.rating === "up" ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" : ""}`}>
+                      {isSavingFeedback ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ThumbsUp className="h-4 w-4" aria-hidden="true" />}
+                    </button>
+                    <button type="button" onClick={() => void saveIdeaFeedback(idea, "down")} disabled={Boolean(pendingIdeaAction) || isRegeneratingThis} aria-label={`Mark ${displayTitle(idea.title)} not good`} aria-pressed={feedback?.rating === "down"} title="Not good" className={`${feedbackButtonClass} ${feedback?.rating === "down" ? "border-red-300 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" : ""}`}>
+                      {isSavingFeedback ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ThumbsDown className="h-4 w-4" aria-hidden="true" />}
+                    </button>
                     {isDiscarded ? (
                       <button type="button" onClick={() => void setIdeaStatus(idea.id, "premise")} disabled={Boolean(pendingIdeaAction)} className={secondaryButtonClass}>{ctaLabel(pendingIdeaAction === `${idea.id}:premise` ? "Restoring" : "Restore", pendingIdeaAction === `${idea.id}:premise`)}</button>
                     ) : (
@@ -1444,7 +1541,11 @@ export default function PitchLabStudioPage() {
             })
           )}
           {visiblePremises.length > 0 && (
-            <div className="flex justify-end border-t border-border pt-3">
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+              <button type="button" onClick={exportPitchLabRcaJson} className={secondaryButtonClass}>
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Download JSON
+              </button>
               <button type="button" onClick={() => setRegenerateAllIdeasDialog({ instruction: "" })} disabled={!canRegenerateAllIdeas} className={secondaryButtonClass}>
                 {ctaLabel(isGeneratingIdeas ? "Generating" : `Regenerate all${resetIdeaCount ? ` (${resetIdeaCount})` : ""}`, isGeneratingIdeas)}
               </button>
