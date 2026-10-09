@@ -1068,7 +1068,7 @@ export default function DocumentPage() {
           {isAdmin && activeTab?.type === "predefined_episodes" && (
             <TextToSpeechButton
               cancelKey={activeTabId}
-              getText={() => editorRef.current?.getFullText() ?? ""}
+              getContentJSON={() => editorRef.current?.getContentJSON() ?? activeTab.content}
             />
           )}
           <details className={`relative ${predefinedLabOpen ? "pointer-events-none opacity-45" : ""}`}>
