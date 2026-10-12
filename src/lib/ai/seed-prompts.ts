@@ -119,7 +119,7 @@ const DEFAULTS = [
   { id: "predef_lab_iterate", label: "Predefined Lab: Iterate Draft v1.1", content: PREDEFINED_LAB_ITERATE_PROMPT },
   { id: "predef_lab_dialogue_pass", label: "Predefined Lab: Dialogue Pass v1.2", content: PREDEFINED_LAB_DIALOGUE_PASS_PROMPT },
   { id: "plot_lab_chat", label: "Plot Lab: Levi Chat Orchestrator v4.2", content: PLOT_LAB_CHAT_SYSTEM_PROMPT },
-  { id: "plot_lab_source_soul_scan", label: "Plot Lab: Source + Lock Reader v2.0", content: PLOT_LAB_SOURCE_SOUL_SCAN_SYSTEM_PROMPT },
+  { id: "plot_lab_source_soul_scan", label: "Plot Lab: Source + Lock Reader v2.1", content: PLOT_LAB_SOURCE_SOUL_SCAN_SYSTEM_PROMPT },
   { id: "plot_lab_character_analyst", label: "Plot Lab: Character Analyst v1.3", content: PLOT_LAB_CHARACTER_ANALYST_SYSTEM_PROMPT },
   { id: "plot_lab_continuity_audit", label: "Plot Lab: Continuity Auditor v1.1", content: PLOT_LAB_CONTINUITY_AUDIT_SYSTEM_PROMPT },
   { id: "plot_lab_paywall_architect", label: "Plot Lab: Paywall Architect v2.3", content: PLOT_LAB_PAYWALL_ARCHITECT_SYSTEM_PROMPT },

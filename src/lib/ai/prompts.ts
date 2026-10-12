@@ -4945,8 +4945,9 @@ const PLOT_LAB_SPECIALIST_JSON_RULES = `Output contract:
 - On reroll, replace the previous option set with genuinely new labels and details. Do not keep the old option with lighter wording.
 - Always use Plot Lab Decisions as locked canon. Recent chat resolves only short references and latest intent.`;
 
-// Plot Lab: Source and Soul Scanner prompt v2.0
+// Plot Lab: Source and Soul Scanner prompt v2.1
 // Changelog:
+// - 2026-10-12: Require the second main/opposing character to get a Stage 1 focus question before Main Relationship.
 // - 2026-10-12: Add source-led stage1CharacterBoard with focus_question, summary_only, and ignore_for_now dispositions; do not force three characters.
 // - 2026-10-07: Convert to structured Source + Lock Reader mini-agent with JSON transport and explicit locked-canon use.
 // - 2026-10-06: Add focused source/soul specialist for Plot Lab prompt architecture.
@@ -4961,7 +4962,7 @@ Extract only what is evidenced or strongly inferable:
 - Series soul: registered appeal pattern, recurring pleasure, central contradiction, no-go drift risks.
 - Character soul cards for consequential characters: essence, power mechanics, speech/gesture rules, desire/fear/leverage, drift risks.
 - Consequential character ledger: who can affect Episode 2 or monetization, and what must be clarified before using them.
-- stage1CharacterBoard: the small list of people/obstacles Levi should use for Stage 1. Mark only genuinely important entries as focus_question; use summary_only for useful context; use ignore_for_now for names that should not shape Stage 1 yet.
+- stage1CharacterBoard: the small list of people/obstacles Levi should use for Stage 1. Mark the protagonist as focus_question. If EP1 establishes a second main romantic character, antagonist, coercive handler, or opposing character who directly shapes the protagonist's choices, mark that person as focus_question too before Main Relationship. Use summary_only for supporting family/context and world obstacles; use ignore_for_now for names that should not shape Stage 1 yet.
 - Current locks from Plot Lab Decisions.
 - One next missing question if a lock would be premature.
 
@@ -4975,6 +4976,7 @@ Rules:
 - If the appeal is almost-meet / delayed-meet, flag any premature meeting as a drift risk.
 - For opening_read, produce a concise EP1 read and a fixed confirmation question. Do not produce reroll options.
 - For opening_read, always return stage1CharacterBoard. Use plain labels: Protagonist, Antagonist when clear, actual names, or simple source nouns like Police, Family, Debt, School. Do not use abstract workflow names.
+- Do not skip the second main character. If the opening read names a clear counterpart such as Hugh, Hiro, a romantic lead, antagonist, handler, or status/power opposite, that person needs one Stage 1 focus_question before the relationship/world-pressure question.
 
 ${PLOT_LAB_SPECIALIST_JSON_RULES}`;
 

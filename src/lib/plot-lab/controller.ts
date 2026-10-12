@@ -278,6 +278,18 @@ function displayLabelForBoardEntry(entry: PlotLabStage1CharacterBoardEntry, inde
   return label || `Character ${index + 1}`;
 }
 
+function isLikelySupportingFamilyEntry(entry: PlotLabStage1CharacterBoardEntry): boolean {
+  const text = `${entry.label} ${entry.rationale ?? ""}`.toLowerCase();
+  return /\b(dad|father|mother|mom|mum|sister|brother|family|home|fallback|supportive)\b/.test(text);
+}
+
+function isCounterpartPromotionCandidate(entry: PlotLabStage1CharacterBoardEntry): boolean {
+  if (entry.disposition === "ignore_for_now") return false;
+  if (entry.storyTerm === "Protagonist" || entry.storyTerm === "Obstacle") return false;
+  if (entry.storyTerm === "Antagonist") return true;
+  return !isLikelySupportingFamilyEntry(entry);
+}
+
 function normalizeStage1CharacterBoard(sourceScan?: unknown): PlotLabStage1CharacterBoardEntry[] {
   if (!isPlainRecord(sourceScan) || !Array.isArray(sourceScan.stage1CharacterBoard)) {
     return DEFAULT_STAGE1_CHARACTER_BOARD;
@@ -309,7 +321,12 @@ function createStage1FocusPlanFromBoard(board: PlotLabStage1CharacterBoardEntry[
   const focusEntries = board
     .filter((entry) => entry.disposition === "focus_question")
     .slice(0, CHARACTER_FOCUS_IDS.length);
-  const entries = focusEntries.length ? focusEntries : DEFAULT_STAGE1_CHARACTER_BOARD;
+  const promotedCounterpart =
+    focusEntries.length === 1
+      ? board.find((entry) => !focusEntries.includes(entry) && isCounterpartPromotionCandidate(entry))
+      : null;
+  const entries = (focusEntries.length ? [...focusEntries, ...(promotedCounterpart ? [promotedCounterpart] : [])] : DEFAULT_STAGE1_CHARACTER_BOARD)
+    .slice(0, CHARACTER_FOCUS_IDS.length);
   const characterFocuses = entries.map((entry, index): PlotLabStage1Focus => ({
     focusId: CHARACTER_FOCUS_IDS[index] ?? "operator_pressure",
     label: displayLabelForBoardEntry(entry, index),

@@ -115,6 +115,31 @@ function testSourceLedCharacterCounts() {
   const oneRelationship = planPlotLabAssistantTurn(oneAddMore, "No");
   assert.equal(oneRelationship.focusId, "relationship_core");
 
+  const underTaggedCounterpartScan = {
+    stage1CharacterBoard: [
+      { label: "Yuki", storyTerm: "Protagonist", disposition: "focus_question" },
+      {
+        label: "Hiro",
+        storyTerm: "Character",
+        disposition: "summary_only",
+        rationale: "Primary romantic/status counterpart whose public claim changes Yuki's choices.",
+      },
+      {
+        label: "Dad + sister",
+        storyTerm: "Character",
+        disposition: "summary_only",
+        rationale: "Supportive family and home gravity.",
+      },
+      { label: "Hospital/police/media", storyTerm: "Obstacle", disposition: "summary_only" },
+    ],
+  };
+  const counterpartStart = planPlotLabAssistantTurn(createInitialPlotLabControllerState(), "Yes, this is right", underTaggedCounterpartScan);
+  assert.deepEqual(counterpartStart.stage1FocusPlan.map((focus) => focus.label), ["Protagonist", "Hiro", "Main Relationship"]);
+  const counterpartAddMore = planPlotLabAssistantTurn(commitPlotLabAssistantTurn(counterpartStart), "Yuki keeps control.");
+  const counterpartQuestion = planPlotLabAssistantTurn(counterpartAddMore, "No");
+  assert.equal(counterpartQuestion.phase, "character_discovery");
+  assert.equal(counterpartQuestion.currentFocus, "Hiro");
+
   const threeCharacterScan = {
     stage1CharacterBoard: [
       { label: "Mira", storyTerm: "Protagonist", disposition: "focus_question" },
