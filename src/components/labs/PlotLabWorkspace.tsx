@@ -48,6 +48,7 @@ interface PlotLabWorkspaceProps {
 type ChatMessage = PlotLabChatMessage;
 
 type PlotLabAnswerSource = "freeform" | "option_click" | "edited_option" | "utility_action";
+type PlotLabCaptureMode = null | "opening_context" | "revision" | "add_more";
 
 interface PlotLabFeedbackEvent {
   messageIndex: number;
@@ -137,6 +138,7 @@ interface SendToLeviOptions {
   controllerStateOverride?: ReturnType<typeof createInitialPlotLabControllerState>;
   answerSource?: PlotLabAnswerSource;
   selectedAction?: PlotLabAction;
+  sourceScanBrief?: PlotLabSpecialistBrief | null;
 }
 
 const MIN_WIDTH = 320;
@@ -154,7 +156,7 @@ const STATE_LABELS: Record<string, string> = {
   plot_transition_gate: "Ready for plot",
   monetization_discovery: "Monetization",
   monetization_lock_review: "Monetization review",
-  premise_bridge: "Universe bridge",
+  add_more_check: "Add more",
   stage_1_complete: "Stage 1 locked",
   plot_thread: "Plot runway",
 };
@@ -162,9 +164,9 @@ const STATE_LABELS: Record<string, string> = {
 const FOCUS_LABELS: Record<string, string> = {
   opening: "Opening",
   protagonist: "Protagonist",
-  primary_counterpart: "Primary counterpart",
-  operator_pressure: "Pressure/operator",
-  relationship_core: "Relationship core",
+  primary_counterpart: "Character",
+  operator_pressure: "Character",
+  relationship_core: "Main Relationship",
   plot: "Plot",
 };
 
@@ -233,17 +235,15 @@ function renderRecentChat(messages: PlotLabMessage[]): string {
 
 function lockedSummary(state: ReturnType<typeof createInitialPlotLabControllerState>): string[] {
   const locks: string[] = [];
-  if (state.completedFocuses.includes("protagonist") || state.roleSlots.protagonist === "locked") {
-    locks.push("Protagonist pass");
-  }
-  if (state.completedFocuses.includes("primary_counterpart") || state.roleSlots.primary_counterpart === "locked") {
-    locks.push("Primary counterpart pass");
-  }
-  if (state.completedFocuses.includes("operator_pressure") || state.roleSlots.operator_pressure === "locked") {
-    locks.push("Pressure/operator pass");
-  }
+  state.stage1FocusPlan
+    .filter((focus) => focus.kind === "character")
+    .forEach((focus) => {
+      if (state.completedFocuses.includes(focus.focusId) || state.roleSlots[focus.focusId as keyof typeof state.roleSlots] === "locked") {
+        locks.push(`${focus.label} pass`);
+      }
+    });
   if (state.completedFocuses.includes("relationship_core")) {
-    locks.push("Relationship core");
+    locks.push("Main Relationship");
   }
   if (state.monetizationStatus === "locked") {
     locks.push("Monetization point");
@@ -273,20 +273,18 @@ function plainTextToTaggedParagraphs(text: string): string[] {
 }
 
 function decisionSectionTitle(state: ReturnType<typeof createInitialPlotLabControllerState>): string {
+  if (state.phase === "plot_transition_gate") return "Character Locks";
   if (state.phase === "monetization_lock_review") return "Monetization Endpoint";
-  if (state.phase === "premise_bridge") return "Universe Lock";
   if (state.phase === "stage_1_complete") return "Stage 1 Complete";
-  if (state.focusId === "relationship_core" || state.phase === "plot_transition_gate") return "Relationship / Pressure Chain";
+  if (state.focusId === "relationship_core") return "Main Relationship";
   if (state.focusId === "plot") return "Monetization Endpoint";
   return "Character Locks";
 }
 
 function decisionBlockTitle(state: ReturnType<typeof createInitialPlotLabControllerState>): string {
-  if (state.focusId === "protagonist") return "Protagonist";
-  if (state.focusId === "primary_counterpart") return "Primary Counterpart";
-  if (state.focusId === "operator_pressure") return "Operator / Pressure Face";
-  if (state.focusId === "relationship_core") return "Relationship Core";
-  if (state.phase === "premise_bridge") return "Delta Lock";
+  if (state.phase === "plot_transition_gate") return "Character Board";
+  if (state.focusId === "protagonist" || state.focusId === "primary_counterpart" || state.focusId === "operator_pressure") return state.currentFocus;
+  if (state.focusId === "relationship_core") return "Main Relationship";
   if (state.phase === "stage_1_complete") return "Stage 1 Lock";
   if (state.phase === "monetization_lock_review" || state.focusId === "plot") return "Endpoint";
   return STATE_LABELS[state.phase] ?? state.phase;
@@ -335,12 +333,11 @@ function defaultPlotLabDecisionsContent(): string {
 function focusHandoffLabel(state: ReturnType<typeof createInitialPlotLabControllerState>): string {
   if (state.focusId === "plot") {
     if (state.phase === "monetization_discovery") return "monetization point";
-    if (state.phase === "premise_bridge") return "universe bridge";
     if (state.phase === "stage_1_complete") return "stage 1 lock";
     if (state.phase === "plot_thread") return "plot runway";
     return "plot";
   }
-  return FOCUS_LABELS[state.focusId] ?? state.currentFocus;
+  return state.currentFocus || FOCUS_LABELS[state.focusId] || "next focus";
 }
 
 function renderBriefAsAssistantText(brief: PlotLabSpecialistBrief | null): string {
@@ -353,10 +350,7 @@ function renderBriefAsAssistantText(brief: PlotLabSpecialistBrief | null): strin
 
 function renderReviewAssistantText(brief: PlotLabSpecialistBrief | null): string {
   if (!brief) return "";
-  return cleanAssistantText([
-    brief.visibleFrame?.trim(),
-    brief.lockCandidate?.text?.trim(),
-  ].filter(Boolean).join("\n\n"));
+  return cleanAssistantText(brief.lockCandidate?.text?.trim() || brief.visibleFrame?.trim() || "");
 }
 
 function auditQuestionNeeded(auditBrief: string): string {
@@ -460,7 +454,7 @@ export default function PlotLabWorkspace({
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isCapturingContext, setIsCapturingContext] = useState(false);
+  const [captureMode, setCaptureMode] = useState<PlotLabCaptureMode>(null);
   const [feedbackEvents, setFeedbackEvents] = useState<PlotLabFeedbackEvent[]>([]);
   const [controllerState, setControllerState] = useState(createInitialPlotLabControllerState);
   const [lockSaveStatus, setLockSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -614,7 +608,7 @@ export default function PlotLabWorkspace({
     setInput("");
     setError(null);
     setStreamingText("");
-    setIsCapturingContext(false);
+    setCaptureMode(null);
   }, [clearPlotLabDecisions, isStreaming]);
 
   const sendToLevi = useCallback(async (override?: SendToLeviOptions | string) => {
@@ -622,6 +616,9 @@ export default function PlotLabWorkspace({
     const replaceLatestAssistant = typeof override === "object" && override.replaceLatestAssistant === true;
     const advanceController = typeof override === "object" && override.advanceController === false ? false : true;
     const appendUserMessage = typeof override === "object" && override.appendUserMessage === false ? false : true;
+    const sourceScanBrief = typeof override === "object"
+      ? override.sourceScanBrief
+      : [...messages].reverse().find((message) => message.role === "assistant")?.meta?.specialistBrief;
     const prompt = (overridePrompt ?? input).trim();
     if (!prompt || isStreaming) return;
 
@@ -632,7 +629,7 @@ export default function PlotLabWorkspace({
     const plannedControllerState = typeof override === "object" && override.controllerStateOverride
       ? override.controllerStateOverride
       : advanceController
-        ? planPlotLabAssistantTurn(controllerState, prompt)
+        ? planPlotLabAssistantTurn(controllerState, prompt, sourceScanBrief)
         : controllerState;
     const userMessage: PlotLabMessage = {
       role: "user",
@@ -661,7 +658,7 @@ export default function PlotLabWorkspace({
     const nextMessages = appendUserMessage ? [...baseMessages, userMessage] : baseMessages;
     setMessages(nextMessages);
     setInput("");
-    setIsCapturingContext(false);
+    setCaptureMode(null);
     setError(null);
     setStreamingText("");
     setIsStreaming(true);
@@ -744,40 +741,13 @@ export default function PlotLabWorkspace({
       );
       if (appendUserMessage) setMessages(contextualizedNextMessages);
 
-      const specialistRes = await fetch("/api/ai/edit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{
-            role: "user",
-            content: [
-              runtimeInput,
-              renderSpecialistOutputContract(),
-            ].filter(Boolean).join("\n\n"),
-          }],
-          mode: specialistRoute.mode,
-          modelId,
-          thinking,
-          documentId,
-        }),
-      });
-
       let specialistRaw = "";
       let specialistBrief: PlotLabSpecialistBrief | null = null;
       let specialistParseError: string | null = null;
       let auditBrief = "";
 
-      if (specialistRes.ok) {
-        specialistRaw = await readAIStream(specialistRes);
-        const parsed = parseSpecialistBrief(specialistRaw);
-        specialistBrief = parsed.brief;
-        specialistParseError = parsed.error;
-      } else {
-        specialistParseError = `specialist request failed (${specialistRes.status})`;
-      }
-
-      if (specialistRoute.auditAfter && specialistBrief) {
-        const auditRes = await fetch("/api/ai/edit", {
+      if (plannedControllerState.assistantTurnKind !== "add_more_check") {
+        const specialistRes = await fetch("/api/ai/edit", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -785,20 +755,49 @@ export default function PlotLabWorkspace({
               role: "user",
               content: [
                 runtimeInput,
-                "## Proposed Specialist Move",
-                JSON.stringify(specialistBrief, null, 2),
-                "## Audit Instruction",
-                "Audit this proposed move against locked canon, repetition, phase objective, and question quality. Return a compact internal audit for Levi.",
+                renderSpecialistOutputContract(),
               ].filter(Boolean).join("\n\n"),
             }],
-            mode: "plot_lab_continuity_audit",
+            mode: specialistRoute.mode,
             modelId,
             thinking,
             documentId,
           }),
         });
-        if (auditRes.ok) {
-          auditBrief = cleanAssistantText(await readAIStream(auditRes));
+
+        if (specialistRes.ok) {
+          specialistRaw = await readAIStream(specialistRes);
+          const parsed = parseSpecialistBrief(specialistRaw);
+          specialistBrief = parsed.brief;
+          specialistParseError = parsed.error;
+        } else {
+          specialistParseError = `specialist request failed (${specialistRes.status})`;
+        }
+
+        if (specialistRoute.auditAfter && specialistBrief) {
+          const auditRes = await fetch("/api/ai/edit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: [{
+                role: "user",
+                content: [
+                  runtimeInput,
+                  "## Proposed Specialist Move",
+                  JSON.stringify(specialistBrief, null, 2),
+                  "## Audit Instruction",
+                  "Audit this proposed move against locked canon, repetition, phase objective, and question quality. Return a compact internal audit for Levi.",
+                ].filter(Boolean).join("\n\n"),
+              }],
+              mode: "plot_lab_continuity_audit",
+              modelId,
+              thinking,
+              documentId,
+            }),
+          });
+          if (auditRes.ok) {
+            auditBrief = cleanAssistantText(await readAIStream(auditRes));
+          }
         }
       }
 
@@ -826,8 +825,15 @@ export default function PlotLabWorkspace({
       }
 
       const structuredActions = specialistOptionsToActions(specialistBrief, plannedControllerState.turnPlan);
+      const addMoreFocusLabel = plannedControllerState.phase === "add_more_check" &&
+        plannedControllerState.focusId === "plot" &&
+        plannedControllerState.lastUserIntent === "stay_character"
+        ? "character board"
+        : plannedControllerState.currentFocus;
 
-      let assistantText = plannedControllerState.turnPlan.allowModelOptions
+      let assistantText = plannedControllerState.assistantTurnKind === "add_more_check"
+        ? `Anything else about ${addMoreFocusLabel} you want to add?`
+        : plannedControllerState.turnPlan.allowModelOptions
         ? renderBriefAsAssistantText(specialistBrief)
         : isDeterministicReviewTurn(plannedControllerState)
           ? renderReviewAssistantText(specialistBrief)
@@ -908,21 +914,28 @@ export default function PlotLabWorkspace({
     if (isStreaming) return;
 
     if (action.kind === "add_context") {
-      setIsCapturingContext(true);
+      setCaptureMode("opening_context");
       setInput("");
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
 
     if (action.kind === "revise_current") {
-      setIsCapturingContext(true);
+      setCaptureMode("revision");
+      setInput("");
+      requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+
+    if (action.kind === "add_more_yes") {
+      setCaptureMode("add_more");
       setInput("");
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
 
     if (action.kind === "custom_answer") {
-      setIsCapturingContext(false);
+      setCaptureMode(null);
       setInput("");
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
@@ -961,6 +974,7 @@ export default function PlotLabWorkspace({
       advanceController: action.kind !== "reroll_options",
       answerSource: action.kind === "requested_option" || action.kind === "confirm_opening" ? "option_click" : "utility_action",
       selectedAction: action,
+      sourceScanBrief: action.kind === "confirm_opening" ? latestMeta?.specialistBrief : undefined,
     });
   }, [controllerState, isStreaming, messages, saveDecisionLock, sendToLevi]);
 
@@ -1049,21 +1063,29 @@ export default function PlotLabWorkspace({
     const value = input.trim();
     if (!value || isStreaming) return;
 
-    if (isCapturingContext) {
+    if (captureMode) {
+      const isAddMore = captureMode === "add_more";
       void sendToLevi({
         displayText: value,
-        promptText: [
-          "The writer is adding context before Levi continues.",
-          "Absorb this context, then continue with the next character-first step.",
-          "Do not treat this as a story choice unless the context clearly says so.",
-          `Context:\n${value}`,
-        ].join("\n\n"),
+        promptText: isAddMore
+          ? [
+              "The writer is adding extra Stage 1 context for the current focus.",
+              "Absorb this context, then continue to the next Plot Lab step.",
+              "Do not ask another digging question about the same focus.",
+              `Context:\n${value}`,
+            ].join("\n\n")
+          : [
+              "The writer is adding context before Levi continues.",
+              "Absorb this context, then continue with the next character-first step.",
+              "Do not treat this as a story choice unless the context clearly says so.",
+              `Context:\n${value}`,
+            ].join("\n\n"),
       });
       return;
     }
 
     void sendToLevi();
-  }, [input, isCapturingContext, isStreaming, sendToLevi]);
+  }, [input, captureMode, isStreaming, sendToLevi]);
 
   const canUseTestingTools = isAdmin || canUseTesterTools;
 
@@ -1270,12 +1292,12 @@ export default function PlotLabWorkspace({
             }}
             disabled={isStreaming}
             rows={3}
-            placeholder={isCapturingContext ? "Add the missing context for Levi..." : "Chat with Levi..."}
+            placeholder={captureMode ? "Add the missing context for Levi..." : "Chat with Levi..."}
             className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2 text-sm leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
           />
           <div className="flex items-center justify-between gap-3 border-t border-border px-2 py-2">
             <p className="min-w-0 truncate text-xs text-muted-foreground">
-              {isCapturingContext ? "Context will be sent only after you type and press Send." : ""}
+              {captureMode ? "Context will be sent only after you type and press Send." : ""}
             </p>
             <button
               type="button"

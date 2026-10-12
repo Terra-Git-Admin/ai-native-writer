@@ -10,11 +10,11 @@ export type PlotLabConversationPhase =
   | "protagonist_discovery"
   | "character_discovery"
   | "relationship_discovery"
+  | "add_more_check"
   | "character_summary"
   | "plot_transition_gate"
   | "monetization_discovery"
   | "monetization_lock_review"
-  | "premise_bridge"
   | "stage_1_complete"
   | "plot_thread";
 
@@ -36,12 +36,12 @@ export type PlotLabFocusId =
 export type PlotLabAssistantTurnKind =
   | "opening_read"
   | "discovery_question"
+  | "add_more_check"
   | "checkpoint_summary"
   | "transition_next_focus"
   | "character_board_summary"
   | "monetization_bridge"
   | "monetization_review"
-  | "premise_bridge"
   | "stage_1_complete"
   | "plot_gate";
 
@@ -49,6 +49,9 @@ export type PlotLabUserIntent =
   | "confirm_opening"
   | "add_context"
   | "move_next"
+  | "add_more_yes"
+  | "add_more_no"
+  | "add_more_context"
   | "different_angle"
   | "move_into_plot"
   | "lock_current"
@@ -73,6 +76,8 @@ export type PlotLabActionKind =
   | "revise_current"
   | "move_into_plot"
   | "stay_character"
+  | "add_more_yes"
+  | "add_more_no"
   | "requested_option"
   | "reroll_options"
   | "custom_answer";
@@ -80,30 +85,18 @@ export type PlotLabActionKind =
 export type PlotLabQuestionVector =
   | "evidence_read"
   | "character_anchor"
-  | "spark_in_world"
   | "external_pressure"
   | "relationship_function"
-  | "choice_space"
-  | "power_language"
-  | "world_rule"
   | "world_pressure"
-  | "unresolved_ecology"
   | "monetization_endpoint"
-  | "monetization_delta"
   | "lock_review";
 
 export type PlotLabFrameworkSlot =
   | "opening_read"
   | "screen_promise"
-  | "world_effect"
   | "relationship_conversion"
-  | "new_door_new_cost"
-  | "pressure_style"
-  | "power_rule"
   | "arena"
-  | "engine_secret"
   | "paid_image"
-  | "earned_change"
   | "lock_review"
   | "stage_1_complete";
 
@@ -121,6 +114,26 @@ export type PlotLabSlotStatus =
   | "locked";
 
 export type PlotLabRoleSlotStatuses = Record<PlotLabRoleSlot, PlotLabSlotStatus>;
+
+export type PlotLabStage1BoardDisposition =
+  | "focus_question"
+  | "summary_only"
+  | "ignore_for_now";
+
+export interface PlotLabStage1CharacterBoardEntry {
+  label: string;
+  storyTerm?: "Protagonist" | "Antagonist" | "Obstacle" | "Character";
+  disposition: PlotLabStage1BoardDisposition;
+  rationale?: string;
+  sourceEvidence?: string[];
+}
+
+export interface PlotLabStage1Focus {
+  focusId: PlotLabFocusId;
+  label: string;
+  kind: "character" | "relationship";
+  storyTerm?: PlotLabStage1CharacterBoardEntry["storyTerm"];
+}
 
 export interface PlotLabAction {
   actionId: string;
@@ -156,6 +169,8 @@ export interface PlotLabControllerState {
   skipCount: number;
   roleSlots: PlotLabRoleSlotStatuses;
   pendingRoleClarification: PlotLabRoleSlot | null;
+  stage1CharacterBoard: PlotLabStage1CharacterBoardEntry[];
+  stage1FocusPlan: PlotLabStage1Focus[];
   monetizationStatus: PlotLabSlotStatus;
   questionVector: PlotLabQuestionVector;
   frameworkSlot: PlotLabFrameworkSlot;
@@ -167,19 +182,18 @@ export interface PlotLabControllerState {
   forbiddenMoves: string[];
 }
 
-const CHARACTER_FOCUS_SEQUENCE: PlotLabFocusId[] = [
+const CHARACTER_FOCUS_IDS: PlotLabFocusId[] = [
   "protagonist",
   "primary_counterpart",
   "operator_pressure",
-  "relationship_core",
 ];
 
 const FOCUS_LABELS: Record<PlotLabFocusId, string> = {
   opening: "opening read",
-  protagonist: "protagonist",
-  primary_counterpart: "primary counterpart / gravity character",
-  operator_pressure: "operator / pressure face",
-  relationship_core: "core relationship/pressure chain",
+  protagonist: "Protagonist",
+  primary_counterpart: "Character",
+  operator_pressure: "Character",
+  relationship_core: "Main Relationship",
   plot: "plot",
 };
 
@@ -193,10 +207,10 @@ const FOCUS_TYPES: Record<PlotLabFocusId, PlotLabFocusType> = {
 };
 
 const ROLE_SLOT_INSTRUCTIONS: Record<PlotLabRoleSlot, string> = {
-  protagonist: "the character whose want, future, or protected self is most directly threatened by EP1",
-  primary_counterpart: "the person whose attention, desire, threat, support, status, or disruption most changes the protagonist's life",
-  operator_pressure: "the person who delivers, enforces, translates, or operationalizes the world pressure; optional if pressure comes directly from the counterpart or world",
-  world_force: "the institution, family, class system, organization, place, or social force creating pressure; summarize only unless the writer asks for a pass",
+  protagonist: "the source-identified protagonist or clearest central person",
+  primary_counterpart: "a source-identified key person; call them Antagonist only when the source clearly supports that role",
+  operator_pressure: "a source-identified key person; do not invent a third character if the source board did not mark one",
+  world_force: "the situation, institution, family, money, class, workplace, public, or social obstacle around the people",
 };
 
 const ROLE_FOCUS_IDS = new Set<PlotLabFocusId>([
@@ -208,11 +222,25 @@ const ROLE_FOCUS_IDS = new Set<PlotLabFocusId>([
 function initialRoleSlots(): PlotLabRoleSlotStatuses {
   return {
     protagonist: "identified",
-    primary_counterpart: "identified",
-    operator_pressure: "identified",
-    world_force: "identified",
+    primary_counterpart: "unclear",
+    operator_pressure: "unclear",
+    world_force: "unclear",
   };
 }
+
+const DEFAULT_STAGE1_CHARACTER_BOARD: PlotLabStage1CharacterBoardEntry[] = [
+  {
+    label: "Protagonist",
+    storyTerm: "Protagonist",
+    disposition: "focus_question",
+    rationale: "Fallback when the source scan did not return a structured character board.",
+  },
+];
+
+const DEFAULT_STAGE1_FOCUS_PLAN: PlotLabStage1Focus[] = [
+  { focusId: "protagonist", label: "Protagonist", kind: "character", storyTerm: "Protagonist" },
+  { focusId: "relationship_core", label: "Main Relationship", kind: "relationship" },
+];
 
 export function isFirstReadConfirmation(text: string): boolean {
   return /^(yes,?\s*)?(this is right|reading is right|read is right|looks right|correct)$/i.test(text.trim());
@@ -220,6 +248,97 @@ export function isFirstReadConfirmation(text: string): boolean {
 
 export function isAddContextSubmission(text: string): boolean {
   return /^The writer is adding context before Levi continues\./i.test(text.trim());
+}
+
+export function isAddMoreContextSubmission(text: string): boolean {
+  return /^The writer is adding extra Stage 1 context for the current focus\./i.test(text.trim());
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeBoardDisposition(value: unknown): PlotLabStage1BoardDisposition {
+  return value === "summary_only" || value === "ignore_for_now" || value === "focus_question"
+    ? value
+    : "summary_only";
+}
+
+function normalizeStoryTerm(value: unknown): PlotLabStage1CharacterBoardEntry["storyTerm"] | undefined {
+  return value === "Protagonist" || value === "Antagonist" || value === "Obstacle" || value === "Character"
+    ? value
+    : undefined;
+}
+
+function displayLabelForBoardEntry(entry: PlotLabStage1CharacterBoardEntry, index: number): string {
+  const label = entry.label.trim();
+  if (entry.storyTerm === "Protagonist") return "Protagonist";
+  if (entry.storyTerm === "Antagonist") return label && !/^antagonist$/i.test(label) ? `Antagonist: ${label}` : "Antagonist";
+  if (entry.storyTerm === "Obstacle") return label || "Obstacle";
+  return label || `Character ${index + 1}`;
+}
+
+function normalizeStage1CharacterBoard(sourceScan?: unknown): PlotLabStage1CharacterBoardEntry[] {
+  if (!isPlainRecord(sourceScan) || !Array.isArray(sourceScan.stage1CharacterBoard)) {
+    return DEFAULT_STAGE1_CHARACTER_BOARD;
+  }
+
+  const entries = sourceScan.stage1CharacterBoard
+    .filter(isPlainRecord)
+    .map((entry): PlotLabStage1CharacterBoardEntry | null => {
+      const rawLabel = typeof entry.label === "string" ? entry.label.trim() : "";
+      const storyTerm = normalizeStoryTerm(entry.storyTerm);
+      const label = rawLabel || storyTerm || "";
+      if (!label) return null;
+      return {
+        label,
+        storyTerm,
+        disposition: normalizeBoardDisposition(entry.disposition),
+        rationale: typeof entry.rationale === "string" ? entry.rationale.trim() : undefined,
+        sourceEvidence: Array.isArray(entry.sourceEvidence)
+          ? entry.sourceEvidence.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).slice(0, 4)
+          : undefined,
+      };
+    })
+    .filter((entry): entry is PlotLabStage1CharacterBoardEntry => Boolean(entry));
+
+  return entries.length ? entries : DEFAULT_STAGE1_CHARACTER_BOARD;
+}
+
+function createStage1FocusPlanFromBoard(board: PlotLabStage1CharacterBoardEntry[]): PlotLabStage1Focus[] {
+  const focusEntries = board
+    .filter((entry) => entry.disposition === "focus_question")
+    .slice(0, CHARACTER_FOCUS_IDS.length);
+  const entries = focusEntries.length ? focusEntries : DEFAULT_STAGE1_CHARACTER_BOARD;
+  const characterFocuses = entries.map((entry, index): PlotLabStage1Focus => ({
+    focusId: CHARACTER_FOCUS_IDS[index] ?? "operator_pressure",
+    label: displayLabelForBoardEntry(entry, index),
+    kind: "character",
+    storyTerm: entry.storyTerm,
+  }));
+
+  return [
+    ...characterFocuses,
+    { focusId: "relationship_core", label: "Main Relationship", kind: "relationship" },
+  ];
+}
+
+function stage1SetupFromSourceScan(sourceScan?: unknown): Pick<PlotLabControllerState, "stage1CharacterBoard" | "stage1FocusPlan" | "roleSlots"> {
+  const stage1CharacterBoard = normalizeStage1CharacterBoard(sourceScan);
+  const stage1FocusPlan = createStage1FocusPlanFromBoard(stage1CharacterBoard);
+  const roleSlots = initialRoleSlots();
+
+  for (const focus of stage1FocusPlan) {
+    if (isRoleFocus(focus.focusId)) {
+      roleSlots[focus.focusId] = "identified";
+    }
+  }
+
+  if (stage1CharacterBoard.some((entry) => entry.storyTerm === "Obstacle" || entry.disposition === "summary_only")) {
+    roleSlots.world_force = "identified";
+  }
+
+  return { stage1CharacterBoard, stage1FocusPlan, roleSlots };
 }
 
 export function createInitialPlotLabControllerState(): PlotLabControllerState {
@@ -236,6 +355,8 @@ export function createInitialPlotLabControllerState(): PlotLabControllerState {
     skipCount: 0,
     roleSlots: initialRoleSlots(),
     pendingRoleClarification: null,
+    stage1CharacterBoard: DEFAULT_STAGE1_CHARACTER_BOARD,
+    stage1FocusPlan: DEFAULT_STAGE1_FOCUS_PLAN,
     monetizationStatus: "unclear",
     questionVector: "evidence_read",
     questionMode: "fixed_actions",
@@ -246,11 +367,16 @@ export function classifyPlotLabUserIntent(text: string, state?: Pick<PlotLabCont
   const normalized = text.trim().toLowerCase();
   if (!normalized) return "normal";
   if (isFirstReadConfirmation(text)) return "confirm_opening";
+  if (isAddMoreContextSubmission(text)) return "add_more_context";
   if (isAddContextSubmission(text) || /^add context$/i.test(text.trim())) return "add_context";
-  if (/\b(therapy|therapist|headache|same question|repeated|repetitive|too similar|stop asking this|bad question|not fun|annoying)\b/.test(normalized)) {
+  if (state?.waitingFor === "add_more") {
+    if (/^(no|nope|nothing|nothing else|done|move on)$/i.test(text.trim())) return "add_more_no";
+    if (/^(yes|yeah|yep|add more|i want to add more)$/i.test(text.trim())) return "add_more_yes";
+  }
+  if (/\b(therapy|therapist|headache|same question|repeated|repetitive|too similar|stop asking this|bad question|not fun|annoying|figure it out|have to do everything|why are you here|what'?s the point of you)\b/.test(normalized)) {
     return "quality_feedback";
   }
-  if (/^(whatever|whate?ver|idk|i don'?t know|dunno|not sure|hmm|meh|yes|yeah|yep|ok|okay|go ahead|go aehad|fine|sure)$/i.test(text.trim())) {
+  if (/^(whatever|whate?ver|idk|i don'?t know|dunno|no idea|not sure|hmm|meh|yes|yeah|yep|ok|okay|go ahead|go aehad|fine|sure)$/i.test(text.trim())) {
     if (state?.waitingFor === "approve_lock") return "lock_current";
     if (state?.waitingFor === "move_on") return "move_into_plot";
     if (state?.assistantTurnKind === "opening_read" && /^(yes|yeah|yep|ok|okay)$/i.test(text.trim())) return "confirm_opening";
@@ -294,7 +420,8 @@ export function classifyPlotLabUserIntent(text: string, state?: Pick<PlotLabCont
 
 export function planPlotLabAssistantTurn(
   previousState: PlotLabControllerState,
-  prompt: string
+  prompt: string,
+  sourceScan?: unknown
 ): PlotLabControllerState {
   const intent = classifyPlotLabUserIntent(prompt, previousState);
   const skipCount = intent === "skip_or_too_narrow" || intent === "quality_feedback" ? previousState.skipCount + 1 : previousState.skipCount;
@@ -312,17 +439,21 @@ export function planPlotLabAssistantTurn(
 
   if (previousState.phase === "opening_read") {
     if (intent === "confirm_opening" || intent === "add_context") {
+      const stage1Setup = stage1SetupFromSourceScan(sourceScan);
+      const firstFocus = stage1Setup.stage1FocusPlan[0] ?? DEFAULT_STAGE1_FOCUS_PLAN[0];
       return buildState({
         ...previousState,
-        phase: "protagonist_discovery",
-        focusId: "protagonist",
+        ...stage1Setup,
+        phase: phaseForFocus(firstFocus.focusId),
+        focusId: firstFocus.focusId,
         focusIndex: 0,
         questionsInFocus: 0,
+        maxQuestionsPerFocus: 1,
         checkpointPending: false,
         assistantTurnKind: "discovery_question",
         lastUserIntent: intent,
         skipCount,
-        questionVector: "character_anchor",
+        questionVector: firstQuestionVectorForFocus(firstFocus.focusId),
         questionMode: "typed",
       });
     }
@@ -342,7 +473,7 @@ export function planPlotLabAssistantTurn(
       ...previousState,
       phase: "monetization_discovery",
       focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+      focusIndex: previousState.stage1FocusPlan.length,
       checkpointPending: false,
       assistantTurnKind: "monetization_bridge",
       lastUserIntent: intent,
@@ -359,7 +490,7 @@ export function planPlotLabAssistantTurn(
         ...previousState,
         phase: "monetization_discovery",
         focusId: "plot",
-        focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+        focusIndex: previousState.stage1FocusPlan.length,
         checkpointPending: false,
         assistantTurnKind: "monetization_bridge",
         lastUserIntent: intent,
@@ -373,52 +504,47 @@ export function planPlotLabAssistantTurn(
     if (previousState.phase === "monetization_lock_review") {
       return buildState({
         ...previousState,
-        phase: "premise_bridge",
-        focusId: "plot",
-        focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
-        checkpointPending: false,
-        assistantTurnKind: "premise_bridge",
-        lastUserIntent: intent,
-        skipCount,
-        monetizationStatus: "locked",
-        questionVector: "monetization_delta",
-        questionMode: "typed",
-      });
-    }
-
-    if (previousState.phase === "premise_bridge") {
-      return buildState({
-        ...previousState,
         phase: "stage_1_complete",
         focusId: "plot",
-        focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+        focusIndex: previousState.stage1FocusPlan.length,
         checkpointPending: false,
         assistantTurnKind: "stage_1_complete",
         lastUserIntent: intent,
         skipCount,
+        monetizationStatus: "locked",
         questionVector: "lock_review",
         questionMode: "typed",
       });
+    }
+
+    if (previousState.phase === "add_more_check") {
+      return planNextFocus(previousState, intent, skipCount);
     }
 
     return planNextFocus(previousState, intent, skipCount);
   }
 
   if (intent === "continue_here" || intent === "revise_current") {
+    if (previousState.checkpointPending || previousState.phase === "add_more_check") {
+      return buildAddMoreCheckState(previousState, intent, skipCount);
+    }
     return buildState({
       ...previousState,
       phase: phaseForFocus(previousState.focusId),
       checkpointPending: false,
-      questionsInFocus: Math.max(0, previousState.maxQuestionsPerFocus - 1),
+      questionsInFocus: 0,
       assistantTurnKind: "discovery_question",
       lastUserIntent: intent,
       skipCount,
-      questionVector: broadenedQuestionVector(previousState),
+      questionVector: firstQuestionVectorForFocus(previousState.focusId),
       questionMode: "typed",
     });
   }
 
   if (intent === "quality_feedback" || intent === "low_signal") {
+    if (previousState.checkpointPending || previousState.phase === "add_more_check") {
+      return buildAddMoreCheckState(previousState, intent, skipCount);
+    }
     return buildState({
       ...previousState,
       phase: phaseForFocus(previousState.focusId),
@@ -426,7 +552,7 @@ export function planPlotLabAssistantTurn(
       assistantTurnKind: "discovery_question",
       lastUserIntent: intent,
       skipCount,
-      questionVector: intent === "quality_feedback" ? broadenedQuestionVector(previousState) : previousState.questionVector,
+      questionVector: firstQuestionVectorForFocus(previousState.focusId),
       questionMode: "typed",
     });
   }
@@ -436,7 +562,7 @@ export function planPlotLabAssistantTurn(
       ...previousState,
       phase: "monetization_discovery",
       focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+      focusIndex: previousState.stage1FocusPlan.length,
       checkpointPending: false,
       assistantTurnKind: "monetization_bridge",
       lastUserIntent: intent,
@@ -455,7 +581,7 @@ export function planPlotLabAssistantTurn(
       ...previousState,
       phase: "monetization_lock_review",
       focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+      focusIndex: previousState.stage1FocusPlan.length,
       checkpointPending: true,
       assistantTurnKind: "monetization_review",
       lastUserIntent: intent,
@@ -466,27 +592,12 @@ export function planPlotLabAssistantTurn(
     });
   }
 
-  if (previousState.phase === "premise_bridge") {
-    return buildState({
-      ...previousState,
-      phase: "premise_bridge",
-      focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
-      checkpointPending: true,
-      assistantTurnKind: "premise_bridge",
-      lastUserIntent: intent,
-      skipCount,
-      questionVector: "lock_review",
-      questionMode: "fixed_actions",
-    });
-  }
-
   if (previousState.phase === "monetization_lock_review") {
     return buildState({
       ...previousState,
       phase: "monetization_lock_review",
       focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+      focusIndex: previousState.stage1FocusPlan.length,
       checkpointPending: true,
       assistantTurnKind: "monetization_review",
       lastUserIntent: intent,
@@ -502,15 +613,18 @@ export function planPlotLabAssistantTurn(
   }
 
   if (intent === "stay_character") {
+    if (previousState.checkpointPending || previousState.phase === "add_more_check") {
+      return buildAddMoreCheckState(previousState, intent, skipCount);
+    }
     return buildState({
       ...previousState,
       phase: phaseForFocus(previousState.focusId),
       checkpointPending: false,
-      questionsInFocus: Math.min(previousState.questionsInFocus, previousState.maxQuestionsPerFocus - 1),
+      questionsInFocus: 0,
       assistantTurnKind: "discovery_question",
       lastUserIntent: intent,
       skipCount,
-      questionVector: nextDiscoveryQuestionVector(previousState),
+      questionVector: firstQuestionVectorForFocus(previousState.focusId),
       questionMode: "typed",
     });
   }
@@ -520,43 +634,27 @@ export function planPlotLabAssistantTurn(
   }
 
   if (intent === "different_angle" || intent === "skip_or_too_narrow") {
+    if (previousState.checkpointPending || previousState.phase === "add_more_check") {
+      return buildAddMoreCheckState(previousState, intent, skipCount);
+    }
     return buildState({
       ...previousState,
       phase: phaseForFocus(previousState.focusId),
       checkpointPending: false,
-      questionsInFocus: previousState.maxQuestionsPerFocus - 1,
+      questionsInFocus: 0,
       assistantTurnKind: "discovery_question",
       lastUserIntent: intent,
       skipCount,
-      questionVector: broadenedQuestionVector(previousState),
+      questionVector: firstQuestionVectorForFocus(previousState.focusId),
       questionMode: "typed",
     });
   }
 
   if (previousState.checkpointPending || previousState.questionsInFocus >= previousState.maxQuestionsPerFocus) {
-    if (previousState.focusId === "relationship_core") {
-      return buildState({
-        ...previousState,
-        phase: "plot_transition_gate",
-        checkpointPending: true,
-        assistantTurnKind: "character_board_summary",
-        lastUserIntent: intent,
-        skipCount,
-        questionVector: "lock_review",
-        questionMode: "fixed_actions",
-      });
+    if (intent === "add_more_no" || intent === "add_more_context") {
+      return planNextFocus(previousState, intent, skipCount);
     }
-
-    return buildState({
-      ...previousState,
-      phase: "character_summary",
-      checkpointPending: true,
-      assistantTurnKind: "checkpoint_summary",
-      lastUserIntent: intent,
-      skipCount,
-      questionVector: "lock_review",
-        questionMode: "fixed_actions",
-      });
+    return buildAddMoreCheckState(previousState, intent, skipCount);
   }
 
   return buildState({
@@ -566,8 +664,25 @@ export function planPlotLabAssistantTurn(
     assistantTurnKind: "discovery_question",
     lastUserIntent: intent,
     skipCount,
-    questionVector: nextDiscoveryQuestionVector(previousState),
+    questionVector: firstQuestionVectorForFocus(previousState.focusId),
     questionMode: "typed",
+  });
+}
+
+function buildAddMoreCheckState(
+  previousState: PlotLabControllerState,
+  intent: PlotLabUserIntent,
+  skipCount: number
+): PlotLabControllerState {
+  return buildState({
+    ...previousState,
+    phase: "add_more_check",
+    checkpointPending: true,
+    assistantTurnKind: "add_more_check",
+    lastUserIntent: intent,
+    skipCount,
+    questionVector: "lock_review",
+    questionMode: "fixed_actions",
   });
 }
 
@@ -592,10 +707,16 @@ export function renderPlotLabControllerDirective(state: PlotLabControllerState):
   const roleStatus = Object.entries(state.roleSlots)
     .map(([slot, status]) => `${slot}: ${status}`)
     .join(", ");
+  const focusPlan = state.stage1FocusPlan
+    .map((focus, index) => `${index + 1}. ${focus.label}`)
+    .join(" -> ");
+  const sourceBoard = state.stage1CharacterBoard
+    .map((entry) => `${entry.label}: ${entry.disposition}${entry.storyTerm ? ` (${entry.storyTerm})` : ""}`)
+    .join(", ");
   const currentRoleInstruction = isRoleFocus(state.focusId)
     ? ROLE_SLOT_INSTRUCTIONS[state.focusId]
     : state.focusId === "relationship_core"
-      ? "connect the completed role slots into a light relationship/pressure chain"
+      ? "connect the completed source-led people and situation into the main relationship engine"
       : "none";
 
   return [
@@ -604,6 +725,8 @@ export function renderPlotLabControllerDirective(state: PlotLabControllerState):
     `- Planned assistant turn kind: ${state.assistantTurnKind}`,
     `- Phase: ${state.phase}`,
     `- Current focus: ${state.currentFocus} (${state.focusType})`,
+    `- Source-led Stage 1 focus plan: ${focusPlan || "fallback protagonist -> main relationship"}`,
+    `- Source-led character board: ${sourceBoard || "fallback protagonist only"}`,
     `- Current role-slot instruction: ${currentRoleInstruction}`,
     `- Role slot statuses: ${roleStatus}`,
     `- Pending role clarification: ${state.pendingRoleClarification ?? "none"}`,
@@ -623,20 +746,20 @@ export function renderPlotLabControllerDirective(state: PlotLabControllerState):
     `- Allowed next move: ${state.allowedNextMove}`,
     `- Forbidden moves: ${state.forbiddenMoves.join(" | ")}`,
     "- If turn kind is opening_read: give the EP1 read and ask the fixed confirmation question only.",
-    "- If turn kind is discovery_question: ask exactly one open, EP1-grounded question for the current focus and question vector. Make it inviting, simple, and story-useful. If this is question 2, change vector from the prior question instead of drilling the same internal axis. When Allow model options is yes, use structured answer-starter options as scaffolds, not canon locks.",
+    "- If turn kind is discovery_question: ask exactly one open, EP1-grounded question for the current focus. Make it inviting, simple, and story-useful. When Allow model options is yes, return exactly 2 structured answer-starter options as scaffolds, not canon locks.",
+    "- If structured answer-starter options are allowed: make the two options distinct story levers, not two phrasings of the same status/pressure/optics idea. One may sharpen the question's angle; the other should open a different supported route.",
+    "- If turn kind is add_more_check: ask only this fixed lightweight check: Anything else about the current focus you want to add? Do not ask a deeper craft question.",
     "- If turn kind is checkpoint_summary: summarize the current focus in 2-3 sentences. Do not ask a new discovery question; the app renders fixed controls.",
-    "- If turn kind is transition_next_focus: bridge in one sentence, then ask the first open discovery question for the new generic role slot. Do not choose a different character role than the controller focus.",
-    "- If turn kind is character_board_summary: summarize protagonist + primary counterpart + operator/world pressure + relationship/core in 2-4 sentences and ask whether to move into plot/monetization or stay at character level. The app renders fixed controls.",
-    "- If turn kind is monetization_bridge: summarize the EP1 big thread, character soul board, and relationship/pressure chain, then ask exactly one open monetization/paywall-point question. Return structured endpoint options only when Allow model options is yes. Do not ask a first plot beat or scene-mechanics question yet.",
+    "- If turn kind is transition_next_focus: bridge in one sentence, then ask the one open discovery question for the controller's current source-led focus. Do not invent an extra character.",
+    "- If turn kind is character_board_summary: summarize the source-led people, obstacle/situation if any, and main relationship in 2-4 sentences and ask whether to move into the paywall question or stay at character level. The app renders fixed controls.",
+    "- If turn kind is monetization_bridge: summarize the EP1 big thread, character board, and main relationship, then ask exactly one open paywall question. Return structured endpoint options only when Allow model options is yes. Do not ask a first plot beat or scene-mechanics question yet.",
     "- If turn kind is monetization_review: restate the current monetization candidate in one sentence and ask for approval, revision, or reroll. Do not move into plot runway yet.",
-    "- If turn kind is premise_bridge and Framework slot is earned_change: treat the monetization point as a later point in time. Ask one open universe/pressure/delta question about what must become true before the endpoint feels earned. Do not ask for first-beat tactics yet.",
-    "- If turn kind is premise_bridge and Framework slot is lock_review: do not ask a new discovery question. Restate the bridge candidate compactly so the app-owned lock/revise/reroll controls can handle the next action.",
     "- If turn kind is stage_1_complete: state that Stage 1 is locked through monetization and stop. Do not propose beats, runway, Episode 2, episode sketches, or next scene mechanics.",
-    "- If turn kind is plot_gate: build the episode runway only after the monetization/paywall point and premise bridge have been approved. Do not use Day 1 / Day 2 framing unless the writer explicitly asks for it as scratch brainstorming.",
+    "- If turn kind is plot_gate: build the episode runway only after the paywall point has been approved. Do not use Day 1 / Day 2 framing unless the writer explicitly asks for it as scratch brainstorming.",
     "- Scope answers to the question just asked. Do not globalize a local answer into the whole story engine.",
-    "- If the current role slot seems missing, ask the writer to explain it briefly or say it can stay blank. If it stays blank, do not invent it.",
+    "- If the current focus seems missing, let it stay blank and move on. Do not invent it.",
     "- If the writer mentions a person/role that is not clearly mapped, ask the smallest entity-resolution clarification before reasoning from it. If the writer moves on, leave that fact unresolved and do not use it as canon.",
-    "- Do not hardcode or assume story-specific identities. Map names from the source/chat into the generic role slots only when the source or writer makes the mapping clear.",
+    "- Do not hardcode or assume story-specific identities. Use names and plain story terms from the source-led board.",
     "- Do not revive stale alternative canon once the writer has confirmed a specific version, unless the writer explicitly reopens it.",
   ].join("\n");
 }
@@ -658,14 +781,15 @@ function planNextFocus(
       ? previousState.completedFocuses
       : [...previousState.completedFocuses, previousState.focusId];
   const nextFocusIndex = previousState.focusIndex + 1;
-  const nextFocusId = CHARACTER_FOCUS_SEQUENCE[nextFocusIndex] ?? "plot";
+  const nextFocus = previousState.stage1FocusPlan[nextFocusIndex] ?? null;
+  const nextFocusId = nextFocus?.focusId ?? "plot";
 
   if (nextFocusId === "plot") {
     return buildState({
       ...previousState,
       phase: "plot_transition_gate",
       focusId: "plot",
-      focusIndex: CHARACTER_FOCUS_SEQUENCE.length,
+      focusIndex: previousState.stage1FocusPlan.length,
       questionsInFocus: 0,
       roleSlots,
       completedFocuses,
@@ -684,6 +808,7 @@ function planNextFocus(
     focusId: nextFocusId,
     focusIndex: nextFocusIndex,
     questionsInFocus: 0,
+    maxQuestionsPerFocus: 1,
     roleSlots,
     pendingRoleClarification: null,
     completedFocuses,
@@ -731,18 +856,17 @@ function frameworkSlotForState(state: PlotLabStateInput): PlotLabFrameworkSlot {
   if (state.assistantTurnKind === "stage_1_complete") return "stage_1_complete";
   if (state.questionVector === "lock_review") return "lock_review";
   if (state.questionVector === "monetization_endpoint") return "paid_image";
-  if (state.questionVector === "monetization_delta") return "earned_change";
   if (state.focusId === "protagonist") {
-    return state.questionsInFocus <= 0 ? "screen_promise" : "world_effect";
+    return "screen_promise";
   }
   if (state.focusId === "primary_counterpart") {
-    return state.questionsInFocus <= 0 ? "relationship_conversion" : "new_door_new_cost";
+    return "relationship_conversion";
   }
   if (state.focusId === "operator_pressure") {
-    return state.questionsInFocus <= 0 ? "pressure_style" : "power_rule";
+    return "relationship_conversion";
   }
   if (state.focusId === "relationship_core") {
-    return state.questionsInFocus <= 0 ? "arena" : "engine_secret";
+    return "arena";
   }
   return "lock_review";
 }
@@ -754,11 +878,12 @@ function buildState(input: PlotLabStateInput): PlotLabControllerState {
   const frameworkSlot = frameworkSlotForState(input);
   const plannedInput = { ...input, frameworkSlot };
   const turnPlan = buildTurnPlan(plannedInput);
+  const dynamicFocusLabel = input.stage1FocusPlan.find((focus) => focus.focusId === input.focusId)?.label;
 
   return {
     ...plannedInput,
     focusType,
-    currentFocus: FOCUS_LABELS[input.focusId],
+    currentFocus: dynamicFocusLabel ?? FOCUS_LABELS[input.focusId],
     waitingFor: waitingFor(input),
     plotDetailAllowed,
     turnPlan,
@@ -816,26 +941,36 @@ const LOCK_REVIEW_ACTIONS: PlotLabAction[] = [
   },
 ];
 
+const ADD_MORE_ACTIONS: PlotLabAction[] = [
+  {
+    actionId: "add_more_no",
+    kind: "add_more_no",
+    label: "No",
+    detail: "Move to the next Plot Lab step.",
+    response: "No",
+  },
+  {
+    actionId: "add_more_yes",
+    kind: "add_more_yes",
+    label: "Yes",
+    detail: "Add one more note in your own words.",
+    response: "Yes",
+  },
+];
+
 const PLOT_GATE_ACTIONS: PlotLabAction[] = [
   {
     actionId: "lock_current",
     kind: "lock_current",
-    label: "Lock and move on",
-    detail: "Save the character board and move into monetization.",
+    label: "Move to monetization",
+    detail: "Save the character board and move to the paywall question.",
     response: "Lock this",
-  },
-  {
-    actionId: "move_into_plot",
-    kind: "move_into_plot",
-    label: "Move into plot",
-    detail: "Use the character board to find the monetization point.",
-    response: "Move into plot",
   },
   {
     actionId: "stay_character",
     kind: "stay_character",
-    label: "Stay with character",
-    detail: "Keep refining character, relationship, or world pressure.",
+    label: "Add character note",
+    detail: "Write one more character, relationship, or world-pressure note in your own words.",
     response: "Stay at character level",
   },
 ];
@@ -882,7 +1017,13 @@ function withCustomAnswer(actions: PlotLabAction[]): PlotLabAction[] {
 
 function shouldAllowModelOptions(state: PlotLabPlannedStateInput): boolean {
   if (state.questionMode === "requested_options") return true;
-  return false;
+  if (state.questionMode !== "typed") return false;
+  if (state.frameworkSlot === "lock_review") return false;
+  return (
+    state.assistantTurnKind === "discovery_question" ||
+    state.assistantTurnKind === "transition_next_focus" ||
+    state.assistantTurnKind === "monetization_bridge"
+  );
 }
 
 function buildTurnPlan(state: PlotLabPlannedStateInput): PlotLabTurnPlan {
@@ -891,15 +1032,17 @@ function buildTurnPlan(state: PlotLabPlannedStateInput): PlotLabTurnPlan {
 
   if (state.assistantTurnKind === "stage_1_complete") {
     actions = [];
+  } else if (state.assistantTurnKind === "add_more_check") {
+    actions = ADD_MORE_ACTIONS;
   } else if (state.questionMode === "requested_options") {
     actions = withCustomAnswer(REQUESTED_OPTION_ACTIONS);
   } else if (state.questionMode === "typed") {
-    actions = withCustomAnswer([]);
+    actions = withCustomAnswer(state.assistantTurnKind === "monetization_bridge" ? REQUESTED_OPTION_ACTIONS : []);
   } else if (state.assistantTurnKind === "opening_read") {
     actions = withCustomAnswer(CONFIRM_OPENING_ACTIONS);
   } else if (state.assistantTurnKind === "character_board_summary") {
-    actions = withCustomAnswer(PLOT_GATE_ACTIONS);
-  } else if (state.assistantTurnKind === "monetization_review" || state.assistantTurnKind === "premise_bridge") {
+    actions = PLOT_GATE_ACTIONS;
+  } else if (state.assistantTurnKind === "monetization_review") {
     actions = withCustomAnswer(MONETIZATION_REVIEW_ACTIONS);
   } else {
     actions = withCustomAnswer(LOCK_REVIEW_ACTIONS);
@@ -928,60 +1071,33 @@ function phaseForFocus(focusId: PlotLabFocusId): PlotLabConversationPhase {
 function firstQuestionVectorForFocus(focusId: PlotLabFocusId): PlotLabQuestionVector {
   if (focusId === "protagonist") return "character_anchor";
   if (focusId === "primary_counterpart") return "relationship_function";
-  if (focusId === "operator_pressure") return "power_language";
+  if (focusId === "operator_pressure") return "relationship_function";
   if (focusId === "relationship_core") return "world_pressure";
   return "character_anchor";
 }
 
-function secondQuestionVectorForFocus(focusId: PlotLabFocusId): PlotLabQuestionVector {
-  if (focusId === "protagonist") return "spark_in_world";
-  if (focusId === "primary_counterpart") return "choice_space";
-  if (focusId === "operator_pressure") return "world_rule";
-  if (focusId === "relationship_core") return "unresolved_ecology";
-  return "external_pressure";
-}
-
-function nextDiscoveryQuestionVector(state: Pick<PlotLabControllerState, "focusId" | "questionsInFocus">): PlotLabQuestionVector {
-  return state.questionsInFocus <= 0
-    ? firstQuestionVectorForFocus(state.focusId)
-    : secondQuestionVectorForFocus(state.focusId);
-}
-
-function broadenedQuestionVector(state: Pick<PlotLabControllerState, "focusId" | "questionVector">): PlotLabQuestionVector {
-  if (state.questionVector === "character_anchor") return "spark_in_world";
-  if (state.questionVector === "spark_in_world") return "world_pressure";
-  if (state.questionVector === "relationship_function") return "choice_space";
-  if (state.questionVector === "choice_space") return "world_pressure";
-  if (state.questionVector === "power_language") return "world_rule";
-  if (state.questionVector === "external_pressure") return "world_pressure";
-  if (state.questionVector === "world_pressure") return "unresolved_ecology";
-  return state.questionVector;
-}
-
 function allowedNextMove(state: PlotLabPlannedStateInput): string {
+  const currentFocusLabel = state.stage1FocusPlan.find((focus) => focus.focusId === state.focusId)?.label ?? FOCUS_LABELS[state.focusId];
   if (state.assistantTurnKind === "opening_read") {
     return "Give a 3-4 sentence EP1 grounding read, then ask if the reading is correct or if the writer wants to add context.";
   }
   if (state.assistantTurnKind === "checkpoint_summary") {
     return "Stop drilling this focus. Summarize the working lock in 2-3 sentences. The app will offer Move to next character / Ask different angle.";
   }
+  if (state.assistantTurnKind === "add_more_check") {
+    return `Ask only: Anything else about ${currentFocusLabel} you want to add?`;
+  }
   if (state.assistantTurnKind === "transition_next_focus") {
-    return `Move to ${FOCUS_LABELS[state.focusId]} and ask the first open EP1-grounded discovery question for that focus.`;
+    return `Move to ${currentFocusLabel} and ask the only open EP1-grounded discovery question for that focus.`;
   }
   if (state.assistantTurnKind === "character_board_summary") {
-    return "Summarize the character board and ask whether to move into plot/monetization or stay at character/relationship level.";
+    return "Summarize the source-led character board and ask whether to move into the paywall question or stay at character/relationship level.";
   }
   if (state.assistantTurnKind === "monetization_bridge") {
-    return "Summarize EP1 big thread + character soul board + relationship/pressure chain, then ask what the monetization/paywall point should be. No first plot beat yet.";
-  }
-  if (state.assistantTurnKind === "premise_bridge" && state.frameworkSlot === "lock_review") {
-    return "Restate the universe/premise bridge candidate in 1-2 sentences and wait for Lock / Revise / Reroll. Do not ask another bridge or outside-force question.";
-  }
-  if (state.assistantTurnKind === "premise_bridge") {
-    return "Zoom out from EP1 to the later monetization point. Ask what story-world, pressure, power, or character-condition shift makes the endpoint feel earned.";
+    return "Summarize EP1 big thread + character board + main relationship, then ask what the paywall question should be. No first plot beat yet.";
   }
   if (state.assistantTurnKind === "stage_1_complete") {
-    return "Stop at Stage 1 completion. Confirm the universe/character/pressure/monetization locks are ready for a later Stage 2, but do not build beats yet.";
+    return "Stop at Stage 1 completion. Confirm the character, relationship, and paywall locks are ready for a later Stage 2, but do not build beats yet.";
   }
   if (state.assistantTurnKind === "monetization_review") {
     return "Restate the monetization candidate in one sentence and wait for Lock / Revise / Reroll. Do not advance to plot runway.";
@@ -1002,31 +1118,16 @@ function allowedNextMove(state: PlotLabPlannedStateInput): string {
     return "Ask a different, simpler EP1-grounded question from another angle. Do not rephrase the same question.";
   }
   if (state.questionVector === "character_anchor") {
-    return "Framework slot screen_promise: ask what viewers should count on from the protagonist on screen. Keep it craft-facing, concrete, and light; no therapy language.";
-  }
-  if (state.questionVector === "spark_in_world") {
-    return "Framework slot world_effect: ask what trouble, opportunity, or world reaction the protagonist's visible promise creates; do not turn it into another threat/status mechanics question.";
+    return "Framework slot screen_promise: ask what viewers should count on from this source-led character on screen. Keep it craft-facing, concrete, and light; no therapy language.";
   }
   if (state.questionVector === "external_pressure") {
-    return "Ask what visible pressure, status shift, public collision, or story-world trouble makes the prior answer matter on screen. Do not ask another internal-psychology variant.";
+    return "Ask one easy source-grounded question about the visible obstacle or situation. Do not ask internal-psychology variants.";
   }
   if (state.questionVector === "relationship_function") {
-    return "Framework slot relationship_conversion: ask what this person becomes in the protagonist's life after EP1 changes the relationship.";
-  }
-  if (state.questionVector === "choice_space") {
-    return "Framework slot new_door_new_cost: ask what door, access, temptation, or protection opens because of this person and what it costs. Do not repeat public status labeling.";
-  }
-  if (state.questionVector === "power_language") {
-    return "Framework slot pressure_style: ask how this operator makes pressure visible on screen. Keep it concrete and non-therapeutic.";
-  }
-  if (state.questionVector === "world_rule") {
-    return "Framework slot power_rule: ask what rule of power the operator's presence proves. Avoid repeating the same character-pressure question.";
+    return "Framework slot relationship_conversion: ask what this person or obstacle changes in the protagonist's life after EP1.";
   }
   if (state.questionVector === "world_pressure") {
-    return "Framework slot arena: ask what larger arena EP1 opens. Do not ask what unresolved secret keeps pressure going yet.";
-  }
-  if (state.questionVector === "unresolved_ecology") {
-    return "Framework slot engine_secret: ask what unresolved force, appetite, danger, or secret in the larger world can keep generating microdrama before monetization.";
+    return "Framework slot arena: ask what larger relationship or situation EP1 opens. Keep it broad, plain, and useful.";
   }
   return "Ask one open EP1-rooted discovery question. No plot mechanics yet.";
 }
@@ -1036,6 +1137,7 @@ function waitingFor(state: PlotLabStateInput): string {
   if (state.questionMode === "fixed_actions") {
     if (state.assistantTurnKind === "opening_read") return "answer";
     if (state.assistantTurnKind === "character_board_summary") return "move_on";
+    if (state.assistantTurnKind === "add_more_check") return "add_more";
     return "approve_lock";
   }
   if (state.assistantTurnKind === "discovery_question" || state.assistantTurnKind === "monetization_bridge") {
@@ -1045,7 +1147,6 @@ function waitingFor(state: PlotLabStateInput): string {
     return "approve_lock";
   }
   if (state.assistantTurnKind === "character_board_summary") return "move_on";
-  if (state.assistantTurnKind === "premise_bridge") return "answer";
   if (state.assistantTurnKind === "stage_1_complete") return "idle";
   if (state.assistantTurnKind === "plot_gate") return "runway_ready";
   return "idle";
@@ -1055,18 +1156,19 @@ function forbiddenMoves(
   state: PlotLabPlannedStateInput,
   plotDetailAllowed: boolean
 ): string[] {
+  const currentFocusLabel = state.stage1FocusPlan.find((focus) => focus.focusId === state.focusId)?.label ?? FOCUS_LABELS[state.focusId];
   const base = [
     "Do not expose workflow labels.",
     "Do not ask more than one question.",
     "Do not invent UI buttons; the app renders them.",
-    "Discovery questions should stay open and writer-led; structured options are only for explicit requested-options turns.",
+    "Discovery questions should stay open and writer-led; structured options are answer starters, not narrow choice menus.",
   ];
 
   if (state.assistantTurnKind === "monetization_bridge") {
     return [
       ...base,
       "Do not ask for the first plot beat, scene tactics, counter-moves, texts/calls, deal terms, room logistics, runway, or Episode 2.",
-      "Do ask for the monetization/paywall point after summarizing the EP1 thread, character soul, and pressure chain.",
+      "Do ask for the paywall question after summarizing the EP1 thread, source-led character board, and main relationship.",
       "Do not present monetization options as final endpoints unless the writer has already given specific choices.",
     ];
   }
@@ -1080,21 +1182,11 @@ function forbiddenMoves(
     ];
   }
 
-  if (state.assistantTurnKind === "premise_bridge") {
-    if (state.frameworkSlot === "lock_review") {
-      return [
-        ...base,
-        "Do not ask a new question.",
-        "Do not ask which outside-facing force, public audience, or pressure lane matters; the writer has already answered the bridge.",
-        "Do restate the candidate compactly and let the app render Lock / Revise / Reroll.",
-      ];
-    }
+  if (state.assistantTurnKind === "add_more_check") {
     return [
       ...base,
-      "Do not ask for first plot beat tactics, room logistics, exact counter-moves, texts/calls, deal terms, or Episode 2 yet.",
-      "Do not assume EP1 behavior persists unchanged until the monetization point.",
-      "Do ask what changes between EP1 and the later endpoint across the story world, pressure ecology, power conditions, and character truth.",
-      "Do not narrow into planted objects, specific intermediate beats, or episode-by-episode runway.",
+      "Do not ask a deeper character, relationship, or paywall question.",
+      `Do ask only whether there is anything else about ${currentFocusLabel} the writer wants to add.`,
     ];
   }
 
@@ -1114,8 +1206,8 @@ function forbiddenMoves(
     "No plot beats, scene tactics, counter-moves, texts/calls, deal terms, paywall, runway, or Episode 2.",
     "Do not announce a lock before the writer has supplied enough signal.",
     "Do not merge a newly mentioned role/name into an existing character without confirmation.",
-    "Do not skip the primary counterpart role when it exists; after the protagonist, ask about the generic primary counterpart before the operator/pressure face.",
-    state.questionVector === "external_pressure" || state.questionVector === "world_pressure" || state.questionVector === "spark_in_world" || state.questionVector === "choice_space" || state.questionVector === "world_rule" || state.questionVector === "unresolved_ecology"
+    "Do not invent a third character; use only the source-led focus plan.",
+    state.questionVector === "external_pressure" || state.questionVector === "world_pressure"
       ? "Do not ask another therapist-style inner-refusal, wound, fear, stolen-future, moral-line, or protected-self variant; move to external pressure, story-world collision, or audience-facing consequence."
       : "Avoid therapist-style phrasing unless the writer introduced it; use craft/story language.",
     state.questionsInFocus >= state.maxQuestionsPerFocus
