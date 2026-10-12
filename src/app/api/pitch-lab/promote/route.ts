@@ -73,7 +73,7 @@ export async function POST(req: Request) {
           alreadyPromoted: true,
         };
       }
-      if (idea.status !== "shortlisted") throw new Error("Shortlist this idea before finalizing it.");
+      if (idea.status !== "shortlisted") throw new Error("Move this route to Studio before finalizing it.");
       const currentText = envelope.currentText.trim();
       if (!currentText) throw new Error("Idea plot is required.");
 

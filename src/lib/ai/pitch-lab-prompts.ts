@@ -1,4 +1,9 @@
-// Pitch Lab prompt version 2.16, updated 2026-10-09.
+// Pitch Lab prompt version 2.21, updated 2026-10-12.
+// Changelog 2026-10-12: add world/period guard so historic, royal, fantasy, and archetypal inputs keep their setting logic instead of becoming modern disguises or random professions.
+// Changelog 2026-10-12: ban episode-framing in idea cards and require visible lead/counterlead profile tension without locking a scene.
+// Changelog 2026-10-12: tighten route outputs so character-profile requests produce idea-rooted profile tensions, not series arc/runway/pilot-arc summaries.
+// Changelog 2026-10-12: reset Pitch Lab contract to idea -> pitch route -> concrete Episode 1 situation, with situation logic only in Studio.
+// Changelog 2026-10-09: reduce idea seeds to 8 and recenter seed generation on executable situation logic before trope or cliffhanger variety.
 // Changelog 2026-10-09: add genre-native cliffhanger selection and seed-quality gates so variety does not become random twist mixing.
 // Changelog 2026-10-08: add a relationship-status trope guard for contract marriage, fake dating, arranged marriage, and secret spouse scenarios.
 // Changelog 2026-10-08: add a trope-agnostic plausibility guard so named tropes must cause, solve, or worsen the Episode 1 problem.
@@ -15,7 +20,7 @@
 // Changelog 2026-09-24: reduce each generation to 4 ideas for faster public release testing.
 // Changelog 2026-09-24: move changing framework guidance into a hidden admin Taste Brief; keep output story-first and remove visible framework/compliance language.
 export const PITCH_LAB_IDEA_COUNT = 4;
-export const PITCH_LAB_PREMISE_COUNT = 12;
+export const PITCH_LAB_PREMISE_COUNT = 8;
 
 const TITLE_FILLER_WORDS = new Set(["a", "an", "the", "and", "or", "but", "nor", "i", "me", "my", "mine", "we", "us", "our", "ours", "you", "your", "yours", "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their", "theirs"]);
 
@@ -29,40 +34,67 @@ type GenerationPromptInput = {
   brief: string;
   instruction: string;
   sourceMaterial: string;
+  instructionControls?: string;
 };
 
 type PilotBatchPromptInput = GenerationPromptInput & {
   selectedPremise: string;
 };
 
-const GENRE_NATIVE_CLIFFHANGER_SELECTOR = `HIDDEN TROPE / CLIFFHANGER SELECTOR
-Before writing, silently choose the story lane implied by the writer input: rom-com, love triangle, fantasy/supernatural, vampire, revenge, relationship-status, workplace/status, mystery/thriller, family/domestic, survival/action, or another clearly named lane.
+const STORY_PROMISE_GATE = `IDEA GATE
+At the idea stage, do not close the situation. Your job is to name the attraction of the show idea, not how Episode 1 mechanically opens.
 
-Then choose cliffhanger logic that is native to that lane:
-- Rom-com: public embarrassment, mistaken identity, wrong confession, social-performance lie, status reversal, accidentally witnessed vulnerability.
-- Love triangle: public claim, forced choice, misread intimacy, secret alliance exposed, rival rescue, betrayal evidence.
-- Fantasy/supernatural: binding oath, power awakening, rule violation, marked or hunted, artifact choice, portal/world gate, transformation deadline.
-- Vampire: blood dependency, blood law, daylight deadline, scent or bite mark, hunter arrival, court or lineage claim, protection bargain.
-- Revenge: wrong target, exposure backfires, enemy alliance, counter-blackmail, evidence turns personal, public accusation.
-- Contract marriage, fake dating, arranged marriage, secret spouse: public status lock, family approval, inheritance/custody/visa, ceremonial obligation, private terms exposed.
-- Workplace/status: audit or test, launch deadline, boss/employee reversal, public reputation trap, access badge or document tether.
-- Mystery/thriller: missing witness, evidence turns personal, alibi collapse, culprit-as-protector, object or body reveal.
+Each visible card should answer:
+1. What emotional/commercial attraction is this show selling?
+2. Who is the woman, what kind of opposing lead or spouse is she entangled with, and what tension makes that pairing compelling?
+3. Why does the writer want to explore this idea from the given instruction?
 
-Use this selector for variety, but never choose a cliffhanger type just to fill a list. A cliffhanger is valid only when it grows naturally from the trope, heroine, opposing lead or force, arena, and visible pressure. A pure reveal is not enough unless it creates an immediate Episode 2 obligation, danger, decision, or relationship engine. Do not expose selector labels, taxonomy names, or scoring in visible output.`;
+Do not include:
+- a specific opening scene, venue, prop, proof object, evidence item, child, badge, receipt, dashcam, medicine, contract, lock, camera, or similar mechanism;
+- a specific public misunderstanding, police/security/legal/manager/PR action, institutional reaction, or final cliffhanger;
+- a fully solved Episode 1 incident;
+- episode-framing phrases such as "each episode", "episodes promise", "the series arc", "episode tests", "across episodes", "arc one", or "season";
+- generic trope labels without a distinct idea.
 
-const SEED_QUALITY_GATE = `SEED QUALITY GATE
-Before returning an idea, silently answer:
-1. Why this heroine for this story?
-2. Why this opposing lead or force, and what leverage do they have?
-3. Why this arena/location, and what rule, witness, deadline, hierarchy, money, access, secret, or public pressure makes it active?
-4. Why now, not later?
-5. What concrete pressure object, role, deadline, rule, secret, or social consequence makes the Episode 1 situation move?
-6. What Episode 2 engine does the final turn create?
+The card should feel selectable because it points to a strong show engine, not because it already solves the plot.`;
 
-Reject and rebuild any idea with a random character bundle, vague arena, passive heroine, opposing lead with no leverage, fake public reaction, unexplained prop/lore rule, hidden backstory required for basic understanding, or variety created only by swapping props, jobs, titles, or one twist word. Logic and commercial playability beat cliffhanger-count diversity.`;
+const PITCH_ROUTE_GATE = `PITCH ROUTE GATE
+At the pitch-route stage, use the selected idea to create four different ways the show could deliver that idea. These are routes, not final Episode 1 situations.
 
-const PILOT_CLIFFHANGER_GATE = `PILOT CLIFFHANGER GATE
-Preserve the selected seed, then vary options through native cliffhanger subtypes only where they still fit the seed. Each pilot must keep heroine agency, opposing-lead leverage, visible pressure, and one-read cause/effect. Do not stack lore, legal mechanics, investigations, public reactions, or supernatural rules just to make a different ending.`;
+Each route should define:
+1. the relationship engine or power dynamic;
+2. the character profile pairing or route flavor, especially when the writer asks for profile options;
+3. the tonal flavor and audience hook;
+4. the tensions, pressures, and recurring frictions it could create later.
+
+Do not write a mini series bible. Do not use labels such as "Series arc", "Episode arc", "Pilot arc", or "Runway". Frame the future as playable tensions and open questions, not predetermined episode events.
+
+Do not lock the exact opening scene, exact prop/proof object, exact inciting incident, exact public misunderstanding, exact institution behavior, or exact cliffhanger. Keep enough specificity that a writer can choose a route, but leave situation design for Studio.`;
+
+const WORLD_PERIOD_GUARD = `WORLD / PERIOD GUARD
+Before choosing jobs, locations, institutions, or social pressure, infer the story world from the writer's words.
+
+If the input contains royal, court, noble, princess, prince, queen, king, duke, knight, hunter, warrior, mage, witch, curse, kingdom, clan, palace, forest, medieval, ancient, historical, mythic, fantasy, period, or similar signals:
+- Preserve the implied world and time texture unless the writer explicitly asks for a modern AU, reincarnation, disguise, or contemporary adaptation.
+- Treat roles such as princess, hunter, warrior, guard, healer, noble, or outcast as real story-world identities or social positions, not as people pretending to be modern professions.
+- Use period/world-native pressure: court duty, succession, betrothal, bloodline, clan law, royal debt, exile, hunting oath, border threat, forbidden magic, palace reputation, family honor, village survival, or equivalent.
+- Do not default to tattoo studios, laundromats, cafes, hospitals, corporate offices, influencers, modern legal/regulatory settings, or random urban jobs unless those were requested.
+- If a profession-like word is also an archetype, keep the archetype first. A hunter should matter because of tracking, survival, oath, prey, forest law, or royal danger, not because they are secretly a barista or tattooist.
+
+If the writer explicitly asks for a modern adaptation, then translate the archetype into a coherent modern equivalent and make the translation visible.`;
+
+const CONCRETE_EPISODE_GATE = `CONCRETE EPISODE 1 SITUATION PROCESS
+Studio is the first stage that should close the concrete Episode 1 situation.
+
+Build the pitch around this causal chain:
+1. Protagonist function: who is she, what does she want right now, and what access, skill, duty, vulnerability, or need makes her necessary here?
+2. Opposing lead or force: why do they engage with her specifically, and what leverage, need, status, danger, or constraint makes them unable to simply walk away?
+3. Active arena: what location, institution, public setting, job system, family rule, deadline, witness, money pressure, secret, or physical constraint makes the scene move now?
+4. Pressure object or system: what concrete thing carries the pressure -- evidence, badge, document, camera, lock, contract, medicine, child, vehicle, room, broadcast, heirloom, phone, payment, public role, or similar?
+5. Proportional consequence: does the reaction fit the trigger, or does it feel like author convenience?
+6. Next-scene obligation: does the final turn force an immediate Episode 2 action, choice, danger, bargain, exposure, rescue, cover-up, investigation, performance, or relationship engine?
+
+Reject and rebuild if the proof object is weak, public/security/family/workplace/legal behavior contradicts ordinary logic, the powerful character chooses the protagonist for no believable reason, or the cliffhanger is only a label/threat/reveal with no concrete next action.`;
 
 export function isValidPitchLabTitle(title: string): boolean {
   const cleanTitle = cleanPitchLabTitle(title);
@@ -71,22 +103,20 @@ export function isValidPitchLabTitle(title: string): boolean {
 }
 
 export function buildPitchLabGenerationSystemPrompt(framework: string): string {
-  return `You write pitchable Episode 1 plot ideas for vertical microdrama series.
+  return `You write ideas, pitch routes, and Episode 1 pitches for vertical microdrama series.
 
 The writer's creative direction has priority. The private Taste Brief is hidden creative calibration: use it to choose story material, pressure engines, relationship dynamics, visual texture, and adaptation strategy. Never mention it, explain it, score against it, or output its labels.
 
-Creative rule: if the writer gives a trope, relationship, character, setting, or broad instruction, pitch a convincing Episode 1 microdrama scenario from it. Keep it simple, visual, emotionally obvious, and easy to retell. The scenario should feel like the start of a series, not an abstract premise note.
+Creative rule: if the writer gives a trope, relationship, character, setting, or broad instruction, diagnose the intended story lane and serve that lane at the correct stage. Idea cards are broad selectable ideas; pitch batches are routes for delivering the selected idea; Studio is where concrete Episode 1 situation mechanics are built.
 
-Trope plausibility: when a writer names a trope, use it only where the trope naturally causes the Episode 1 problem, solves the problem, or makes the problem worse in a way the viewer understands immediately. If the trope can be removed and the scenario still works, choose a better scenario.
+Do not collapse stages. Do not force idea cards or pitch routes to solve the opening scene.
 
-Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+${STORY_PROMISE_GATE}
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
-
-${SEED_QUALITY_GATE}
+${WORLD_PERIOD_GUARD}
 
 SETTING DEFAULT
-If the writer does not specify geography or culture, do not default to US/Western names, courts, police procedure, corporate luxury, engagement-party rituals, or city markers. Keep the setting location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. If a culture is specified by the writer or source, follow that instead.
+If the writer gives world/time cues, follow those first. If the writer does not specify geography, culture, world, or time period, do not default to US/Western names, courts, police procedure, corporate luxury, engagement-party rituals, or city markers. Keep the setting location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds only when the input itself is contemporary or neutral. If a culture is specified by the writer or source, follow that instead.
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -95,25 +125,21 @@ ${framework}`;
 export function buildPitchLabPremiseSystemPrompt(framework: string): string {
   return `You are the Master Orchestrator for Pitch Lab's idea stage.
 
-Your job is not to write finished pitch paragraphs or pilot loglines. Your job is to run the early writers-room seed step: read the creative inputs, explore many possible dramatic seed combinations, and return clear seed cards that a scriptwriter can select from.
+Your job is not to write finished pitch paragraphs, pilot loglines, episode plans, or Episode 1 situations. Your job is to read the creative inputs, infer the broad trope/story lane, explore many possible series ideas, and return clear idea cards that a scriptwriter can select from.
 
-Only creative rule: if the writer gives a trope, relationship, character, setting, or broad instruction, pitch convincing Episode 1 microdrama scenarios from it. Keep the ideas simple, emotionally legible, easy to visualize, and commercially playable. Do not turn the trope into a checklist or taxonomy.
+If the writer gives a trope, relationship, character, setting, or broad instruction, use it to shape the idea. Do not merely repeat the trope lane; make each card a distinct emotional/commercial concept.
 
-Trope plausibility: when a writer names a trope, use it only where the trope naturally causes the Episode 1 problem, solves the problem, or makes the problem worse in a way the viewer understands immediately. If the trope can be removed and the scenario still works, choose a better scenario.
-
-Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
-
-At this stage, return selectable idea seeds, not full plotted episodes. Each seed should feel like the beginning of a show a writer could immediately expand: a clear heroine, a clear opposing lead or force, a vivid arena, and a simple reason the situation could explode in Episode 1.
+At this stage, return selectable ideas, not situation mechanics. The idea can imply a relationship engine, power asymmetry, fantasy, contradiction, or emotional wound, but it must not lock the concrete opening scene. It must still name enough about the woman and opposing lead/spouse to feel like a playable pairing, not an abstract thesis.
 
 For adaptation, use the source only as story inspiration. Keep what is emotionally useful, but make the new ideas feel like new shows rather than renamed copies.
 
-Quality standard: the scenario should make ordinary human sense on first read. If the setup feels like paperwork, explanation, or a clever loophole instead of a watchable microdrama scene, choose a simpler scenario.
+Quality standard: each card should be specific enough to choose and broad enough to support multiple possible pilot routes.
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
+${STORY_PROMISE_GATE}
 
-${SEED_QUALITY_GATE}
+${WORLD_PERIOD_GUARD}
 
-Setting default: if the writer does not specify geography or culture, keep ideas location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Do not default to US/Western institutions, names, social rituals, or status markers unless requested or required by the source.
+Setting default: if the writer gives world/time cues, follow those first. If the writer does not specify geography, culture, world, or time period, keep ideas location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds only when the input itself is contemporary or neutral. Do not default to US/Western institutions, names, social rituals, or status markers unless requested or required by the source.
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -127,8 +153,8 @@ export function buildPitchLabPremisePrompt(input: GenerationPromptInput): string
   const mode = input.generationType === "framework"
     ? "Framework/original mode: create fresh ideas from the Taste Brief and writer instruction. Do not adapt an existing source story."
     : input.adaptationStyle === "close"
-      ? "Existing-series close adaptation mode: preserve the source's story function and rough pressure sequence, but transform surface identity, occupations, setting, exact crisis, props, and cliffhanger mechanism."
-      : "Existing-series loose adaptation mode: preserve the source's emotional/commercial engine, but freely rebuild the premise mechanics, world, jobs, pressure object, and cliffhanger.";
+      ? "Existing-series close adaptation mode: preserve the source's emotional/commercial engine and relationship engine, but do not copy its exact situation mechanics."
+      : "Existing-series loose adaptation mode: preserve the source's emotional/commercial engine while freely rebuilding the route and eventual situation later.";
 
   return `${writerDirections
     ? `WRITER SEED / INSTRUCTIONS - HIGHEST CREATIVE PRIORITY. Use these instructions to generate the visible ideas. Treat named tropes, roles, relationship dynamics, settings, tones, and exclusions as binding unless they would break clarity or the required output shape. If a latest writer instruction is supplied, it is not optional mood text: every returned idea should visibly reflect it unless that would make the idea incoherent.\n${writerDirections}`
@@ -136,33 +162,36 @@ export function buildPitchLabPremisePrompt(input: GenerationPromptInput): string
 
 ${mode}
 
+${input.instructionControls || ""}
+
 Setting default:
-- If the writer does not specify geography or culture, keep the visible ideas location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds.
+- If the writer gives world/time cues, follow those first.
+- If the writer does not specify geography, culture, world, or time period, keep the visible ideas location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds only when the input itself is contemporary or neutral.
 - Do not default to US/Western institutions, names, social rituals, legal procedure, or status markers unless requested or required by the source.
 - If the writer gives a location, culture, or naming style, follow that instruction.
 
 ${input.generationType === "adaptation" ? `SOURCE MATERIAL
 ${input.sourceMaterial || "None."}
 
-Use the source as inspiration, but pitch new Episode 1 microdrama scenarios. Do not make renamed copies.` : "Source material: none."}
+Use the source as inspiration, but return new ideas. Do not make renamed copies and do not close the Episode 1 situation here.` : "Source material: none."}
 
 Creative direction:
-- If the writer gives a trope, use it as the core of the scenario.
-- If a trope is named, it must naturally cause, solve, or worsen the Episode 1 problem. If the scenario still works without the trope, choose a better scenario.
-- For relationship-status tropes such as contract marriage, fake dating, arranged marriage, or secret spouse, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+- If the writer gives a trope, use it as the core of the idea.
+- If a trope is named, the card should clarify the emotional or commercial appeal of that trope, not invent the exact scene mechanics.
+- If the writer gives archetypal or period roles, keep them as real story-world roles unless a modern adaptation is explicitly requested.
 - If the writer gives characters, a relationship, setting, culture, or exclusion, respect it.
 - Keep each idea simple enough to understand in one read.
-- Make each idea feel like it could open Episode 1 of a vertical microdrama series.
-- Prefer situations that are emotionally obvious, visual, and convincing.
-- Make the 12 ideas meaningfully distinct through native story logic. Do not chase variety with random cliffhanger types, pasted-on twists, or interchangeable props.
+- Make the ${PITCH_LAB_PREMISE_COUNT} ideas meaningfully distinct through different woman/opposing-lead pairings, emotional engines, relationship engines, status fantasies, dangers, or contradictions.
+- Do not chase variety with random props, jobs, incident mechanics, or cliffhangers.
+- Do not describe how episodes will work. Frame the tension directly: "Their tension is...", "The engine is...", "The appeal is...", or an equivalent plain sentence.
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
+${STORY_PROMISE_GATE}
 
-${SEED_QUALITY_GATE}
+${WORLD_PERIOD_GUARD}
 
-Return exactly ${PITCH_LAB_PREMISE_COUNT} visible seed cards as one valid JSON array.
+Return exactly ${PITCH_LAB_PREMISE_COUNT} visible idea cards as one valid JSON array.
 Each item must have exactly these fields:
-{"title":"one or two words","premiseText":"one simple idea sentence, 18-35 words, pitching a convincing Episode 1 microdrama scenario","appealLane":"short plain story-charge label, not a taxonomy term","transformationNotes":"one short story reason explaining why this character/arena/pressure combination is distinct"}
+{"title":"one or two words","premiseText":"one or two sentences, 28-55 words, describing the idea and lead/counterlead tension without locking a concrete Episode 1 situation","appealLane":"short plain commercial/emotional appeal","transformationNotes":"one short reason this idea is worth developing into routes"}
 
 Do not add markdown, numbering, commentary, scores, or extra fields.`;
 }
@@ -170,15 +199,13 @@ Do not add markdown, numbering, commentary, scores, or extra fields.`;
 export function buildPitchLabPremiseRefinementSystemPrompt(framework: string): string {
   return `You are the Pitch Lab Idea Regeneration Agent.
 
-The writer is still in the Ideas stage. Do not write pilot options. Your job is to rewrite one selected idea card so the writer can decide whether it is worth expanding into pilot options.
+The writer is still in the idea stage. Do not write pitch routes, route options, or concrete Episode 1 situations. Your job is to rewrite one selected idea card so the writer can decide whether it is worth expanding into pitch routes.
 
-The writer's instruction is the highest creative priority. Preserve the idea's useful core unless the writer asks to change it. Keep the rewritten idea simple, convincing, and easy to picture as the start of Episode 1 of a microdrama series.
+The writer's instruction is the highest creative priority. Preserve the idea's useful core unless the writer asks to change it. Keep the rewritten idea simple, commercially legible, and broad enough to support multiple routes.
 
 Use the private Taste Brief only as hidden creative calibration. Never mention it, explain it, score against it, or output its labels.
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
-
-${SEED_QUALITY_GATE}
+${STORY_PROMISE_GATE}
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -201,38 +228,36 @@ ${input.priorTurns}
 
 Revision shape:
 - Apply the writer instruction directly.
-- Preserve the seed's useful core unless the writer asks to change it.
-- Do not return the same idea with cosmetic wording if the instruction asks for a role, arena, pressure, tone, trope, or charge change.
+- Preserve the idea's useful core unless the writer asks to change it.
+- Do not return the same card with cosmetic wording if the instruction asks for a relationship engine, tone, trope, fantasy, danger, or charge change.
 - If the instruction contains exclusions, remove those elements from the regenerated idea unless they are essential to the explicitly approved core.
-- premiseText must be one simple idea sentence, 18-35 words.
-- If the writer gives a trope, make the scenario feel like a natural Episode 1 use of that trope. If the scenario still works without the trope, change it.
-- Choose a genre-native cliffhanger/engine only if it makes the rewritten seed more logical. Do not add random twists for novelty.
-- Do not add broad series lore, labels, analysis, markdown, multiple options, or hidden investigation machinery.
+- premiseText must be one or two idea sentences, 28-55 words.
+- Do not use episode-framing phrases such as "each episode", "episodes promise", "episodes deliver", "the series arc", "across episodes", or "season".
+- Do not add exact opening scene mechanics, proof objects, institutions, managers, security, legal pressure, or cliffhangers.
+- Do not add broad lore, labels, analysis, markdown, multiple options, or hidden investigation machinery.
 
-${SEED_QUALITY_GATE}
+${STORY_PROMISE_GATE}
 
 Return only valid JSON:
-{"title":"one or two words","premiseText":"one simple seed sentence, 18-35 words","appealLane":"short plain story-charge label, not a taxonomy term","transformationNotes":"one short story reason about what changed"}`;
+{"title":"one or two words","premiseText":"one or two idea sentences, 28-55 words","appealLane":"short plain commercial/emotional appeal","transformationNotes":"one short reason about what changed"}`;
 }
 
 export function buildPitchLabPilotBatchSystemPrompt(framework: string): string {
-  return `You are the Master Orchestrator for Pitch Lab's selected-idea pitch batch.
+  return `You are the Master Orchestrator for Pitch Lab's selected-idea route batch.
 
-The writer has selected one idea. Your job is to develop four simple, distinct Episode 1 logline options from it.
+The writer has selected one idea. Your job is to develop four distinct pitch routes that could deliver that idea.
 
-Only creative rule: pitch a convincing microdrama scenario for Episode 1. If the selected idea or writer instruction contains a trope, make the trope feel natural, visual, and easy to understand. Keep the logline easy to retell in one breath.
+Only creative rule: each route must stay rooted in the selected idea. Do not drift into unrelated trope variations. The routes should help the writer choose a direction before concrete Episode 1 situation design.
 
-Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the logline still works without the trope, choose a better logline.
+If the selected idea or writer instruction contains a trope, use the trope to shape the relationship engine, emotional arc, and commercial hook. Do not turn the trope into a fixed opening incident yet.
 
-Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+Setting default: if the selected idea and writer instruction contain world/time cues, follow those first. If they do not specify geography, culture, world, or time period, keep the routes location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds only when the input itself is contemporary or neutral. Avoid automatic US/Western names, institutions, social rituals, legal procedure, and luxury markers unless the source or writer asks for them.
 
-Setting default: if the selected seed and writer instruction do not specify geography or culture, keep the pilots location-neutral or lightly biased toward contemporary Asian / Southeast Asian / East Asian urban microdrama worlds. Avoid automatic US/Western names, institutions, social rituals, legal procedure, and luxury markers unless the source or writer asks for them.
+Quality standard: each option should be a route-level direction with enough charge to choose, but not a final Episode 1 scene.
 
-Quality standard: each option should make ordinary human sense on first read, open on a watchable situation, and leave the viewer wanting Episode 2. Avoid clever logic if it makes the premise harder to feel.
+${PITCH_ROUTE_GATE}
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
-
-${PILOT_CLIFFHANGER_GATE}
+${WORLD_PERIOD_GUARD}
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -248,36 +273,37 @@ export function buildPitchLabPilotBatchPrompt(input: PilotBatchPromptInput): str
 ${input.sourceMaterial || "None."}
 
 Adaptation rule:
-Use the source as inspiration for what feels compelling, but make the pitch options feel like new Episode 1 scenarios rather than renamed copies.`
-    : "Source material: none; generate from the selected seed and Taste Brief.";
+Use the source as inspiration for what feels compelling, but make the pitch routes feel like new directions rather than renamed copies.`
+    : "Source material: none; generate from the selected idea and Taste Brief.";
 
   return `${writerDirections
-    ? `WRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Apply the latest batch instruction to all four pilot options while preserving the selected seed's core. If the instruction asks to add, remove, avoid, strengthen, soften, change tone, change setting, or change lead behavior, every option must respect that request.\n${writerDirections}`
+    ? `WRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Apply the latest batch instruction to all four pitch routes while preserving the selected idea. If the instruction asks to add, remove, avoid, strengthen, soften, change tone, change setting, or change lead behavior, every route must respect that request.\n${writerDirections}`
     : "Writer direction: none provided."}
 
-SELECTED SEED
+SELECTED IDEA
 ${input.selectedPremise}
 
 ${adaptationRules}
 
-For each of the ${PITCH_LAB_IDEA_COUNT} pitch options:
-- Use the selected seed as the starting point.
-- If a trope is present, make it central to the Episode 1 scenario.
-- If the scenario still works without the trope, choose a better scenario.
-- For relationship-status tropes such as contract marriage, fake dating, arranged marriage, or secret spouse, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
-- Keep the logline simple, visual, and emotionally convincing.
-- Make the four options distinct through native Episode 2 engines, not cosmetic rewrites. Use at least two native cliffhanger subtypes when the seed allows it; if the seed only supports one strong subtype, keep logic over variety.
-- ideaText must read like a simple Episode 1 logline, roughly 35-65 words, not a pitch paragraph.
+${input.instructionControls || ""}
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
+For each of the ${PITCH_LAB_IDEA_COUNT} pitch routes:
+- Use the selected idea as the anchor.
+- Make the route a possible delivery path for that idea, not a new unrelated idea.
+- Preserve the selected idea's world/time logic. Do not convert princess/hunter/royal/fantasy/historical roles into modern disguises unless the writer explicitly asks for a modern adaptation.
+- If the writer asks for character profiles, make each option a different idea-rooted lead/counterlead profile pairing. Describe who they are, what each needs, and what romantic/comic tension their pairing creates.
+- Vary through relationship engine, profile pairing, tonal flavor, power dynamic, moral bind, fantasy payoff, or recurring tension.
+- Do not lock an exact opening scene, prop/proof object, institution behavior, public misunderstanding, final cliffhanger, or Episode 1 situation.
+- Do not add "Runway:", "Pilot arc:", "Series arc:", "Episodes:", or similar sections. Keep future potential as tensions, pressures, and questions.
+- ideaText must read like a route-level pitch direction, roughly 45-80 words, not a concrete Episode 1 logline.
 
-${PILOT_CLIFFHANGER_GATE}
+${PITCH_ROUTE_GATE}
 
-Return exactly ${PITCH_LAB_IDEA_COUNT} distinct pitch options as one valid JSON array.
+Return exactly ${PITCH_LAB_IDEA_COUNT} distinct pitch routes as one valid JSON array.
 Each item must have exactly these fields:
-{"title":"one or two words","ideaText":"one simple Episode 1 logline, roughly 35-65 words","kernel":"hidden concise story kernel","beats":"hidden simple Episode 1 beats","clarityChecks":"hidden QA summary proving seed fit, native cliffhanger fit, role clarity, and Episode 2 engine","adaptationNotes":"hidden note on source inspiration if relevant"}
+{"title":"one or two words","ideaText":"one route-level pitch direction, roughly 45-80 words, rooted in the selected idea but not closing the concrete Episode 1 situation","kernel":"hidden concise route thesis","beats":"hidden profile/tension map, not scene beats or episode arc","clarityChecks":"hidden QA summary proving idea fit, route/profile distinctness, and situation deferral","adaptationNotes":"hidden note on source inspiration if relevant"}
 
-Every title must be one or two words maximum. Do not use dialogue unless the writer explicitly asks. Do not add markdown, numbering, subtitles, scores, or other fields. Do not describe the option strategy; write only the finished logline.`;
+Every title must be one or two words maximum. Do not use dialogue unless the writer explicitly asks. Do not add markdown, numbering, subtitles, scores, or other fields. Do not describe the option strategy; write only the route.`;
 }
 
 export function buildPitchLabGenerationPrompt(input: GenerationPromptInput): string {
@@ -287,49 +313,47 @@ export function buildPitchLabGenerationPrompt(input: GenerationPromptInput): str
   ].filter(Boolean).join("\n\n");
   const hasWriterDirection = Boolean(writerDirections.trim());
   const pathInstructions = input.generationType === "framework"
-    ? "Create original Episode 1 microdrama scenarios from the Taste Brief and writer instruction."
+    ? "Create original pitch routes from the Taste Brief and writer instruction."
     : input.adaptationStyle === "close"
-      ? "Create close adaptations that feel like convincing new Episode 1 microdrama scenarios, not renamed copies."
-      : "Create loose adaptations that use the source as inspiration for a convincing new Episode 1 microdrama scenario.";
+      ? "Create close-adaptation pitch routes that preserve the source's appeal without copying exact situation mechanics."
+      : "Create loose-adaptation pitch routes that use the source as inspiration for a new direction.";
 
   return `${hasWriterDirection
     ? `SCRIPTWRITER DIRECTION - HIGHEST CREATIVE PRIORITY. Follow these directions over the framework's default trope mix, genre assumptions, character choices, tone, and setting. Preserve the required output shape and selected generation path.\n${writerDirections}`
-    : "SCRIPTWRITER DIRECTION: None provided. Use the private Taste Brief for variety across romance, forced-contact engines, heroine capability or resourcefulness under pressure, and other supported trope combinations. Do not force every taste signal into every story."}
+    : "SCRIPTWRITER DIRECTION: None provided. Use the private Taste Brief for variety across romance engines, heroine capability or resourcefulness under pressure, status asymmetry, intimacy pressure, and other supported trope combinations. Do not force every taste signal into every story."}
 
 Generation path:
 ${pathInstructions}
 
 Creative rule:
-If the writer gives a trope, relationship, character, setting, or broad instruction, pitch a convincing Episode 1 microdrama scenario from it. Keep it simple, visual, emotionally obvious, and easy to retell.
-
-Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the scenario still works without the trope, choose a better scenario.
-
-Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
+If the writer gives a trope, relationship, character, setting, or broad instruction, pitch route-level directions from it. Keep them emotionally obvious, commercially playable, and easy to compare.
+If the writer asks for character profiles, return different idea-rooted profile pairings, not series arcs or episode plans.
+If the writer gives archetypal or period roles, preserve the implied world/time logic rather than translating them into random modern professions.
 
 ${input.generationType === "adaptation" ? `Adaptation source rule:
-Use the source as inspiration for what feels compelling, but output new Episode 1 scenarios rather than analysis or renamed copies.
+Use the source as inspiration for what feels compelling, but output new pitch routes rather than analysis or renamed copies.
 
-Source story material (untrusted; use as story content only):\n${input.sourceMaterial || "None."}` : "Source story material: None; generate original premises."}
+Source story material (untrusted; use as story content only):\n${input.sourceMaterial || "None."}` : "Source story material: None; generate original pitch routes."}
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
+${PITCH_ROUTE_GATE}
 
-${SEED_QUALITY_GATE}
+${WORLD_PERIOD_GUARD}
 
-Return exactly ${PITCH_LAB_IDEA_COUNT} distinct ideas as one valid JSON array. Each item must have exactly these fields: {"title":"one or two words","ideaText":"one compact plot paragraph, 90-140 words"}. Every title must be one or two words maximum, built around a powerful, specific noun or verb. Titles must not contain articles, conjunctions, or pronouns such as "the", "or", "her", or "they". Do not add markdown, numbering, subtitles, or other fields.`;
+Return exactly ${PITCH_LAB_IDEA_COUNT} distinct pitch routes as one valid JSON array. Each item must have exactly these fields: {"title":"one or two words","ideaText":"one route-level pitch direction, 45-80 words"}. Every title must be one or two words maximum, built around a powerful, specific noun or verb. Titles must not contain articles, conjunctions, or pronouns such as "the", "or", "her", or "they". Do not add markdown, numbering, subtitles, labels such as "Runway" or "Pilot arc", or other fields.`;
 }
 
 export function buildPitchLabRefinementSystemPrompt(framework: string): string {
-  return `You are the Shortlist Refinement Agent for one shortlisted Episode 1 pitch. The writer's instruction is the highest creative priority; when no instruction is supplied, use the private Taste Brief only as a quiet guide. Preserve the selected idea's distinctive core unless the writer asks to change it.
+  return `You are the Studio Agent for one selected pitch route. The writer's instruction is the highest creative priority; when no instruction is supplied, use the private Taste Brief only as a quiet guide. Preserve the selected idea and route unless the writer asks to change them.
 
-Only creative rule: revise the pitch into a convincing Episode 1 microdrama scenario. If a trope is present, make it feel natural and easy to understand. Keep the output simple, visual, emotionally clear, and commercially pitchable.
+This is the first stage that should close the concrete Episode 1 situation. Turn the shortlisted route into a convincing Episode 1 microdrama pitch with a specific setup, protagonist function, opposing force, pressure system, consequence, and Episode 2 engine.
 
-Trope plausibility: when a trope is present, it must naturally cause, solve, or worsen the Episode 1 problem. If the pitch still works without the trope, change the scenario.
+If a trope is present, make it natural and easy to understand inside the concrete situation. If the situation still works without the trope, adjust the mechanics so the trope is actually doing story work.
 
 Relationship-status tropes: for contract marriage, fake dating, arranged marriage, secret spouse, or similar tropes, the visible problem must specifically involve public relationship status, family approval, inheritance, custody, visa or residency, social legitimacy, or a ceremonial obligation.
 
-${GENRE_NATIVE_CLIFFHANGER_SELECTOR}
+${CONCRETE_EPISODE_GATE}
 
-${PILOT_CLIFFHANGER_GATE}
+${WORLD_PERIOD_GUARD}
 
 PRIVATE TASTE BRIEF FOR THIS RUN:
 ${framework}`;
@@ -343,10 +367,10 @@ HIDDEN APPROVED STORY STATE
 Selected idea:
 ${input.premise || "None."}
 
-Current story kernel:
+Current route thesis:
 ${input.kernel || "None."}
 
-Current causal beats:
+Current route shape:
 ${input.beats || "None."}
 
 Current clarity checks:
@@ -357,23 +381,24 @@ ${input.adaptationNotes || "None."}
 
 Revision direction:
 - Apply the writer instruction directly.
-- Preserve the useful core unless the writer clearly asks to change it.
-- Keep the revised idea simple, visual, emotionally clear, and convincing as Episode 1 of a microdrama series.
-- If the instruction changes ending, pressure, trope, or engine, update the cliffhanger logic with a genre-native choice. Do not preserve an old ending that no longer fits.
+- Preserve the selected idea and route unless the writer clearly asks to change them.
+- Convert the route into a concrete Episode 1 pitch, or revise the existing concrete pitch if one already exists.
+- Keep the result simple, visual, emotionally clear, and commercially pitchable.
+- If the instruction changes ending, pressure, trope, or engine, update the concrete situation so cause/effect still works.
 
-${PILOT_CLIFFHANGER_GATE}
+${CONCRETE_EPISODE_GATE}
 
 CURRENT TITLE:
 ${input.currentTitle}
 
-CURRENT SHORTLISTED IDEA:
+CURRENT SHORTLISTED ROUTE OR EPISODE 1 PITCH:
 ${input.currentText}
 
-ORIGINAL SHORTLISTED IDEA:
+ORIGINAL SHORTLISTED ROUTE:
 ${input.originalText}
 
 COMPACT PRIOR REFINEMENT HISTORY:
 ${input.priorTurns}
 
-Return one standalone generated option only. Do not include the instruction text, previous outputs, labels, commentary, or sample/debug notes in ideaText. Return only valid JSON shaped as {"title":"one or two words","ideaText":"one refined logline or compact pitch at the current item's scale unless the writer explicitly asks to expand","kernel":"updated or preserved hidden story kernel","beats":"updated or preserved hidden simple Episode 1 beats","clarityChecks":"hidden QA summary proving seed fit, native cliffhanger fit, role clarity, and Episode 2 engine","adaptationNotes":"updated or preserved source-inspiration note"}.`;
+Return one standalone generated option only. Do not include the instruction text, previous outputs, labels, commentary, or sample/debug notes in ideaText. Return only valid JSON shaped as {"title":"one or two words","ideaText":"one concrete Episode 1 pitch, usually 70-130 words unless the writer explicitly asks for another scale","kernel":"updated or preserved hidden route thesis","beats":"hidden concrete Episode 1 causal beats","clarityChecks":"hidden QA summary proving idea fit, situation logic, role clarity, and Episode 2 engine","adaptationNotes":"updated or preserved source-inspiration note"}.`;
 }

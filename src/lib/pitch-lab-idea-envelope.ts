@@ -7,6 +7,8 @@ export type PitchIdeaTurn = {
   beats?: string;
   clarityChecks?: string;
   adaptationNotes?: string;
+  instructionControls?: unknown;
+  qaWarnings?: unknown[];
 };
 
 export type PitchIdeaEnvelope = {
@@ -28,6 +30,8 @@ export type PitchIdeaEnvelope = {
   beats?: string;
   clarityChecks?: string;
   adaptationNotes?: string;
+  instructionControls?: unknown;
+  qaWarnings?: unknown[];
 };
 
 export function cleanPitchIdeaText(value: string): string {
@@ -64,6 +68,8 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
               beats: typeof turn.beats === "string" ? turn.beats : undefined,
               clarityChecks: typeof turn.clarityChecks === "string" ? turn.clarityChecks : undefined,
               adaptationNotes: typeof turn.adaptationNotes === "string" ? turn.adaptationNotes : undefined,
+              instructionControls: turn.instructionControls,
+              qaWarnings: Array.isArray(turn.qaWarnings) ? turn.qaWarnings : undefined,
             };
           })
           .filter((turn): turn is PitchIdeaTurn => Boolean(turn))
@@ -92,6 +98,8 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
       beats: typeof parsed.beats === "string" ? parsed.beats : undefined,
       clarityChecks: typeof parsed.clarityChecks === "string" ? parsed.clarityChecks : undefined,
       adaptationNotes: typeof parsed.adaptationNotes === "string" ? parsed.adaptationNotes : undefined,
+      instructionControls: parsed.instructionControls,
+      qaWarnings: Array.isArray(parsed.qaWarnings) ? parsed.qaWarnings : undefined,
     };
   } catch {
     return { originalText: fallback, currentText: fallback, turns: [] };
@@ -120,5 +128,7 @@ export function serializePitchIdeaEnvelope(envelope: PitchIdeaEnvelope): string 
     beats: envelope.beats,
     clarityChecks: envelope.clarityChecks,
     adaptationNotes: envelope.adaptationNotes,
+    instructionControls: envelope.instructionControls,
+    qaWarnings: envelope.qaWarnings,
   });
 }

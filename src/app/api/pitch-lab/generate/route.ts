@@ -24,6 +24,12 @@ import {
 } from "@/lib/ai/pitch-lab-prompts";
 import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
 import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
+import {
+  compilePitchLabInstructions,
+  formatPitchLabInstructionControls,
+  scanPitchLabOutput,
+  type PitchLabQaWarning,
+} from "@/lib/ai/pitch-lab-instruction-compiler";
 
 const SOURCE_LIMIT = 60_000;
 const WRITER_SOURCE_BLOCK_LIMIT = 20_000;
@@ -46,7 +52,7 @@ function logPitchLabGenerationOutput(input: {
     adaptationStyle: input.adaptationStyle,
     isPlaceholder: input.isPlaceholder,
     sourceCount: input.sourceCount,
-    ideaCount: input.ideas.length,
+    itemCount: input.ideas.length,
     ideas: input.ideas.map((idea, index) => ({
       index,
       ideaId: idea.id,
@@ -78,7 +84,7 @@ function parseModelJson(text: string): unknown {
   try {
     return JSON.parse(repaired);
   } catch {
-    throw new Error("The model returned an unreadable idea list. Your current ideas are unchanged; try generating again.");
+    throw new Error("The model returned unreadable Pitch Lab JSON. Your current work is unchanged; try generating again.");
   }
 }
 
@@ -104,7 +110,7 @@ function parsePremises(text: string): ParsedPremise[] {
 
 function parseIdeas(text: string): ParsedPilot[] {
   const parsed = parseModelJson(text);
-  if (!Array.isArray(parsed)) throw new Error("The model returned an invalid idea list.");
+  if (!Array.isArray(parsed)) throw new Error("The model returned an invalid pitch route list.");
   const ideas = parsed.map((item) => {
     if (!item || typeof item !== "object") return null;
     const candidate = item as Record<string, unknown>;
@@ -120,8 +126,23 @@ function parseIdeas(text: string): ParsedPilot[] {
       adaptationNotes: typeof candidate.adaptationNotes === "string" ? candidate.adaptationNotes.trim() : "",
     } : null;
   }).filter((idea): idea is ParsedPilot => Boolean(idea));
-  if (ideas.length !== PITCH_LAB_IDEA_COUNT) throw new Error(`The model returned ${ideas.length} valid ideas with one- or two-word titles; expected ${PITCH_LAB_IDEA_COUNT}. Please regenerate.`);
+  if (ideas.length !== PITCH_LAB_IDEA_COUNT) throw new Error(`The model returned ${ideas.length} valid pitch routes with one- or two-word titles; expected ${PITCH_LAB_IDEA_COUNT}. Please regenerate.`);
   return ideas;
+}
+
+function buildCarriedPromiseContext(input: {
+  selectedPremiseEnvelope: ReturnType<typeof parsePitchIdeaEnvelope> | null;
+}): string {
+  const promiseInstruction = input.selectedPremiseEnvelope?.turns
+    ?.map((turn) => turn.instruction)
+    .find((instruction) => /^Idea batch instruction:/i.test(instruction))
+    ?.replace(/^Idea batch instruction:\s*/i, "")
+    .trim();
+  const promiseNotes = input.selectedPremiseEnvelope?.adaptationNotes?.trim() || "";
+  return [
+    promiseInstruction ? `Selected idea was created from: ${promiseInstruction}` : "",
+    promiseNotes ? `Selected idea notes: ${promiseNotes}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function getTextFromHtml(html: string | null): string {
@@ -288,7 +309,7 @@ export async function POST(req: Request) {
   const generationType = body?.generationType === "adaptation" ? "adaptation" : "framework";
   const adaptationStyle = body?.adaptationStyle === "close" ? "close" : "loose";
   if (phase === "pilots" && !selectedPremise) {
-    return NextResponse.json({ error: "Choose an idea before generating pitch options." }, { status: 400 });
+    return NextResponse.json({ error: "Choose an idea before generating pitch routes." }, { status: 400 });
   }
   if (generationType === "adaptation" && !sourceDocumentId && !pastedSource && !sourceUrl) {
     return NextResponse.json({ error: "Choose a Writer story, add a public story link, or paste story material to adapt." }, { status: 400 });
@@ -314,6 +335,37 @@ export async function POST(req: Request) {
     }
   }
   const sourceMaterial = sources.map((source) => source.text).join("\n\n---\n\n").slice(0, SOURCE_LIMIT);
+  const workspaceRow = db.select({ id: pitchWorkspaces.id, brief: pitchWorkspaces.brief })
+    .from(pitchWorkspaces)
+    .where(eq(pitchWorkspaces.ownerId, session.user.id))
+    .get();
+  const selectedPremiseEnvelope = phase === "pilots" && selectedPremiseId && workspaceRow?.id
+    ? parsePitchIdeaEnvelope(db.select({ ideaText: pitchIdeas.ideaText })
+      .from(pitchIdeas)
+      .where(and(eq(pitchIdeas.workspaceId, workspaceRow.id), eq(pitchIdeas.id, selectedPremiseId)))
+      .limit(1)
+      .get()?.ideaText || "")
+    : null;
+  const carriedPromiseContext = phase === "pilots"
+    ? buildCarriedPromiseContext({
+        selectedPremiseEnvelope,
+      })
+    : "";
+  const effectiveBrief = phase === "pilots"
+    ? [brief || workspaceRow?.brief || "", carriedPromiseContext ? `Carried selected-idea context:\n${carriedPromiseContext}` : ""].filter(Boolean).join("\n\n")
+    : brief;
+  const workspaceBriefToSave = phase === "pilots" ? (brief || workspaceRow?.brief || "") : brief;
+  const instructionControls = compilePitchLabInstructions({
+    stage: phase === "premises" ? "ideas" : "routes",
+    brief: effectiveBrief || brief,
+    instruction,
+    selectedIdea: phase === "pilots" ? selectedPremise : "",
+    carriedContext: carriedPromiseContext,
+    sourceMaterial,
+    generationType,
+  });
+  const instructionControlsBlock = formatPitchLabInstructionControls(instructionControls);
+  let qaWarnings: PitchLabQaWarning[] = [];
 
   let parsedPremises: ParsedPremise[] | null = null;
   let parsedIdeas: ParsedPilot[] | null = null;
@@ -326,6 +378,7 @@ export async function POST(req: Request) {
           adaptationStyle,
           sourceTitle: sources.map((source) => source.title).join(" + ") || "the selected story",
         });
+        qaWarnings = scanPitchLabOutput(instructionControls, "ideas", parsedPremises.map((premise) => premise.premiseText));
       } else {
         const sampleIdeas = buildPitchLabSampleIdeas({
           generationType,
@@ -334,9 +387,10 @@ export async function POST(req: Request) {
           selectedPremise,
         });
         if (sampleIdeas.length !== PITCH_LAB_IDEA_COUNT) {
-          throw new Error(`Sample pitch batch returned ${sampleIdeas.length} ideas; expected ${PITCH_LAB_IDEA_COUNT}.`);
+          throw new Error(`Sample pitch batch returned ${sampleIdeas.length} routes; expected ${PITCH_LAB_IDEA_COUNT}.`);
         }
         parsedIdeas = sampleIdeas.map((idea) => ({ ...idea, kernel: selectedPremise, beats: "", clarityChecks: "", adaptationNotes: "" }));
+        qaWarnings = scanPitchLabOutput(instructionControls, "routes", parsedIdeas.map((idea) => idea.ideaText));
       }
       isPlaceholder = true;
     } else {
@@ -354,13 +408,18 @@ export async function POST(req: Request) {
               ? buildPitchLabPremiseSystemPrompt(tasteBrief)
               : buildPitchLabPilotBatchSystemPrompt(tasteBrief),
             prompt: phase === "premises"
-              ? buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial })
-              : buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, selectedPremise }),
+              ? buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, instructionControls: instructionControlsBlock })
+              : buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief: effectiveBrief, instruction, sourceMaterial, selectedPremise, instructionControls: instructionControlsBlock }),
             maxOutputTokens: phase === "premises" ? 9000 : 14000,
             maxRetries: 0,
           });
-          if (phase === "premises") parsedPremises = parsePremises(result.text);
-          else parsedIdeas = parseIdeas(result.text);
+          if (phase === "premises") {
+            parsedPremises = parsePremises(result.text);
+            qaWarnings = scanPitchLabOutput(instructionControls, "ideas", parsedPremises.map((premise) => premise.premiseText));
+          } else {
+            parsedIdeas = parseIdeas(result.text);
+            qaWarnings = scanPitchLabOutput(instructionControls, "routes", parsedIdeas.map((idea) => idea.ideaText));
+          }
           lastError = null;
           break;
         } catch (err) {
@@ -413,9 +472,18 @@ export async function POST(req: Request) {
           ideaText: serializePitchIdeaEnvelope({
             originalText: premise.premiseText,
             currentText: premise.premiseText,
-            turns: [{ instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea", ideaText: premise.premiseText, createdAt: now.toISOString(), kind: "initial" }],
+            turns: [{
+              instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea",
+              ideaText: premise.premiseText,
+              createdAt: now.toISOString(),
+              kind: "initial",
+              instructionControls,
+              qaWarnings,
+            }],
             premise: premise.premiseText,
             adaptationNotes: [premise.appealLane, premise.transformationNotes].filter(Boolean).join(" | "),
+            instructionControls,
+            qaWarnings,
           }),
           status: "premise" as const, position: startPosition + index, createdAt: now, updatedAt: now,
         }));
@@ -425,7 +493,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ...saved, phase, isPlaceholder });
     }
 
-    if (!parsedIdeas) throw new Error("Idea generation returned no ideas.");
+    if (!parsedIdeas) throw new Error("Pitch route generation returned no routes.");
     const ideasToSave = parsedIdeas;
     const saved = db.transaction((tx) => {
       const now = new Date();
@@ -433,9 +501,9 @@ export async function POST(req: Request) {
         .where(eq(pitchWorkspaces.ownerId, session.user.id)).get()?.id ?? null;
       if (!workspaceId) {
         workspaceId = nanoid(12);
-        tx.insert(pitchWorkspaces).values({ id: workspaceId, ownerId: session.user.id, brief, adaptationStyle: sourceMaterial ? adaptationStyle : null, createdAt: now, updatedAt: now }).run();
+        tx.insert(pitchWorkspaces).values({ id: workspaceId, ownerId: session.user.id, brief: workspaceBriefToSave, adaptationStyle: sourceMaterial ? adaptationStyle : null, createdAt: now, updatedAt: now }).run();
       } else {
-        tx.update(pitchWorkspaces).set({ brief, adaptationStyle: sourceMaterial ? adaptationStyle : null, updatedAt: now })
+        tx.update(pitchWorkspaces).set({ brief: workspaceBriefToSave, adaptationStyle: sourceMaterial ? adaptationStyle : null, updatedAt: now })
           .where(eq(pitchWorkspaces.id, workspaceId)).run();
       }
       tx.delete(pitchSources).where(eq(pitchSources.workspaceId, workspaceId)).run();
@@ -465,7 +533,18 @@ export async function POST(req: Request) {
         ideaText: serializePitchIdeaEnvelope({
           originalText: idea.ideaText,
           currentText: idea.ideaText,
-          turns: [{ instruction: instruction ? `Selected idea: ${selectedPremise}\nPilot instruction: ${instruction}` : `Selected idea: ${selectedPremise}`, ideaText: idea.ideaText, createdAt: now.toISOString(), kind: "initial" }],
+          turns: [{
+            instruction: [
+              `Selected idea: ${selectedPremise}`,
+              carriedPromiseContext ? `Carried creative context: ${carriedPromiseContext}` : "",
+              instruction ? `Route instruction: ${instruction}` : "",
+            ].filter(Boolean).join("\n"),
+            ideaText: idea.ideaText,
+            createdAt: now.toISOString(),
+            kind: "initial",
+            instructionControls,
+            qaWarnings,
+          }],
           premise: selectedPremise,
           premiseId: selectedPremiseId || undefined,
           batchId,
@@ -475,6 +554,8 @@ export async function POST(req: Request) {
           beats: idea.beats,
           clarityChecks: idea.clarityChecks,
           adaptationNotes: idea.adaptationNotes,
+          instructionControls,
+          qaWarnings,
         }),
         status: "generated" as const, position: startPosition + index, createdAt: now, updatedAt: now,
       }));

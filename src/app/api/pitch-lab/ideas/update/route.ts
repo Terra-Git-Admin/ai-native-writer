@@ -75,6 +75,12 @@ function parseRefinedPremise(raw: string, fallbackTitle: string): { title: strin
   };
 }
 
+function buildSampleEpisodePitch(input: { title: string; routeText: string; premise?: string; instruction: string }): string {
+  const premise = input.premise ? ` It stays rooted in the selected idea: ${input.premise}` : "";
+  const instruction = input.instruction ? ` The writer asked: ${input.instruction}` : "";
+  return `Episode 1 opens by turning the route "${input.title}" into a concrete public pressure test: ${input.routeText} The heroine needs one immediate practical win, the opposing lead needs her specific access or courage, and a visible rule in the arena forces them to act together before either can explain themselves.${premise}${instruction} The final beat leaves them with an immediate Episode 2 obligation instead of a solved misunderstanding.`;
+}
+
 export async function POST(req: Request) {
   const session = await auth();
   const accessError = requirePitchLabAccess(session);
@@ -90,13 +96,13 @@ export async function POST(req: Request) {
   const feedback = body?.feedback && typeof body.feedback === "object" && !Array.isArray(body.feedback)
     ? body.feedback as { rating?: unknown; reason?: unknown }
     : null;
-  if (!ideaId) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
-  if (!ideaText && !feedback) return NextResponse.json({ error: "Idea text is required." }, { status: 400 });
+  if (!ideaId) return NextResponse.json({ error: "Pitch Lab item not found." }, { status: 404 });
+  if (!ideaText && !feedback) return NextResponse.json({ error: "Pitch Lab text is required." }, { status: 400 });
   if (title && !isValidPitchLabTitle(title)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
-  if (!workspace) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
+  if (!workspace) return NextResponse.json({ error: "Pitch Lab item not found." }, { status: 404 });
   const idea = await db.query.pitchIdeas.findFirst({ where: and(eq(pitchIdeas.id, ideaId), eq(pitchIdeas.workspaceId, workspace.id)) });
-  if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an idea before refining." }, { status: 404 });
+  if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an idea or Studio route before refining." }, { status: 404 });
 
   const envelope = parsePitchIdeaEnvelope(idea.ideaText);
   if (feedback) {
@@ -141,7 +147,14 @@ export async function POST(req: Request) {
   if (instruction) {
     if (isPitchLabSampleMode()) {
       // Keep local flow tests usable without sending a paid request to a model.
-      updatedText = cleanPitchIdeaText(ideaText);
+      updatedText = isPremise
+        ? cleanPitchIdeaText(ideaText)
+        : buildSampleEpisodePitch({
+          title: updatedTitle,
+          routeText: ideaText,
+          premise: envelope.premise,
+          instruction,
+        });
       isPlaceholder = true;
     } else {
       const providers = await getConfiguredProviders();
@@ -199,7 +212,7 @@ export async function POST(req: Request) {
       }
       updatedTitle = refinedPremise?.title ?? refinedIdea!.title;
       updatedText = cleanPitchIdeaText(refinedPremise?.premiseText ?? refinedIdea!.ideaText);
-      if (!updatedText) return NextResponse.json({ error: "The model returned an empty idea." }, { status: 502 });
+      if (!updatedText) return NextResponse.json({ error: "The model returned empty Pitch Lab text." }, { status: 502 });
       if (!isValidPitchLabTitle(updatedTitle)) return NextResponse.json({ error: "The model returned a title longer than two words. Try a simpler refinement." }, { status: 502 });
     }
   }
