@@ -3,8 +3,7 @@ export const PITCH_LAB_SAMPLE_TITLE_PREFIX = "[Sample] ";
 export function isPitchLabSampleMode(): boolean {
   if (process.env.NODE_ENV === "production") return false;
   if (process.env.PITCH_LAB_USE_REAL_AI === "true") return false;
-  if (process.env.PITCH_LAB_USE_SAMPLES === "false") return false;
-  return true;
+  return process.env.PITCH_LAB_USE_SAMPLES === "true";
 }
 
 type SampleInput = {
@@ -21,83 +20,43 @@ export type PitchLabSamplePremise = {
   transformationNotes: string;
 };
 
-// Prompt/sample title constraints v1.1 (2026-09-18): every title is one or two words.
-const FRAMEWORK_IDEAS = [
-  ["Defusal", "A charming bomb technician is trapped in a stalled elevator with the building owner's daughter, who has a vest counting down beneath her coat. She keeps moving to hide how terrified she is, so he gets her to match his breathing by making up ridiculous stories about their future together. The doors finally open and the vest is safe. Then the elevator starts rising by itself, with someone inside on every floor."],
-  ["Impostor", "A night-shift nurse sees a man shove a stranger onto the tracks, then realizes the stranger is her missing husband. The off-duty detective beside her insists the cameras show she did it, and they have one train ride to prove who is lying. When the doors open, her husband steps out alive and calls the detective by a name nobody should know."],
-  ["Second Ring", "A wedding planner locks the runaway bride in a supply room so the ceremony can start. The groom's furious older brother helps the bride climb out, but she refuses to leave until she knows why he came back after ten years. They uncover a hidden letter in the wedding dress and learn the groom has been paying the brother to stay away. The bride walks to the altar anyway, carrying a second ring."],
-  ["Room 17", "A broke motel clerk lets a stranger hide in room 17 while a storm traps the town. The sheriff arrives asking for the stranger by name, and the clerk lies because the man just saved a child from the flooded road. They spend the night building an escape plan and almost kiss. At dawn, the clerk opens the room safe and finds her own photograph inside."],
-  ["False Promise", "A street magician steals an engagement ring from a woman who swears she never owned it. She corners him backstage and demands the secret message engraved inside, so he admits his brother planted it to frame her for a jewel heist. They fake an engagement to get into the family mansion. At the party, the groom is waiting with the real ring and a wedding license."],
-  ["Evacuation", "A meticulous hotel auditor pulls a reckless fire captain out of a locked service stairwell moments before a real alarm sends the guests running. They have to lead the evacuation together while arguing about who caused the first alarm. When the last guest is safe, they discover one room was never on the hotel plan. Someone inside calls the auditor by her childhood nickname."],
-  ["Missing Evidence", "A public defender gets stuck in a courthouse overnight with the judge who sent her brother to prison. He says he can prove the case was rigged, but only if she helps him find a missing evidence box before court opens. Their search turns into a confession about the night her brother disappeared. The evidence box is empty except for a fresh key to her apartment."],
-  ["Cold Storage", "A food truck owner and a health inspector are locked inside a restaurant freezer after a midnight break-in. She thinks he is hiding the health violations that could close her business; he thinks she saw the thief's face. They thaw the emergency latch with a bottle of stolen champagne and admit what they were each really afraid of. Outside, her truck is gone and his badge is on the ground."],
-  ["Buried Necklace", "A paramedic calls the emergency contact for an unconscious stranger and reaches the woman who left him at the altar. She arrives furious, then recognizes the necklace in his hand as one she buried with her sister. The paramedic and the ex race to find out how he got it, slowly realizing he may have saved the sister years ago. The patient wakes and asks which one of them is his wife."],
-  ["Detonator", "A rookie negotiator is sent to talk down a bank robber who refuses to speak to police. Through the vault door, she learns he is trying to protect the cashier he claims kidnapped him. She gets him to trust her by admitting she once helped the same woman escape an abusive marriage. The robber walks out unarmed, but the cashier is still inside holding the detonator."],
-  ["Phantom Cry", "A sleep-deprived nanny hears a baby crying through a monitor that belongs to the apartment next door. The baby's father insists there is no child there, yet he knows every lullaby she sings. They break into the empty unit and find a nursery, a hospital bracelet, and a note in her handwriting. The baby's cry suddenly comes from her own locked bedroom."],
-  ["Empty Aquarium", "A broke rideshare driver picks up a millionaire who begs her to say he was with her when a museum guard vanished. She refuses until the guard's daughter appears in the back seat with a bloodied key. The three of them hide in a closed aquarium and uncover a family secret while the millionaire tries to buy his way out. The missing guard calls the driver and says her father is alive."],
-  ["False Burial", "A florist brings a funeral wreath to the wrong house and finds the supposed dead man very much alive, handcuffed to a radiator. The cop guarding him claims he is a killer, but the florist recognizes the song he uses to calm her little brother. She cuts the chain and helps him escape through the flower market. At sunrise, the dead man's portrait is on every news channel, and the cop is named as the victim."],
-  ["Open Line", "A radio host takes one final call before her station shuts down and hears her ex confess to a murder live on air. He says the victim is still alive and gives her clues only she would understand. She races across town with the station's grumpy engineer, who keeps cutting the broadcast to protect her. The signal goes dead just as the caller says her real name."],
-  ["Double Booked", "Two strangers arrive for the same remote cabin: a wedding singer escaping a groom and a private investigator tracking the groom's missing fiancÃ©e. They agree to share the cabin until the road clears, each hiding why they need to stay. A storm knocks out the power and reveals they have been following the same woman for very different reasons. Her car pulls into the driveway, empty and still running."],
-  ["Blackout", "A pharmacy owner refuses to give a desperate police officer the medicine he needs for a woman locked in his trunk. She makes him tell the whole truth while the town's blackout traps them inside. Their argument turns into a plan to save the woman without calling backup, and the officer gives her his badge as proof he will stay. The medicine label carries the pharmacist's own name."],
-  ["Second Bride", "A videographer notices the bride whispering for help in the wedding footage and corners the groom's best friend before the reception. He admits the bride asked him to ruin the ceremony, but refuses to say why. They replay the footage frame by frame and uncover a second bride hiding in the venue. The woman in white is not the bride they invited."],
-  ["Disappearing Ink", "A border officer recognizes the smuggler in her queue as the boy who saved her life as a child. He says he is carrying no contraband, only a message that could stop her father's arrest. She risks her career to search his bags in private and finds them empty. The message is written under her skin in disappearing ink."],
-  ["Hidden Room", "A landlord shows a new tenant the apartment where his sister vanished, then insists the spare room has never existed. The tenant hears someone knocking from behind a bricked-up wall and persuades him to open it. They find a phone still ringing with a live call from the missing sister. The voice on the line says the landlord is the one who let her out."],
-  ["Death Ticket", "A ferry captain discovers a passenger hiding below deck with the same name as the woman listed as drowned five years ago. A marine investigator boards to arrest him, but the captain knows the investigator has been falsifying the passenger log. They work together to reach shore before the ferry turns back. In the cabin, a second ticket has the captain's name and tomorrow's date of death."],
+// Prompt/sample title constraints v1.2 (2026-10-12): every title is one or two words.
+const FRAMEWORK_ROUTES = [
+  ["Refusal", "Build a route around a heroine whose clean refusal exposes a powerful lead's weakness. The pilot should promise attraction through integrity, public consequence, and a later concrete situation where saying no changes the power balance."],
+  ["Witness", "Build a route around public misreading and private recognition. The heroine looks guilty or foolish to everyone else, while the opposing lead sees she may be the only person with usable access, courage, or truth."],
+  ["Leverage", "Build a route around mismatched status: the heroine has one practical advantage the powerful lead cannot buy. The pilot should promise bargaining, suspicion, and romantic dependence before Shortlist Studio chooses the exact pressure object."],
+  ["Exposure", "Build a route around image versus truth. The heroine can damage a family's, company's, or celebrity's perfect surface, and the opposing lead must decide whether to silence, use, or protect her."],
 ] as const;
 
-const ADAPTATION_TITLES = ["Floodgate", "Runaway", "Last Route", "Blackout", "Open Frequency", "False Portrait", "Sealed Verdict", "Dead Reckoning", "Rising Water", "Living Funeral", "Missing Passport", "Power Cut", "After Hours", "Stolen Ignition", "Hidden Floor", "Eye of Storm", "Second Vow", "Empty Rides", "Fireline", "Final Fare"] as const;
+const ADAPTATION_TITLES = ["Floodgate", "Runaway", "Last Route", "Blackout"] as const;
 
 const ADAPTATION_VARIANTS = [
   ["ER nurse", "fire investigator", "a shuttered seaside hotel"],
   ["wedding planner", "divorce lawyer", "an empty wedding venue"],
   ["night bus driver", "missing-person detective", "the last route through downtown"],
-  ["small-town pharmacist", "undercover officer", "a locked pharmacy during a blackout"],
-  ["radio host", "sound engineer", "a station during its final broadcast"],
-  ["museum curator", "security guard", "a gallery during a midnight gala"],
-  ["courthouse clerk", "public defender", "a courthouse sealed overnight"],
-  ["ferry captain", "marine investigator", "a crossing in heavy fog"],
-  ["motel manager", "stranded paramedic", "a roadside motel cut off by flooding"],
-  ["flower-shop owner", "funeral director", "a funeral home before dawn"],
-  ["airport cleaner", "customs officer", "a terminal during a security lockdown"],
-  ["private chef", "family chauffeur", "a mansion during a power outage"],
-  ["school counselor", "new substitute teacher", "a school after the last bell"],
-  ["night-shift mechanic", "stolen-car investigator", "an isolated service station"],
-  ["apartment superintendent", "new tenant", "a tower with one working elevator"],
-  ["storm chaser", "local weather reporter", "a town shelter as the storm arrives"],
-  ["wedding singer", "groom's older brother", "a reception hall during the ceremony"],
-  ["ride-share driver", "bail bonds agent", "a closed amusement park"],
-  ["hotel auditor", "fire captain", "a high-rise hotel during evacuation"],
-  ["late-night diner owner", "off-duty detective", "a diner beside an empty highway"],
+  ["small-town pharmacist", "undercover officer", "a pharmacy during a blackout"],
 ] as const;
 
 const FRAMEWORK_PREMISES: PitchLabSamplePremise[] = [
-  { title: "Debt Bride", premiseText: "A street-smart debt collector and the groom's quiet brother inside a luxury engagement dinner, where a fake bride's necklace threatens a family takeover.", appealLane: "status leverage", transformationNotes: "Keeps family pressure but holds the collision for Generate." },
-  { title: "Fireline", premiseText: "A rule-bound hotel safety auditor and a reckless fire captain inside a high-rise hotel, where one false alarm could cost her career.", appealLane: "competence collision", transformationNotes: "Turns workplace pressure into a charged arena seed." },
-  { title: "Wrong Verdict", premiseText: "Mira, a courthouse clerk, and Jae, an icy defense lawyer, inside a courthouse records wing where one file controls both their families.", appealLane: "legal leverage", transformationNotes: "Preserves procedural pressure without plotting the file swap." },
-  { title: "Last Route", premiseText: "Ara, a night bus driver, and Minjun, a rich passenger, on the last downtown route where every camera sees her choices.", appealLane: "public danger", transformationNotes: "Keeps moving-location pressure as a seed." },
-  { title: "Storm Key", premiseText: "A guarded motel manager and a soaked stranger inside a flood-cut roadside motel, where shelter means reopening the night her father vanished.", appealLane: "rescue suspicion", transformationNotes: "Uses intimate storm pressure without an incident reveal." },
-  { title: "False Guest", premiseText: "A wedding singer hiding from scandal and the groom's older brother inside a private reception suite, where both need the wrong identity.", appealLane: "mistaken access", transformationNotes: "Keeps public ceremony stakes but delays the collision." },
-  { title: "Open Mic", premiseText: "A radio host on her final shift and a powerful club owner outside the studio, where one live call could ruin them both.", appealLane: "voice trap", transformationNotes: "Audio pressure becomes the seed's dramatic charge." },
-  { title: "Cold Room", premiseText: "A food truck owner and a strict health inspector inside a restaurant kitchen, where her recipe book is worth more than her permit.", appealLane: "ambition pressure", transformationNotes: "Keeps food-world stakes without a freezer incident." },
-  { title: "Second Ticket", premiseText: "A ferry captain and a marine investigator on a fogbound crossing, where the passenger log can make either of them disappear.", appealLane: "contained route", transformationNotes: "Turns route mystery into a clean arena seed." },
-  { title: "Missing Badge", premiseText: "A pharmacy owner and a bleeding officer inside a blackout-locked pharmacy, where medicine, authority, and a stolen badge collide.", appealLane: "moral pressure", transformationNotes: "Preserves authority conflict without resolving the dilemma." },
-  { title: "Hidden Wall", premiseText: "A new tenant and the landlord her missing sister feared inside an old apartment tower, where every sealed room feels personal.", appealLane: "domestic danger", transformationNotes: "Keeps contained danger as charge, not plot." },
-  { title: "Double Bride", premiseText: "A wedding videographer and the groom's best friend inside a live-streamed wedding, where family image matters more than the bride.", appealLane: "public erasure", transformationNotes: "Keeps visual scandal potential without the second-bride reveal." },
+  { title: "Debt Bride", premiseText: "A working-class heroine is pulled toward a powerful family that treats marriage as leverage, promising romance where love, debt, and public status keep changing who owns the bargain.", appealLane: "status leverage", transformationNotes: "Frames the contract fantasy without choosing the incident." },
+  { title: "Fireline", premiseText: "A careful rule-follower and a reckless protector keep colliding because each crisis proves the other's competence is both dangerous and irresistible.", appealLane: "competence collision", transformationNotes: "Keeps workplace heat while leaving the arena open." },
+  { title: "Wrong Verdict", premiseText: "A low-status woman with hidden access to truth is forced into an alliance with a colder, higher-status defender, promising justice, family secrets, and reluctant dependence.", appealLane: "legal leverage", transformationNotes: "Preserves procedural pressure without plotting a file swap." },
+  { title: "Last Route", premiseText: "A woman whose job makes her publicly accountable keeps getting trapped with a privileged man whose secrets make every ordinary choice look suspicious.", appealLane: "public danger", transformationNotes: "Keeps moving public pressure without choosing the vehicle incident." },
+  { title: "Storm Key", premiseText: "A guarded caretaker must decide whether sheltering a stranger is rescue, betrayal, or the first clue to a family wound she has avoided for years.", appealLane: "rescue suspicion", transformationNotes: "Uses intimate storm pressure without an incident reveal." },
+  { title: "False Guest", premiseText: "A woman hiding from scandal and a powerful man guarding family image need each other's false identity, promising public performance, private recognition, and romantic exposure.", appealLane: "mistaken access", transformationNotes: "Keeps ceremony stakes but delays the collision." },
+  { title: "Open Mic", premiseText: "A woman whose voice is her only power becomes dangerous to a man who controls the room, promising secrets exposed through performance, sound, and reputation.", appealLane: "voice trap", transformationNotes: "Audio pressure becomes a broad promise, not a fixed call." },
+  { title: "Cold Room", premiseText: "A practical heroine protecting her livelihood clashes with a status figure who can ruin or save it, promising competence, suspicion, and attraction under business pressure.", appealLane: "ambition pressure", transformationNotes: "Keeps food-world stakes without a freezer incident." },
 ];
 
 const ADAPTATION_PREMISES: PitchLabSamplePremise[] = [
-  { title: "Cold Room", premiseText: "A pastry-shop owner and a powerful investor inside her failing kitchen, where one performance debt can swallow her whole business.", appealLane: "competence under pressure", transformationNotes: "Preserves crisis-born attachment while changing job, setting, and obligation." },
-  { title: "Fire Audit", premiseText: "A hotel auditor and a fire captain inside a high-rise safety review, where gratitude and career-ending blame point at the same report.", appealLane: "dangerous gratitude", transformationNotes: "Transforms caregiver surface into workplace competence and institutional pressure." },
-  { title: "Last Table", premiseText: "A diner owner and a dangerous regular inside a blackout restaurant, where every reserved table looks like protection or a threat.", appealLane: "forced protection", transformationNotes: "Keeps nerve-plus-charm pressure while changing the follow-up trap." },
-  { title: "Open Stage", premiseText: "A community-theater stage manager and a powerful donor inside a rehearsal hall, where public performance can hide private coercion.", appealLane: "public coercion", transformationNotes: "Replaces private care with public performance pressure." },
-  { title: "Storm Escort", premiseText: "A ferry medic and a dangerous passenger on a storm crossing, where helping him could make her look like his accomplice.", appealLane: "accidental alliance", transformationNotes: "Changes occupation stakes and cliffhanger mechanism." },
-  { title: "False Note", premiseText: "A piano tuner and a club owner inside a gala venue, where her rare skill can expose the ledger hidden in his instrument.", appealLane: "skill trap", transformationNotes: "Keeps performance-world charge without repeating nurse or caregiver logic." },
-  { title: "Back Room", premiseText: "A casino cashier and a wounded VIP behind the counting room, where every chip makes her either useful or disposable.", appealLane: "status reversal", transformationNotes: "Preserves dangerous male pressure but makes heroine the accused actor." },
-  { title: "Locked Lens", premiseText: "A wedding photographer and a collapsing heir inside a family ceremony, where her camera controls what the powerful family can deny.", appealLane: "evidence trap", transformationNotes: "Transforms medical rescue into visual evidence pressure." },
-  { title: "Night Shift", premiseText: "A tow-truck driver and a bleeding businessman at an isolated service yard, where his route can save or destroy her livelihood.", appealLane: "working-class leverage", transformationNotes: "Keeps indebted powerful man, changes world and obligation." },
-  { title: "Quiet Room", premiseText: "A library clerk and a panicked patron inside a silent reading room, where hiding him turns quiet space into public danger.", appealLane: "soft-space danger", transformationNotes: "Moves the competence engine into a non-medical quiet setting." },
-  { title: "Gold Card", premiseText: "A pawnshop appraiser and a wounded heir across her appraisal counter, where his bloodied watch can buy safety or an alibi.", appealLane: "transaction trap", transformationNotes: "Transforms care contract into alibi and money pressure." },
-  { title: "Exit Row", premiseText: "An airport cleaner and a first-class passenger inside a lockdown terminal, where status decides who gets searched and who gets believed.", appealLane: "public status collision", transformationNotes: "Keeps forced proximity but changes the crisis and visible institution." },
+  { title: "Cold Room", premiseText: "A small-business heroine and a powerful investor are bound by crisis-born gratitude, promising attraction where help always risks ownership.", appealLane: "competence under pressure", transformationNotes: "Preserves attachment while changing job, setting, and obligation." },
+  { title: "Fire Audit", premiseText: "A rule-bound heroine and a reckless protector keep saving each other in ways that can end their careers, promising gratitude, blame, and public competence.", appealLane: "dangerous gratitude", transformationNotes: "Transforms caregiver surface into workplace pressure." },
+  { title: "Last Table", premiseText: "A woman protecting her everyday kingdom attracts a dangerous regular whose charm may be shelter or threat, promising intimacy under public pressure.", appealLane: "protective ambiguity", transformationNotes: "Keeps nerve-plus-charm pressure while changing the trap." },
+  { title: "Open Stage", premiseText: "A woman who manages public performance becomes the only person who can expose a powerful donor's coercion, promising romance through spectacle and risk.", appealLane: "public coercion", transformationNotes: "Replaces private care with performance pressure." },
+  { title: "Storm Escort", premiseText: "A competent woman helps a dangerous passenger and becomes implicated by that help, promising accidental alliance, suspicion, and storm-bound trust.", appealLane: "accidental alliance", transformationNotes: "Changes occupation stakes and defers the cliffhanger." },
+  { title: "False Note", premiseText: "A heroine's rare skill makes her useful to a powerful man with hidden money trouble, promising romance where performance, class, and evidence keep crossing.", appealLane: "skill trap", transformationNotes: "Keeps performance-world charge without caregiver logic." },
+  { title: "Back Room", premiseText: "A woman who handles other people's money becomes necessary to a dangerous VIP, promising status reversal where usefulness can turn into disposability or desire.", appealLane: "status reversal", transformationNotes: "Preserves dangerous male pressure but keeps heroine active." },
+  { title: "Locked Lens", premiseText: "A woman paid to preserve family image becomes the person who can destroy it, promising wedding glamour, visual evidence, and forbidden alliance.", appealLane: "evidence trap", transformationNotes: "Transforms rescue into visual evidence pressure." },
 ];
 
 export function buildPitchLabSamplePremises(input: SampleInput): PitchLabSamplePremise[] {
@@ -108,32 +67,30 @@ export function buildPitchLabSampleIdeas(input: SampleInput): { title: string; i
   if (input.selectedPremise) {
     const premise = input.selectedPremise.replace(/\s+/g, " ").trim();
     const lowerPremise = premise.toLocaleLowerCase();
-    if (lowerPremise.includes("courthouse clerk")) {
+    if (lowerPremise.includes("truth") || lowerPremise.includes("justice")) {
       return [
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Live File`, ideaText: "When Mira is blamed for a missing plea file minutes before a live hearing, Jae catches the gap and makes her sit beside him as records witness, turning her access badge into both his proof and her public risk." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Witness Seat`, ideaText: "When a prosecutor asks Mira to explain a file logged under her sister's name, Jae interrupts with one question that saves her job but forces her to help him expose who touched the record first." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Court Lock`, ideaText: "When a courthouse lockdown traps Mira in the records wing, Jae refuses to let her erase the only clip that can clear his client, forcing both of them toward the live hearing feed." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Plea Trap`, ideaText: "When Mira tries to deliver the safest file before court opens, Jae blocks her with proof that the wrong document can expose the judge, but only if Mira becomes the visible clerk of record." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Live File`, ideaText: "Lean into a procedural romance route where the heroine's overlooked access makes her the only person the defender can trust. The pilot should deliver public stakes, family shame, and reluctant alliance before Shortlist Studio chooses the exact record, hearing, or proof mechanism." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Witness Seat`, ideaText: "Shape the route around visible belief: the heroine is used to being ignored until the opposing lead makes her testimony matter. The pilot should promise status reversal, public pressure, and a partnership that risks both families without fixing the opening incident yet." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Court Lock`, ideaText: "Use a contained-pressure route where bureaucracy becomes romantic friction. The heroine and opposing lead need each other's access and nerve, but the exact file, room, or public accusation should be selected later in Shortlist Studio." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Plea Trap`, ideaText: "Build toward a moral-bind route: the heroine can protect herself or help expose a larger wrong. The pilot should carry legal leverage, family consequence, and attraction through competence while leaving the concrete trigger unresolved." },
       ];
     }
-    if (lowerPremise.includes("night bus driver")) {
+    if (lowerPremise.includes("publicly accountable") || lowerPremise.includes("ordinary choice")) {
       return [
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Last Stop`, ideaText: "When Minjun begs Ara to skip the last stop, she refuses on camera, then the route screens show his ticket number in a missing-person alert and force her to keep driving with every passenger watching." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Route Nine`, ideaText: "When Minjun offers to buy the whole bus route, Ara keeps him in the front camera seat, only to learn the alert using his ticket may be bait for someone riding behind them." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Night Fare`, ideaText: "When Minjun asks Ara to bypass a police checkpoint, she locks the doors and moves every passenger into camera view, turning the bus into a rolling witness room." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Terminal Light`, ideaText: "When Minjun begs Ara to turn off the terminal lights, she follows procedure until her deleted dispatch call plays back over the bus radio with the missing girl's voice." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Last Stop`, ideaText: "Take the public-accountability route: the heroine's job makes every choice visible, while the privileged lead's secrets make every request suspicious. The pilot should promise class tension, moving danger, and reluctant dependence without choosing the exact alert or stop." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Route Nine`, ideaText: "Use a route built on bought access versus public duty. The powerful lead can open doors the heroine cannot, she controls the journey he needs, and Shortlist Studio can later decide the concrete schedule, witness, or threat." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Night Fare`, ideaText: "Make the pilot a moral-pressure route where rule-following becomes heroic and inconvenient. The lead's secret should test whether procedure protects people or exposes them, but the exact checkpoint or proof stays open." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Terminal Light`, ideaText: "Choose an atmospheric suspense route: an ordinary public system turns intimate because the heroine understands how it works and the lead understands why someone wants to disappear. Keep the final mechanism for Shortlist Studio." },
       ];
     }
-    return [
-      { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Refusal`, ideaText: `When the heroine refuses the arena's expected lie, the opposing lead catches the cost immediately and keeps her close because her clean choice exposes leverage he cannot reach alone.` },
-      { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Witness`, ideaText: `When a public witness misreads the heroine's motive, the opposing lead can either expose her or use her access, forcing them into one visible bargain before the room turns on them.` },
-      { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Proof`, ideaText: `When the heroine tries to undo a risky choice in public, the opposing lead forces her to finish it because stopping now would destroy the only proof inside the arena.` },
-      { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Lock`, ideaText: `When a deadline traps the heroine with the opposing lead, he tests her story under pressure and discovers the collision was prepared before either of them arrived.` },
-    ];
+    return FRAMEWORK_ROUTES.map(([title, ideaText]) => ({
+      title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`,
+      ideaText,
+    }));
   }
 
   if (input.generationType === "framework") {
-    return FRAMEWORK_IDEAS.map(([title, ideaText]) => ({
+    return FRAMEWORK_ROUTES.map(([title, ideaText]) => ({
       title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`,
       ideaText,
     }));
@@ -143,8 +100,8 @@ export function buildPitchLabSampleIdeas(input: SampleInput): { title: string; i
     const title = ADAPTATION_TITLES[index];
 
     const ideaText = input.adaptationStyle === "close"
-      ? `Sample placeholder based on â€œ${input.sourceTitle}.â€ Keep the source's major story beats, relationship turns, reveal, and ending in the same order. Recast the heroine as a ${lead} and the male lead as a ${counterpart}, and move the action to ${setting}; let their new jobs change how they handle each crisis. The source's final reversal lands almost beat for beat, then a new detail in the closing moment pulls the audience into episode two.`
-      : `Sample placeholder inspired by â€œ${input.sourceTitle}.â€ Keep its central emotional engine, but rebuild the episode around a ${lead} and a ${counterpart} trapped in ${setting}. Their opposing goals force them to cooperate, a discovery changes what they believe about the source conflict, and the final beat reveals that one of them has been hiding a connection to the other.`;
+      ? `Sample placeholder based on "${input.sourceTitle}". Preserve the source's major emotional promise and relationship turns, but recast the heroine as a ${lead} and the male lead as a ${counterpart}. Keep this as a route direction; Shortlist Studio can later choose the exact incident, proof, and final turn.`
+      : `Sample placeholder inspired by "${input.sourceTitle}". Keep its central emotional engine, but rebuild the route around a ${lead} and a ${counterpart} with pressure from ${setting}. Their opposing goals should suggest cooperation and suspicion without closing the Episode 1 situation yet.`;
     return { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`, ideaText };
   });
 }
