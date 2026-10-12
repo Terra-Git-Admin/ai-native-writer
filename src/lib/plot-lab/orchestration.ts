@@ -4,7 +4,6 @@ export type PlotLabSpecialistMode =
   | "plot_lab_source_soul_scan"
   | "plot_lab_character_analyst"
   | "plot_lab_paywall_architect"
-  | "plot_lab_premise_bridge"
   | "plot_lab_universe_builder"
   | "plot_lab_runway_sketch";
 
@@ -26,6 +25,13 @@ export interface PlotLabSpecialistBrief {
   visibleFrame?: string;
   question?: string;
   options?: PlotLabSpecialistOption[];
+  stage1CharacterBoard?: Array<{
+    label: string;
+    storyTerm?: "Protagonist" | "Antagonist" | "Obstacle" | "Character";
+    disposition: "focus_question" | "summary_only" | "ignore_for_now";
+    rationale?: string;
+    sourceEvidence?: string[];
+  }>;
   lockCandidate?: {
     section?: string;
     block?: string;
@@ -61,13 +67,13 @@ const PHASE_OBJECTIVES: Record<string, string> = {
   protagonist_discovery: "Find the next protagonist question from locked canon and EP1 evidence.",
   character_discovery: "Clarify the current consequential role without repeating already locked facts.",
   relationship_discovery: "Use role locks to open broader universe, pressure, power, and story-world possibilities without repeating character-motivation questions.",
+  add_more_check: "Ask only whether the writer wants to add anything else about the current focus.",
   character_summary: "Summarize the current focus and prepare a lock review.",
   plot_transition_gate: "Review the character board before moving to monetization.",
   monetization_discovery: "Find or refine the paid image/question without jumping into runway tactics.",
   monetization_lock_review: "Review the monetization candidate for lock, revise, or reroll.",
-  premise_bridge: "Ask what must evolve in the story world, pressure ecology, or character conditions between EP1 and the later monetization point.",
   stage_1_complete: "Summarize Stage 1 as complete through monetization lock; do not build beats or episode runway.",
-  plot_thread: "Build runway only from locked endpoint, bridge, and character context.",
+  plot_thread: "Build runway only from locked endpoint and character context.",
 };
 
 export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabSpecialistRoute {
@@ -84,13 +90,16 @@ export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabS
     state.phase === "protagonist_discovery" ||
     state.phase === "character_discovery" ||
     state.phase === "relationship_discovery" ||
+    state.phase === "add_more_check" ||
     state.phase === "character_summary" ||
     state.phase === "plot_transition_gate"
   ) {
     return {
       mode: state.phase === "relationship_discovery" ? "plot_lab_universe_builder" : "plot_lab_character_analyst",
       objective: PHASE_OBJECTIVES[state.phase] ?? "Advance the current character or relationship focus.",
-      qualityGate: state.phase === "relationship_discovery"
+      qualityGate: state.phase === "add_more_check"
+        ? "Ask only the fixed add-more check; do not ask a deeper question."
+        : state.phase === "relationship_discovery"
         ? "Ask a broad, writer-led universe/pressure question that opens possibility; do not ask another disguised character-motivation question or any beat mechanics."
         : "Use locked facts first, ask one open question unless the controller requests a compact review, and do not repeat solved locks.",
       auditAfter: true,
@@ -102,19 +111,6 @@ export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabS
       mode: "plot_lab_paywall_architect",
       objective: PHASE_OBJECTIVES[state.phase] ?? "Find the monetization endpoint.",
       qualityGate: "Keep monetization visual, paid-answer driven, and later than EP1; no first-beat or Episode 2 mechanics.",
-      auditAfter: true,
-    };
-  }
-
-  if (state.phase === "premise_bridge") {
-    return {
-      mode: "plot_lab_universe_builder",
-      objective: state.frameworkSlot === "lock_review"
-        ? "Review the EP1-to-paywall bridge candidate for lock, revise, or reroll."
-        : PHASE_OBJECTIVES.premise_bridge,
-      qualityGate: state.frameworkSlot === "lock_review"
-        ? "Restate the bridge candidate compactly; do not ask a new universe, pressure, outside-force, or transformation question."
-        : "Bridge EP1 to monetization through open-ended universe, pressure, power, and transformation questions; no beats, scene tactics, or Episode 2.",
       auditAfter: true,
     };
   }
@@ -131,7 +127,7 @@ export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabS
   return {
     mode: "plot_lab_runway_sketch",
     objective: PHASE_OBJECTIVES.plot_thread,
-    qualityGate: "Build executable episode movement only after endpoint and bridge are ready.",
+      qualityGate: "Build executable episode movement only after endpoint and character context are ready.",
     auditAfter: true,
   };
 }
@@ -201,13 +197,26 @@ export function renderSpecialistOutputContract(): string {
         { label: "2-7 word story label", detail: "what choosing this means", response: "optional prompt value" }
       ],
       lockCandidate: { section: "Plot Lab Decisions section", block: "block title", text: "save-ready canon if applicable" },
+      stage1CharacterBoard: [
+        {
+          label: "plain name or source noun",
+          storyTerm: "Protagonist | Antagonist | Obstacle | Character",
+          disposition: "focus_question | summary_only | ignore_for_now",
+          rationale: "why this person or obstacle matters",
+          sourceEvidence: ["short evidence"]
+        }
+      ],
       risks: ["short risk if any"]
     }, null, 2),
     "Rules:",
     "- If Allow model options is yes: set recommendedMove to show_options, ask one open question, and include exactly 2 concise answer-starter options by default. Use 3 only when the third is a genuinely different story state.",
     "- If Allow model options is yes: do not put option labels inside the question text. The app renders options as action buttons.",
     "- If Allow model options is yes: options are scaffolds for the writer to react to, not final canon locks. Keep labels concrete and details short.",
+    "- If Allow model options is yes: the 2 options must use different story levers, not two phrasings of the same pressure/status/optics idea.",
+    "- If Allow model options is yes: avoid repeating the main noun stack from the question in both options. One option may sharpen the question's angle; the other should open a distinct supported direction.",
     "- If Allow model options is no: default to one open question, set recommendedMove to ask, and leave options empty. Do not return answer starters.",
+    "- If Allow model options is yes on a typed discovery turn: include exactly 2 concise answer-starter options by default, plus the writer's custom answer path from the app.",
+    "- For opening_read/source scan: include stage1CharacterBoard. Mark only genuinely important people as focus_question; do not force three characters.",
     "- If Question mode is fixed_actions or Framework slot is lock_review: do not ask a new discovery question. Return a compact review/summary frame and leave options empty.",
     "- Use the Framework slot as the active question job. Do not substitute a neighboring framework slot because it seems more interesting.",
     "- Fixed UI actions such as lock, revise, add context, reroll, and custom answer are supplied by the app; do not duplicate them in options.",
@@ -252,10 +261,24 @@ export function specialistOptionsToActions(
   turnPlan: PlotLabTurnPlan
 ): PlotLabAction[] {
   if (!turnPlan.allowModelOptions) return [];
-  return (brief?.options ?? [])
+  const validOptions = (brief?.options ?? [])
     .filter((option) => option.label?.trim())
-    .slice(0, 4)
-    .map((option, index) => ({
+    .slice(0, 2);
+  const fallbackOptions: PlotLabSpecialistOption[] = [
+    {
+      label: "Use source evidence",
+      detail: "Answer from the strongest detail already on the page.",
+      response: "Use the strongest EP1/source evidence Levi already found.",
+    },
+    {
+      label: "Add off-page context",
+      detail: "Bring in what the writer knows but the page has not shown yet.",
+      response: "Add off-page context the writer already knows.",
+    },
+  ];
+  const options = [...validOptions, ...fallbackOptions].slice(0, 2);
+
+  return options.map((option, index) => ({
       actionId: `requested_option_${index + 1}`,
       kind: "requested_option" as const,
       label: option.label.trim(),
@@ -272,11 +295,25 @@ function normalizeSpecialistBrief(brief: PlotLabSpecialistBrief): PlotLabSpecial
     options: Array.isArray(brief.options)
       ? brief.options
           .filter((option) => option && option.label)
-          .slice(0, 4)
+          .slice(0, 2)
           .map((option) => ({
             label: option.label.trim(),
             detail: option.detail?.trim() ?? "",
             response: option.response?.trim(),
+          }))
+      : [],
+    stage1CharacterBoard: Array.isArray(brief.stage1CharacterBoard)
+      ? brief.stage1CharacterBoard
+          .filter((entry) => entry && typeof entry.label === "string" && entry.label.trim())
+          .slice(0, 8)
+          .map((entry) => ({
+            label: entry.label.trim(),
+            storyTerm: entry.storyTerm,
+            disposition: entry.disposition,
+            rationale: entry.rationale?.trim(),
+            sourceEvidence: Array.isArray(entry.sourceEvidence)
+              ? entry.sourceEvidence.filter(Boolean).slice(0, 4)
+              : [],
           }))
       : [],
     risks: Array.isArray(brief.risks) ? brief.risks.filter(Boolean).slice(0, 5) : [],

@@ -1,6 +1,6 @@
 # Plot Lab Single Source Of Truth
 
-Date: 2026-10-07
+Date: 2026-10-12
 Status: Canonical product, design, prompt, and implementation contract for Plot Lab V1
 
 Related docs:
@@ -23,9 +23,9 @@ Use this as the starting point for the next local session.
 - AI model endpoint: `/api/ai/models` last showed configured OpenAI model `gpt-5.2`
 - Current Levi prompt: `Plot Lab: Levi Chat Orchestrator v4.0`
 - Current prompt architecture: controller-routed mini-agents feed Levi through a structured transport brief. Levi is the visible renderer, not the only brain running the show.
-- Current workflow: generic role-slot controller, not story-name-specific prompt logic
-- Current intended role/state order: `protagonist -> primary_counterpart -> operator_pressure (optional/skippable) -> universe_pressure_read -> monetization_discovery -> monetization_review -> monetization_delta -> stage_1_complete`
-- Current guardrail: Stage 1 stops at character soul, universe/pressure context, monetization endpoint, and monetization delta lock. First plot beat mechanics, episode runway, E2, and sketches are Stage 2 and remain blocked for now.
+- Current workflow: source-led character board. Levi asks only about key people/obstacles identified from Plot 1 / Predefined EP1; no forced third character.
+- Current intended state order: `opening_read -> source-led character focus(es) -> main_relationship -> monetization_discovery -> monetization_review -> stage_1_complete`
+- Current guardrail: each active character, main relationship, and monetization focus gets one substantive question with two answer-starter options plus `Write my own answer`, followed by the fixed add-more check. First plot beat mechanics, episode runway, E2, and sketches are Stage 2 and remain blocked for now.
 - Current lock ledger: `Plot Lab Decisions`. Confirmed locks are written into stable editable sections, and the app opens that tab after saving.
 - Verification already run after latest implementation: `npm run lint` passed with only pre-existing warnings, `npm run build` passed, and `git diff --check` passed with existing CRLF warnings only.
 - Not yet run: browser click-through dogfood and approved real-AI dogfood on the EP1 seed flow. Do not judge final product behavior until those are run with explicit approval.
@@ -75,9 +75,9 @@ The product is not a dashboard, mode picker, or generic brainstorm chat. Levi is
 9. Streaming should not show prose that later transforms into buttons. Show a stable thinking state, then render the final answer and buttons together.
 10. Durable saves require explicit confirmation and write to tabs. Levi must never claim something is saved from chat alone.
 11. Early questions and options must be grounded in what EP1 actually shows. If Levi needs a new off-page lever, he must label it as new and ask whether to add it.
-12. Early Plot Lab starts character-first. Levi must understand the protagonist, then the main force/opponent, then the core plot thread. Pressure mechanics come after character function, not before.
-13. Use a default 2-question cap per character role pass. After two useful answers, summarize the working lock and let app-owned controls ask whether to lock/move on, continue here, or revise. A third question is allowed only when the writer chooses to continue or the controller explicitly asks another angle.
-14. Moving into plot must first lock the EP1 big thread, character soul board, and relationship/pressure chain, then ask for the monetization/paywall point, then review that endpoint before entering runway. First-beat mechanics come after the premise/evolution bridge, not immediately after EP1.
+12. Early Plot Lab starts character-first, but character count is source-led. Levi must understand the protagonist and any truly key antagonist/person/obstacle from EP1; he must not invent a generic third role.
+13. Use a one-question cap per active focus. After one useful answer, show the fixed add-more check: `Anything else about <focus> you want to add?` with `No` and `Yes`.
+14. Moving into plot must first lock the EP1 big thread, source-led character board, and main relationship, then ask for the monetization/paywall point and review that endpoint before entering runway.
 15. Workflow rules are app-owned, not prompt-owned. Prompt text can provide story taste, but the UI/controller must enforce first-turn choices, Add Context behavior, utility controls, per-character question caps, skip handling, and the allowed next move.
 16. Specialist output is internal structured metadata. The writer never sees JSON or mini-agent reports; Levi renders one concise visible move.
 17. Story option sets must render as action buttons outside assistant prose. Levi must not print inline A/B/C options, comma-separated option menus, or "choose one of..." prose when buttons are active.
@@ -89,12 +89,11 @@ Plot Lab uses one visible orchestrator and focused mini-agents:
 | Agent | Job |
 |---|---|
 | Levi Orchestrator | Visible chat only: concise framing, one question, no exposed process. |
-| Source + Lock Reader | EP1 read, source soul, locked-canon summary, missing first question. |
-| Character Analyst | Current role/focus question or lock summary from Plot Lab Decisions + EP1 evidence. |
+| Source + Lock Reader | EP1 read, source soul, locked-canon summary, and source-led Stage 1 character board. |
+| Character Analyst | Current source-led focus question or lock summary from Plot Lab Decisions + EP1 evidence. |
 | Paywall Architect | Monetization endpoint quality, paid image/question, lock review. |
-| Premise Bridge Architect | EP1-to-later-endpoint evolution before runway mechanics. |
-| Universe Builder | Open-ended Stage 1 story-world, pressure ecology, power, and monetization-delta questions. |
-| Runway Designer | Episode movement only after endpoint and bridge context exist. |
+| Universe Builder | Open-ended Stage 1 main relationship / story-world questions. |
+| Runway Designer | Episode movement only after endpoint and character context exist. |
 | Question Planner | Selects the next question vector and blocks same-vector repetition before a specialist writes the turn. |
 | Relationship Analyst | Relationship/power/evolution questions that are not disguised individual-motivation questions. |
 | Option Generator | Reroll-only agent that receives a frozen question and returns replacement options only. |
@@ -104,7 +103,7 @@ Runtime contract:
 - The controller selects the mini-agent from phase/focus, not from loose keyword regex.
 - Each turn builds a phase-specific context pack: controller state, objective, quality gate, writer move, recent chat, EP1/source evidence, and relevant `Plot Lab Decisions`.
 - `Plot Lab Decisions` is the story canon. Recent chat only resolves local references such as `A`, `both`, `same`, or the latest typed correction.
-- Mini-agents return a small JSON transport envelope: objective, lockedContextUsed, evidenceUsed, recommendedMove, visibleFrame, question, options, lockCandidate, risks.
+- Mini-agents return a small JSON transport envelope: objective, lockedContextUsed, evidenceUsed, recommendedMove, visibleFrame, question, options, stage1CharacterBoard, lockCandidate, risks.
 - JSON is not the creative format. It is only the routing envelope; creative text remains short natural language.
 - On story-choice turns, the app renders the visible chat text directly from the structured `visibleFrame` and `question`, and renders `options` as action buttons. The second prose renderer must not rewrite these turns, because that can reintroduce inline option menus.
 - If the specialist response cannot be parsed, Levi falls back to one safe open question and the debug export records the parse error.
@@ -114,8 +113,8 @@ Context contract:
 - `Plot Lab Decisions` is the durable memory. Mini-agents should receive only the relevant sections for their job, plus enough EP1/source evidence to ground the next question.
 - Recent chat is secondary. Use it to resolve local references and the latest correction, not to re-derive facts that are already locked.
 - Do not maintain a separate visible "do not repeat" list. Repetition is prevented by reading the locked canon and current objective correctly.
-- When moving from EP1 to monetization, preserve the broad promise and character soul, but do not freeze EP1 psychology as permanent. EP1 facts are launch conditions; the later endpoint may require evolution, new pressure, a richer story world, or new characters.
-- Stage 1 universe work is open-ended and writer-led. It should ask what larger world EP1 is opening, what invisible forces can keep generating story, and what must become true for monetization to feel earned. It must not ask for crumbs, planted objects, episode beats, E2, runway, or scene tactics.
+- When moving from EP1 to monetization, preserve the broad promise and character soul, but do not freeze EP1 psychology as permanent. EP1 facts are launch conditions.
+- Stage 1 relationship/world work is open-ended and writer-led. It should ask what larger relationship or situation EP1 is opening. It must not ask for crumbs, planted objects, episode beats, E2, runway, or scene tactics.
 
 Reroll policy:
 - No reroll on opening confirmation.
