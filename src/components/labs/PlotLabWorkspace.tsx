@@ -89,6 +89,7 @@ interface PlotLabMessageMeta {
   specialistParseError?: string | null;
   auditBrief?: string;
   structuredActions?: PlotLabAction[];
+  visibleActions?: PlotLabAction[];
   controllerSnapshot?: {
     phase: string;
     focus: string;
@@ -199,6 +200,9 @@ function controlledPromptForAction(action: PlotLabAction, latestAssistantText: s
   }
   if (action.kind === "stay_character") {
     return "Stay at character level";
+  }
+  if (action.kind === "add_missing_detail") {
+    return "Add missing detail";
   }
   if (action.kind === "reroll_options") {
     return [
@@ -825,14 +829,23 @@ export default function PlotLabWorkspace({
       }
 
       const structuredActions = specialistOptionsToActions(specialistBrief, plannedControllerState.turnPlan);
+      const visibleActions = [
+        ...structuredActions,
+        ...plannedControllerState.turnPlan.actions,
+      ];
+      const isMissingDetailCheck = plannedControllerState.phase === "add_more_check" &&
+        plannedControllerState.focusId === "plot" &&
+        (plannedControllerState.lastUserIntent === "add_missing_detail" || plannedControllerState.lastUserIntent === "stay_character");
       const addMoreFocusLabel = plannedControllerState.phase === "add_more_check" &&
         plannedControllerState.focusId === "plot" &&
-        plannedControllerState.lastUserIntent === "stay_character"
+        (plannedControllerState.lastUserIntent === "add_missing_detail" || plannedControllerState.lastUserIntent === "stay_character")
         ? "character board"
         : plannedControllerState.currentFocus;
 
       let assistantText = plannedControllerState.assistantTurnKind === "add_more_check"
-        ? `Anything else about ${addMoreFocusLabel} you want to add?`
+        ? isMissingDetailCheck
+          ? "Anything important we missed before monetization? You can add a character, relationship, world pressure, or plot thread."
+          : `Anything else about ${addMoreFocusLabel} you want to add?`
         : plannedControllerState.turnPlan.allowModelOptions
         ? renderBriefAsAssistantText(specialistBrief)
         : isDeterministicReviewTurn(plannedControllerState)
@@ -887,6 +900,7 @@ export default function PlotLabWorkspace({
           specialistParseError,
           auditBrief,
           structuredActions,
+          visibleActions,
           controllerSnapshot: controllerSnapshot(plannedControllerState),
           turnPlan: plannedControllerState.turnPlan,
         };
@@ -1045,9 +1059,21 @@ export default function PlotLabWorkspace({
           selectedAction: message.meta?.selectedAction ?? null,
           controllerSnapshot: message.meta?.controllerSnapshot ?? null,
           turnPlan: message.meta?.turnPlan ?? null,
+          visibleActions: message.meta?.visibleActions ?? null,
           contextSnapshot: message.meta?.contextSnapshot ?? null,
         })),
-      messages,
+      messages: messages.map((message) => ({
+        ...message,
+        meta: message.meta
+          ? {
+              ...message.meta,
+              visibleActions: message.meta.visibleActions ?? [
+                ...(message.meta.structuredActions ?? []),
+                ...(message.meta.turnPlan?.actions ?? []),
+              ],
+            }
+          : message.meta,
+      })),
       feedback: feedbackEvents,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -1065,9 +1091,19 @@ export default function PlotLabWorkspace({
 
     if (captureMode) {
       const isAddMore = captureMode === "add_more";
+      const isMissingDetail = isAddMore &&
+        controllerState.focusId === "plot" &&
+        (controllerState.lastUserIntent === "add_missing_detail" || controllerState.lastUserIntent === "stay_character");
       void sendToLevi({
         displayText: value,
-        promptText: isAddMore
+        promptText: isMissingDetail
+          ? [
+              "The writer is adding a missing Stage 1 detail before monetization.",
+              "Absorb this context into the character board, then return to the character-board gate.",
+              "Do not ask another digging question. Do not move into monetization until the writer chooses that action.",
+              `Context:\n${value}`,
+            ].join("\n\n")
+          : isAddMore
           ? [
               "The writer is adding extra Stage 1 context for the current focus.",
               "Absorb this context, then continue to the next Plot Lab step.",
@@ -1085,7 +1121,7 @@ export default function PlotLabWorkspace({
     }
 
     void sendToLevi();
-  }, [input, captureMode, isStreaming, sendToLevi]);
+  }, [controllerState.focusId, controllerState.lastUserIntent, input, captureMode, isStreaming, sendToLevi]);
 
   const canUseTestingTools = isAdmin || canUseTesterTools;
 
@@ -1177,10 +1213,10 @@ export default function PlotLabWorkspace({
             const isLatest = index === messages.length - 1;
             const displayContent = message.content;
             const visibleActions = isLatest && message.role === "assistant"
-              ? [
-                  ...(message.meta?.structuredActions ?? []),
-                  ...controllerState.turnPlan.actions,
-                ]
+              ? message.meta?.visibleActions ?? [
+                ...(message.meta?.structuredActions ?? []),
+                ...controllerState.turnPlan.actions,
+              ]
               : [];
             const dedupedVisibleActions = visibleActions.filter((action, actionIndex, actions) =>
               actions.findIndex((candidate) => candidate.actionId === action.actionId) === actionIndex

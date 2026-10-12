@@ -60,6 +60,7 @@ export type PlotLabUserIntent =
   | "reroll_options"
   | "skip_role"
   | "skip_monetization"
+  | "add_missing_detail"
   | "stay_character"
   | "skip_or_too_narrow"
   | "quality_feedback"
@@ -75,6 +76,7 @@ export type PlotLabActionKind =
   | "continue_here"
   | "revise_current"
   | "move_into_plot"
+  | "add_missing_detail"
   | "stay_character"
   | "add_more_yes"
   | "add_more_no"
@@ -251,7 +253,8 @@ export function isAddContextSubmission(text: string): boolean {
 }
 
 export function isAddMoreContextSubmission(text: string): boolean {
-  return /^The writer is adding extra Stage 1 context for the current focus\./i.test(text.trim());
+  return /^The writer is adding extra Stage 1 context for the current focus\./i.test(text.trim()) ||
+    /^The writer is adding a missing Stage 1 detail before monetization\./i.test(text.trim());
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -425,6 +428,9 @@ export function classifyPlotLabUserIntent(text: string, state?: Pick<PlotLabCont
   }
   if (/skip (the )?(monetization|paywall)|no paywall yet|paywall later|leave (monetization|paywall) blank/.test(normalized)) {
     return "skip_monetization";
+  }
+  if (/add missing|missing detail|missed detail|anything important|add.*(character|relationship|world|plot thread)/.test(normalized)) {
+    return "add_missing_detail";
   }
   if (/stay (at|with).*character|character level|relationship level|not plot yet/.test(normalized)) {
     return "stay_character";
@@ -629,7 +635,7 @@ export function planPlotLabAssistantTurn(
     return skipCurrentRole(previousState, intent, skipCount);
   }
 
-  if (intent === "stay_character") {
+  if (intent === "stay_character" || intent === "add_missing_detail") {
     if (previousState.checkpointPending || previousState.phase === "add_more_check") {
       return buildAddMoreCheckState(previousState, intent, skipCount);
     }
@@ -984,11 +990,11 @@ const PLOT_GATE_ACTIONS: PlotLabAction[] = [
     response: "Lock this",
   },
   {
-    actionId: "stay_character",
-    kind: "stay_character",
-    label: "Add character note",
-    detail: "Write one more character, relationship, or world-pressure note in your own words.",
-    response: "Stay at character level",
+    actionId: "add_missing_detail",
+    kind: "add_missing_detail",
+    label: "Add missing detail",
+    detail: "Add a character, relationship, world pressure, or plot thread before monetization.",
+    response: "Add missing detail",
   },
 ];
 
@@ -1102,13 +1108,16 @@ function allowedNextMove(state: PlotLabPlannedStateInput): string {
     return "Stop drilling this focus. Summarize the working lock in 2-3 sentences. The app will offer Move to next character / Ask different angle.";
   }
   if (state.assistantTurnKind === "add_more_check") {
+    if (state.focusId === "plot" && (state.lastUserIntent === "add_missing_detail" || state.lastUserIntent === "stay_character")) {
+      return "Ask only: Anything important we missed before monetization? The writer can add a character, relationship, world pressure, or plot thread.";
+    }
     return `Ask only: Anything else about ${currentFocusLabel} you want to add?`;
   }
   if (state.assistantTurnKind === "transition_next_focus") {
     return `Move to ${currentFocusLabel} and ask the only open EP1-grounded discovery question for that focus.`;
   }
   if (state.assistantTurnKind === "character_board_summary") {
-    return "Summarize the source-led character board and ask whether to move into the paywall question or stay at character/relationship level.";
+    return "Summarize the source-led character board and ask whether to move into the paywall question or add any missing character, relationship, world-pressure, or plot-thread detail.";
   }
   if (state.assistantTurnKind === "monetization_bridge") {
     return "Summarize EP1 big thread + character board + main relationship, then ask what the paywall question should be. No first plot beat yet.";

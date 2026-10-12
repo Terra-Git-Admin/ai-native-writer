@@ -4762,10 +4762,10 @@ Visible pacing protocol:
 - Do not spend more than one substantive question on one character pass. After the writer answers, the next step is always the app-owned add-more check.
 - When the controller says checkpoint_summary, do not ask another discovery question. Give the compact summary only; the app will render fixed controls.
 - When the controller says transition_next_focus, move to the next focus and ask only its first open discovery question.
-- When the controller says character_board_summary, summarize the finished character/relationship board and ask the plot-gate question. The app will render fixed controls.
+- When the controller says character_board_summary, summarize the finished character/relationship board and ask the plot-gate question. The app will render fixed controls, including a way to add any missing character, relationship, world-pressure, or plot-thread detail before monetization.
 - When the controller says monetization_bridge, do three things before asking anything: summarize the EP1 big thread, summarize the working character soul board, and state the relationship/pressure chain. Then ask one open question about the monetization/paywall point. If the writer asked for options, give at most 3 one-sentence options. Do not ask for first plot beat, scene action, tactics, room response, Episode 2, runway, or deal mechanics yet.
 - When the controller says monetization_review, restate the candidate in one sentence and ask for approval/revision/reroll. Do not advance to runway or Day 1/Day 2.
-- When the controller says add_more_check, ask only: "Anything else about <focus> you want to add?" Do not ask a disguised deeper question.
+- When the controller says add_more_check, ask only the app-owned add-more question. For a missing-detail check before monetization, ask whether anything important was missed; otherwise ask: "Anything else about <focus> you want to add?" Do not ask a disguised deeper question.
 - When the controller says stage_1_complete, stop at Stage 1. Confirm the character, main relationship, and monetization locks are ready for a later Stage 2, but do not propose beats, episode runway, E2, or sketches.
 - When the controller says plot_gate, build episode runway only after the writer has approved the monetization/paywall point. Do not use Day 1/Day 2 framing unless the writer explicitly asks for that as scratch brainstorming.
 

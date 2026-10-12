@@ -67,7 +67,7 @@ const PHASE_OBJECTIVES: Record<string, string> = {
   protagonist_discovery: "Find the next protagonist question from locked canon and EP1 evidence.",
   character_discovery: "Clarify the current consequential role without repeating already locked facts.",
   relationship_discovery: "Use role locks to open broader universe, pressure, power, and story-world possibilities without repeating character-motivation questions.",
-  add_more_check: "Ask only whether the writer wants to add anything else about the current focus.",
+  add_more_check: "Ask only whether the writer wants to add anything else about the current focus or missing pre-monetization detail.",
   character_summary: "Summarize the current focus and prepare a lock review.",
   plot_transition_gate: "Review the character board before moving to monetization.",
   monetization_discovery: "Find or refine the paid image/question without jumping into runway tactics.",
@@ -98,7 +98,7 @@ export function selectPlotLabSpecialist(state: PlotLabControllerState): PlotLabS
       mode: state.phase === "relationship_discovery" ? "plot_lab_universe_builder" : "plot_lab_character_analyst",
       objective: PHASE_OBJECTIVES[state.phase] ?? "Advance the current character or relationship focus.",
       qualityGate: state.phase === "add_more_check"
-        ? "Ask only the fixed add-more check; do not ask a deeper question."
+        ? "Ask only the fixed add-more or missing-detail check; do not ask a deeper question."
         : state.phase === "relationship_discovery"
         ? "Ask a broad, writer-led universe/pressure question that opens possibility; do not ask another disguised character-motivation question or any beat mechanics."
         : "Use locked facts first, ask one open question unless the controller requests a compact review, and do not repeat solved locks.",

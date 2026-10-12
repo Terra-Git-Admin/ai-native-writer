@@ -118,7 +118,7 @@ Context contract:
 
 Reroll policy:
 - No reroll on opening confirmation.
-- No reroll on utility controls such as Lock, Continue, Revise, or Move into plot.
+- No reroll on utility controls such as Lock, Continue, Revise, Move to monetization, or Add missing detail.
 - Reroll appears only for AI-generated story option sets in character, relationship/evolution, monetization, and plot/runway.
 - Reroll is option-only. It preserves the current question, visible frame, objective, phase, focus, locked context, and lock candidate. It only replaces the current option buttons.
 - A different question is a separate action (`Change question` / `Different angle`) and must not be conflated with reroll.
@@ -290,9 +290,9 @@ Question types:
 Character-first does not mean plot-detail-first. Levi must not narrow the writer into tactics or scene mechanics before asking permission to enter plot beats. Questions like `what does the protagonist do with that minute`, `who do they text`, `what exact term does the pressure character offer`, `what happens in the room`, or `what counter-move do they make` are plot-detail questions. Before asking them, Levi must ask a transition question:
 
 ```text
-Do you want to move from character lock into the monetization/paywall point, or stay with character?
-- A) Move into plot
-- B) Stay character
+Do you want to move from character lock into the monetization/paywall point, or add any missing story detail first?
+- Move to monetization
+- Add missing detail
 ```
 
 Option wording must be plain:
@@ -420,8 +420,8 @@ State transition principles:
 - Character setup uses a default `maxQuestionsPerFocus = 2` counter. The counter increments only when the app planned a discovery question, not by counting `?` in the model output.
 - After the second discovery question in a focus, the next assistant turn must be a checkpoint summary. The app injects lock-review controls: `Lock and move on`, `Continue here`, and `Revise`.
 - `Continue here` or `Revise` keeps the current focus alive for one broader question or corrected lock. `Lock and move on` advances the state and writes the lock to `Plot Lab Decisions`.
-- Moving to the next character resets the counter and advances the focus order: protagonist -> primary counterpart / gravity character -> operator / pressure face if present -> core relationship/pressure chain -> character board summary -> monetization bridge -> monetization review -> premise bridge -> plot beat/runway.
-- The primary counterpart must not be skipped in favor of the operator/pressure face when both exist. If the primary counterpart is not introduced yet, the writer may leave it blank and Levi carries it as skipped/unresolved rather than inventing it.
+- Moving to the next character resets the counter and advances the focus order: protagonist -> second main/opposing character if EP1 establishes one -> optional additional pressure character if present -> core relationship/pressure chain -> character board summary -> monetization bridge -> monetization review -> premise bridge -> plot beat/runway.
+- The second main/opposing character must not be skipped in favor of relationship/world pressure when EP1 clearly establishes one. If the source scan under-tags that person as summary-only, the controller promotes them into the Stage 1 focus plan. If no such person is introduced yet, Levi carries that slot as unresolved rather than inventing it.
 - The operator/pressure face is optional. If skipped/not present, the relationship chain should connect the protagonist, primary counterpart, and world force directly.
 - The monetization bridge is mandatory before first-beat mechanics. It summarizes the EP1 big thread, working character soul board, and relationship/pressure chain, then asks one open question about the monetization/paywall point.
 - After the writer proposes a monetization/paywall point, Levi must not jump into scene tactics or Day 1/Day 2 planning. The controller moves to `monetization_lock_review`, where Levi restates the candidate endpoint and the app asks the writer to lock or revise.
@@ -583,7 +583,8 @@ Use these dogfood cases:
 - early setup follows the default two-question cap per character pass, then checkpoint summary and app-owned lock/continue/revise controls
 - after two discovery questions in a focus, Levi cannot ask a third same-focus discovery question unless the writer chooses `Continue here` or `Revise`
 - clicking `Lock and move on` resets the focus counter and starts the next generic role slot or relationship chain
-- clicking Move into plot after the character board summary produces the EP1 big-thread + character-soul + pressure-chain summary and asks for the monetization/paywall point, not the first plot beat
+- clicking `Add missing detail` after the character board summary asks only whether anything important was missed before monetization, then lets the writer add a character, relationship, world pressure, or plot thread in their own words
+- clicking `Move to monetization` after the character board summary produces the EP1 big-thread + character-soul + pressure-chain summary and asks for the monetization/paywall point, not the first plot beat
 - after the writer answers the monetization/paywall point, Levi restates it in a monetization review and waits for lock/revise/reroll
 - after the monetization point is locked, Levi asks how the story evolves between EP1 and that later endpoint before proposing runway beats
 - Levi does not use Day 1/Day 2 framing unless the writer explicitly asks for scratch sequencing

@@ -80,14 +80,18 @@ function testStage1DiscoveryOptionsAcrossPipeline() {
   assert.equal(monetizationGate.assistantTurnKind, "character_board_summary");
   assert.deepEqual(monetizationGate.turnPlan.actions.map((action) => `${action.kind}:${action.label}`), [
     "lock_current:Move to monetization",
-    "stay_character:Add character note",
+    "add_missing_detail:Add missing detail",
   ]);
 
-  const characterNoteCheck = planPlotLabAssistantTurn(monetizationGate, "Stay at character level");
+  const characterNoteCheck = planPlotLabAssistantTurn(monetizationGate, "Add missing detail");
   assert.equal(characterNoteCheck.assistantTurnKind, "add_more_check");
   assert.equal(characterNoteCheck.focusId, "plot");
-  assert.equal(characterNoteCheck.lastUserIntent, "stay_character");
-  const backToGate = planPlotLabAssistantTurn(characterNoteCheck, "No");
+  assert.equal(characterNoteCheck.lastUserIntent, "add_missing_detail");
+  const backToGate = planPlotLabAssistantTurn(characterNoteCheck, [
+    "The writer is adding a missing Stage 1 detail before monetization.",
+    "Context:",
+    "Ming should be tracked as the third pressure character.",
+  ].join("\n\n"));
   assert.equal(backToGate.assistantTurnKind, "character_board_summary");
 
   const monetizationPlanned = planPlotLabAssistantTurn(monetizationGate, "Lock this");
@@ -454,6 +458,10 @@ async function testPlotLabPromptReversionGuards() {
   assert.equal(workspace.includes("Primary Counterpart"), false);
   assert.equal(controller.includes("label: \"Move into plot\""), false);
   assert.equal(controller.includes("label: \"Stay with character\""), false);
+  assert.equal(controller.includes("label: \"Add character note\""), false);
+  assert.equal(controller.includes("label: \"Add missing detail\""), true);
+  assert.equal(workspace.includes("Anything important we missed before monetization?"), true);
+  assert.equal(workspace.includes("visibleActions"), true);
   assert.equal(workspace.includes("if (state.phase === \"plot_transition_gate\") return \"Character Locks\";"), true);
   assert.equal(workspace.includes("return cleanAssistantText(brief.lockCandidate?.text?.trim() || brief.visibleFrame?.trim() || \"\");"), true);
 }
