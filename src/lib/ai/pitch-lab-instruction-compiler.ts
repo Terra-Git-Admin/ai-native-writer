@@ -1,4 +1,4 @@
-export type PitchLabGenerationStage = "ideas" | "routes" | "studio";
+export type PitchLabGenerationStage = "ideas" | "pilot_options" | "studio";
 
 export type PitchLabWorldMode = "period_archetypal" | "contemporary" | "modern_adaptation" | "source_locked" | "unspecified";
 
@@ -8,7 +8,7 @@ export type PitchLabInstructionControls = {
   roleCues: string[];
   relationshipTropes: string[];
   toneCues: string[];
-  routeIntent: "character_profiles" | "setting_variants" | "tone_variants" | "relationship_engines" | "general_routes";
+  pilotOptionIntent: "character_profiles" | "setting_variants" | "tone_variants" | "relationship_engines" | "general_options";
   requiredConstraints: string[];
   avoidGuidance: string[];
   evidence: string[];
@@ -39,7 +39,7 @@ const PERIOD_WORLD_CUES = [
 ];
 
 const MODERN_ADAPTATION_CUES = [
-  "modern", "contemporary", "present-day", "present day", "urban", "modern au", " au ", "adaptation", "reimagining", "reimagine", "pretending", "disguise", "undercover", "fake job",
+  "modern", "contemporary", "present-day", "present day", "urban", "modern au", "au", "adaptation", "reimagining", "reimagine", "pretending", "disguise", "undercover", "fake job",
 ];
 
 const CONTEMPORARY_SURFACES = [
@@ -57,12 +57,23 @@ const TONE_CUES = [
 const EXCLUSION_PATTERN = /\b(?:no|avoid|exclude|without|not)\s+([^,.;\n]+)/gi;
 
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, " ").trim();
+  return value.toLowerCase().replace(/[\u2019']/g, "'").replace(/\s+/g, " ").trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function cueMatches(normalizedText: string, cue: string): boolean {
+  const normalizedCue = normalize(cue).trim();
+  if (!normalizedCue) return false;
+  const pattern = new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(normalizedCue)}(?:$|[^a-z0-9])`, "i");
+  return pattern.test(normalizedText);
 }
 
 function collectMatches(text: string, cues: string[]): string[] {
   const normalized = normalize(text);
-  return cues.filter((cue) => normalized.includes(normalize(cue).trim()));
+  return cues.filter((cue) => cueMatches(normalized, cue));
 }
 
 function collectExclusions(text: string): string[] {
@@ -74,19 +85,19 @@ function collectExclusions(text: string): string[] {
   return [...new Set(exclusions)];
 }
 
-function detectRouteIntent(text: string): PitchLabInstructionControls["routeIntent"] {
+function detectPilotOptionIntent(text: string): PitchLabInstructionControls["pilotOptionIntent"] {
   const normalized = normalize(text);
   if (/\b(character|profile|profiles|lead|heroine|male lead|counterlead|pairing|pairings)\b/.test(normalized)) return "character_profiles";
   if (/\b(setting|location|world|arena|place|surface)\b/.test(normalized)) return "setting_variants";
   if (/\b(tone|vibe|genre|comedy|dark|sweet|thriller|melodrama)\b/.test(normalized)) return "tone_variants";
   if (/\b(engine|relationship|dynamic|tension|power)\b/.test(normalized)) return "relationship_engines";
-  return "general_routes";
+  return "general_options";
 }
 
 function detectWorldMode(input: CompileInput, text: string): PitchLabWorldMode {
   if (input.generationType === "adaptation" && input.sourceMaterial?.trim()) return "source_locked";
   const hasPeriodCue = collectMatches(text, PERIOD_WORLD_CUES).length > 0;
-  const hasModernCue = collectMatches(` ${text} `, MODERN_ADAPTATION_CUES).length > 0;
+  const hasModernCue = collectMatches(text, MODERN_ADAPTATION_CUES).length > 0;
   if (hasPeriodCue && hasModernCue) return "modern_adaptation";
   if (hasPeriodCue) return "period_archetypal";
   if (hasModernCue || collectMatches(text, CONTEMPORARY_SURFACES).length > 0) return "contemporary";
@@ -119,14 +130,15 @@ export function compilePitchLabInstructions(input: CompileInput): PitchLabInstru
     requiredConstraints.push(`Keep these tone cues visible: ${toneCues.join(", ")}.`);
   }
   if (input.stage === "ideas") {
-    requiredConstraints.push("Idea cards must include visible woman/opposing-lead tension without describing episode plans.");
+    requiredConstraints.push("Ideas must be compact concrete seeds with visible woman/opposing-lead tension, not episode plans.");
     avoidGuidance.push("Avoid episode-framing phrases like each episode, episodes promise, series arc, or season.");
   }
-  if (input.stage === "routes") {
-    if (detectRouteIntent(text) === "character_profiles") {
-      requiredConstraints.push("Make each route a distinct lead/counterlead profile pairing.");
+  if (input.stage === "pilot_options") {
+    if (detectPilotOptionIntent(text) === "character_profiles") {
+      requiredConstraints.push("Make each Pilot Option a distinct lead/counterlead profile pairing.");
     }
-    avoidGuidance.push("Avoid route labels such as Runway, Pilot arc, Series arc, or Episodes.");
+    requiredConstraints.push("Each Pilot Option must use exactly Hook, Escalation, and Cliffhanger lines.");
+    avoidGuidance.push("Avoid route labels and wording, plus Runway, Pilot arc, Series arc, or Episodes.");
   }
   exclusions.forEach((exclusion) => avoidGuidance.push(`Avoid: ${exclusion}.`));
 
@@ -136,7 +148,7 @@ export function compilePitchLabInstructions(input: CompileInput): PitchLabInstru
     roleCues: [...new Set(roleCues)],
     relationshipTropes: [...new Set(relationshipTropes)],
     toneCues: [...new Set(toneCues)],
-    routeIntent: detectRouteIntent(text),
+    pilotOptionIntent: detectPilotOptionIntent(text),
     requiredConstraints,
     avoidGuidance,
     evidence,
@@ -151,7 +163,7 @@ export function formatPitchLabInstructionControls(controls: PitchLabInstructionC
     controls.roleCues.length ? `- Role cues: ${controls.roleCues.join(", ")}` : "",
     controls.relationshipTropes.length ? `- Relationship/trope cues: ${controls.relationshipTropes.join(", ")}` : "",
     controls.toneCues.length ? `- Tone cues: ${controls.toneCues.join(", ")}` : "",
-    `- Route intent: ${controls.routeIntent}`,
+    `- Pilot option intent: ${controls.pilotOptionIntent}`,
     controls.requiredConstraints.length ? `- Must respect: ${controls.requiredConstraints.join(" | ")}` : "",
     controls.avoidGuidance.length ? `- Avoid: ${controls.avoidGuidance.join(" | ")}` : "",
   ].filter(Boolean);
@@ -162,13 +174,13 @@ export function scanPitchLabOutput(controls: PitchLabInstructionControls, stage:
   const warnings: PitchLabQaWarning[] = [];
   const joined = outputs.join("\n\n");
   if (stage === "ideas" && /\b(?:each episode|episodes?\s+(?:promise|deliver|test|surface|show|explore)|across episodes|series arc|season)\b/i.test(joined)) {
-    warnings.push({ code: "episode_framing_in_idea", message: "Idea output used episode-plan or series-arc language before the route/studio stages." });
+    warnings.push({ code: "episode_framing_in_idea", message: "Idea output used episode-plan or series-arc language before the Pilot Options stage." });
   }
-  if (stage === "routes" && /\b(?:Runway|Pilot arc|Series arc|Episodes?)\s*:/i.test(joined)) {
-    warnings.push({ code: "arc_label_in_route", message: "Route output used arc/runway labels instead of plain route/profile tension." });
+  if (stage === "pilot_options" && /\b(?:route|routes|Runway|Pilot arc|Series arc|Episodes?)\s*:?\b/i.test(joined)) {
+    warnings.push({ code: "arc_label_in_pilot_option", message: "Pilot Option output used route/arc/runway language instead of Hook/Escalation/Cliffhanger." });
   }
   if (controls.worldMode === "period_archetypal") {
-    const modernSurface = CONTEMPORARY_SURFACES.find((cue) => normalize(joined).includes(normalize(cue)));
+    const modernSurface = CONTEMPORARY_SURFACES.find((cue) => cueMatches(normalize(joined), cue));
     if (modernSurface) {
       warnings.push({
         code: "world_period_modernized",

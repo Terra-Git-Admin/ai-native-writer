@@ -6,7 +6,7 @@ import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchWorkspaces } from "@/lib/db/schema";
 import { isPitchLabSampleMode, PITCH_LAB_SAMPLE_TITLE_PREFIX } from "@/lib/ai/pitch-lab-samples";
-import { cleanPitchIdeaText, parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
+import { cleanPitchIdeaText, parsePitchIdeaEnvelope, serializePitchIdeaEnvelope, type PitchLabWriterContext } from "@/lib/pitch-lab-idea-envelope";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import {
@@ -17,6 +17,10 @@ import {
   cleanPitchLabTitle,
   isValidPitchLabTitle,
 } from "@/lib/ai/pitch-lab-prompts";
+import { assertPitchLabPilotOptionText } from "@/lib/ai/pitch-lab-pilot-option-format";
+import { assertPitchLabPilotPlotText } from "@/lib/ai/pitch-lab-pilot-plot-format";
+import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
+import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 
@@ -34,27 +38,44 @@ function buildCompactPriorTurns(turns: ReturnType<typeof parsePitchIdeaEnvelope>
   }).join("\n\n");
   return [olderNote, recentNote].filter(Boolean).join("\n\n");
 }
-function parseRefinedIdea(raw: string, fallbackTitle: string): { title: string; ideaText: string; kernel?: string; beats?: string; clarityChecks?: string; adaptationNotes?: string } {
+
+function mergeWriterContext(...contexts: Array<PitchLabWriterContext | undefined>): PitchLabWriterContext | undefined {
+  const merged = contexts.reduce<PitchLabWriterContext>((acc, context) => ({
+    ...acc,
+    ...Object.fromEntries(Object.entries(context ?? {}).filter(([, value]) => typeof value === "string" && value.trim())),
+  }), {});
+  return Object.values(merged).some(Boolean) ? merged : undefined;
+}
+
+function formatWriterContext(context: PitchLabWriterContext | undefined): string {
+  if (!context) return "";
+  const lines = [
+    "WRITER CONTEXT - CARRY THIS THROUGH",
+    context.workspaceBrief ? `- Original writer brief: ${context.workspaceBrief}` : "",
+    context.latestInstruction ? `- Latest writer instruction: ${context.latestInstruction}` : "",
+    context.selectedIdea ? `- Selected Idea: ${context.selectedIdea}` : "",
+    context.selectedPilotOption ? `- Selected Pilot Option: ${context.selectedPilotOption}` : "",
+    context.carriedNotes ? `- Carried notes: ${context.carriedNotes}` : "",
+  ].filter(Boolean);
+  return lines.length > 1 ? lines.join("\n") : "";
+}
+function parseRefinedPilotPlot(raw: string, fallbackTitle: string): { title: string; ideaText: string; kernel?: string; beats?: string; clarityChecks?: string; adaptationNotes?: string } {
   const clean = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  try {
-    const parsed: unknown = JSON.parse(clean);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const record = parsed as Record<string, unknown>;
-      if (typeof record.title === "string" && typeof record.ideaText === "string") {
-        return {
-          title: record.title.trim().slice(0, 160) || fallbackTitle,
-          ideaText: record.ideaText.trim(),
-          kernel: typeof record.kernel === "string" ? record.kernel.trim() : undefined,
-          beats: typeof record.beats === "string" ? record.beats.trim() : undefined,
-          clarityChecks: typeof record.clarityChecks === "string" ? record.clarityChecks.trim() : undefined,
-          adaptationNotes: typeof record.adaptationNotes === "string" ? record.adaptationNotes.trim() : undefined,
-        };
-      }
+  const parsed: unknown = JSON.parse(clean);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const record = parsed as Record<string, unknown>;
+    if (typeof record.title === "string" && typeof record.ideaText === "string") {
+      return {
+        title: record.title.trim().slice(0, 160) || fallbackTitle,
+        ideaText: assertPitchLabPilotPlotText(record.ideaText.trim()),
+        kernel: typeof record.kernel === "string" ? record.kernel.trim() : undefined,
+        beats: typeof record.beats === "string" ? record.beats.trim() : undefined,
+        clarityChecks: typeof record.clarityChecks === "string" ? record.clarityChecks.trim() : undefined,
+        adaptationNotes: typeof record.adaptationNotes === "string" ? record.adaptationNotes.trim() : undefined,
+      };
     }
-  } catch {
-    // Fall back to plain paragraph output from older model behavior.
   }
-  return { title: fallbackTitle, ideaText: clean };
+  throw new Error("The model returned an invalid Pilot Plot.");
 }
 
 function parseRefinedPremise(raw: string, fallbackTitle: string): { title: string; premiseText: string; appealLane?: string; transformationNotes?: string } {
@@ -69,16 +90,20 @@ function parseRefinedPremise(raw: string, fallbackTitle: string): { title: strin
   }
   return {
     title: typeof record.title === "string" ? record.title.trim().slice(0, 160) || fallbackTitle : fallbackTitle,
-    premiseText: record.premiseText.trim(),
+    premiseText: assertPitchLabIdeaSeedText(record.premiseText.trim()),
     appealLane: typeof record.appealLane === "string" ? record.appealLane.trim() : undefined,
     transformationNotes: typeof record.transformationNotes === "string" ? record.transformationNotes.trim() : undefined,
   };
 }
 
-function buildSampleEpisodePitch(input: { title: string; routeText: string; premise?: string; instruction: string }): string {
-  const premise = input.premise ? ` It stays rooted in the selected idea: ${input.premise}` : "";
-  const instruction = input.instruction ? ` The writer asked: ${input.instruction}` : "";
-  return `Episode 1 opens by turning the route "${input.title}" into a concrete public pressure test: ${input.routeText} The heroine needs one immediate practical win, the opposing lead needs her specific access or courage, and a visible rule in the arena forces them to act together before either can explain themselves.${premise}${instruction} The final beat leaves them with an immediate Episode 2 obligation instead of a solved misunderstanding.`;
+function buildSampleEpisodePitch(input: { title: string; optionText: string; premise?: string; instruction: string }): string {
+  const premise = input.premise ? input.premise.replace(/\s+/g, " ").slice(0, 110) : "the selected Idea";
+  const instruction = input.instruction ? input.instruction.replace(/\s+/g, " ").slice(0, 90) : "make the pressure sharper";
+  return [
+    `Opening: ${input.title} opens with the heroine forced to act on ${premise} while the opposing lead needs her choice now`,
+    `Plot progression: ${instruction} turns the room against her and makes his protection useful but costly`,
+    "Final cliffhanger: The bargain becomes public and locks her into his next immediate demand",
+  ].join("\n");
 }
 
 export async function POST(req: Request) {
@@ -102,9 +127,13 @@ export async function POST(req: Request) {
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
   if (!workspace) return NextResponse.json({ error: "Pitch Lab item not found." }, { status: 404 });
   const idea = await db.query.pitchIdeas.findFirst({ where: and(eq(pitchIdeas.id, ideaId), eq(pitchIdeas.workspaceId, workspace.id)) });
-  if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an idea or Studio route before refining." }, { status: 404 });
+  if (!idea || !["premise", "generated", "shortlisted"].includes(idea.status)) return NextResponse.json({ error: "Choose an Idea, Pilot Option, or Pilot Plot before refining." }, { status: 404 });
 
   const envelope = parsePitchIdeaEnvelope(idea.ideaText);
+  const existingState = getPitchLabContentState(idea.status, idea.ideaText);
+  if (!existingState.isValid && !feedback) {
+    return NextResponse.json({ error: "This Pitch Lab item is invalid legacy content. Regenerate it before continuing." }, { status: 400 });
+  }
   if (feedback) {
     const rating = feedback.rating === "up" || feedback.rating === "down" ? feedback.rating : null;
     const reason = typeof feedback.reason === "string" ? feedback.reason.trim().slice(0, 1000) : "";
@@ -130,7 +159,7 @@ export async function POST(req: Request) {
     if (!turn || turn.kind !== "rewrite") return NextResponse.json({ error: "Generated option not found." }, { status: 404 });
     const storedEnvelope = serializePitchIdeaEnvelope({
       ...envelope,
-      turns: envelope.turns.map((item, index) => index === turnIndex ? { ...item, ideaText } : item),
+      turns: envelope.turns.map((item, index) => index === turnIndex ? { ...item, ideaText: assertPitchLabPilotPlotText(ideaText), contentKind: "pilot_plot" as const } : item),
     });
     await db.update(pitchIdeas).set({
       ideaText: storedEnvelope,
@@ -141,17 +170,28 @@ export async function POST(req: Request) {
   let updatedTitle = title || idea.title.replace(PITCH_LAB_SAMPLE_TITLE_PREFIX, "");
   let updatedText = cleanPitchIdeaText(ideaText);
   let isPlaceholder = idea.title.startsWith(PITCH_LAB_SAMPLE_TITLE_PREFIX);
-  let refinedIdea: ReturnType<typeof parseRefinedIdea> | null = null;
+  let refinedIdea: ReturnType<typeof parseRefinedPilotPlot> | null = null;
   let refinedPremise: ReturnType<typeof parseRefinedPremise> | null = null;
   const isPremise = idea.status === "premise";
+  const writerContext = mergeWriterContext(envelope.writerContext, {
+    workspaceBrief: workspace.brief || undefined,
+    latestInstruction: instruction || envelope.writerContext?.latestInstruction,
+    selectedIdea: isPremise ? updatedText : envelope.premise,
+    selectedPilotOption: !isPremise ? envelope.originalText || ideaText : undefined,
+    carriedNotes: envelope.adaptationNotes,
+  });
+  const writerContextBlock = formatWriterContext(writerContext);
+  if (!isPremise && instruction && idea.status !== "shortlisted") {
+    return NextResponse.json({ error: "Move a valid Pilot Option to Shortlist before developing a Pilot Plot." }, { status: 400 });
+  }
   if (instruction) {
     if (isPitchLabSampleMode()) {
       // Keep local flow tests usable without sending a paid request to a model.
       updatedText = isPremise
-        ? cleanPitchIdeaText(ideaText)
+        ? assertPitchLabIdeaSeedText(ideaText)
         : buildSampleEpisodePitch({
           title: updatedTitle,
-          routeText: ideaText,
+          optionText: ideaText,
           premise: envelope.premise,
           instruction,
         });
@@ -178,6 +218,7 @@ export async function POST(req: Request) {
                 priorTurns,
                 instruction,
                 transformationNotes: envelope.adaptationNotes,
+                writerContext: writerContextBlock,
               })
               : buildPitchLabRefinementPrompt({
                 currentTitle: updatedTitle,
@@ -190,12 +231,13 @@ export async function POST(req: Request) {
                 beats: envelope.beats,
                 clarityChecks: envelope.clarityChecks,
                 adaptationNotes: envelope.adaptationNotes,
+                writerContext: writerContextBlock,
               }),
             maxOutputTokens: isPremise ? 1200 : 2400,
             maxRetries: 0,
           });
           if (isPremise) refinedPremise = parseRefinedPremise(result.text, updatedTitle);
-          else refinedIdea = parseRefinedIdea(result.text, updatedTitle);
+          else refinedIdea = parseRefinedPilotPlot(result.text, updatedTitle);
           lastError = null;
           break;
         } catch (err) {
@@ -217,28 +259,51 @@ export async function POST(req: Request) {
     }
   }
 
+  if (!isPremise) {
+    try {
+      updatedText = instruction || existingState.contentKind === "pilot_plot"
+        ? assertPitchLabPilotPlotText(updatedText)
+        : assertPitchLabPilotOptionText(updatedText);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Pilot Plot must use Opening, Plot progression, and Final cliffhanger.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+  if (isPremise) {
+    try {
+      updatedText = assertPitchLabIdeaSeedText(updatedText);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Idea must use compact FL/ML seed format.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
   const cleanTitle = cleanPitchLabTitle((instruction && !isPremise ? idea.title : updatedTitle).replace(/^\[Sample\]\s*/i, ""));
   if (!isValidPitchLabTitle(cleanTitle)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
-  const currentText = isPremise || !instruction ? updatedText : cleanPitchIdeaText(envelope.currentText || ideaText);
+  const nextContentKind = isPremise ? "idea_seed" as const : instruction ? "pilot_plot" as const : (existingState.contentKind ?? "pilot_option");
+  const currentText = updatedText;
   const adaptationNotes = refinedPremise
     ? [refinedPremise.appealLane, refinedPremise.transformationNotes].filter(Boolean).join(" | ")
     : envelope.adaptationNotes;
   const storedEnvelope = serializePitchIdeaEnvelope({
     originalText: envelope.originalText || currentText || updatedText,
     currentText,
+    contentKind: nextContentKind,
     turns: instruction
       ? [...envelope.turns, {
           instruction,
           ideaText: updatedText,
           createdAt: new Date().toISOString(),
           kind: isPremise ? "rerun" as const : "rewrite" as const,
+          contentKind: nextContentKind,
           kernel: refinedIdea?.kernel || envelope.kernel,
           beats: refinedIdea?.beats || envelope.beats,
           clarityChecks: refinedIdea?.clarityChecks || envelope.clarityChecks,
           adaptationNotes: refinedIdea?.adaptationNotes || adaptationNotes,
+          writerContext,
         }]
       : isPremise && updatedText !== envelope.currentText
-        ? [...envelope.turns, { instruction: "Manual edit", ideaText: updatedText, createdAt: new Date().toISOString(), kind: "manual_edit" as const }]
+        ? [...envelope.turns, { instruction: "Manual edit", ideaText: updatedText, createdAt: new Date().toISOString(), kind: "manual_edit" as const, contentKind: nextContentKind, writerContext }]
         : envelope.turns,
     premise: isPremise ? currentText : envelope.premise,
     premiseId: envelope.premiseId,
@@ -247,10 +312,11 @@ export async function POST(req: Request) {
     feedback: envelope.feedback,
     generatedAt: envelope.generatedAt,
     shortlistedAt: envelope.shortlistedAt,
-    kernel: envelope.kernel,
-    beats: envelope.beats,
-    clarityChecks: envelope.clarityChecks,
-    adaptationNotes,
+    kernel: refinedIdea?.kernel || envelope.kernel,
+    beats: refinedIdea?.beats || envelope.beats,
+    clarityChecks: refinedIdea?.clarityChecks || envelope.clarityChecks,
+    adaptationNotes: refinedIdea?.adaptationNotes || adaptationNotes,
+    writerContext,
   });
   await db.update(pitchIdeas).set({
     title: cleanTitle,

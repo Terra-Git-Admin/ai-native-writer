@@ -22,8 +22,11 @@ import {
   PITCH_LAB_IDEA_COUNT,
   PITCH_LAB_PREMISE_COUNT,
 } from "@/lib/ai/pitch-lab-prompts";
+import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
+import { assertPitchLabPilotOptionText, validatePitchLabPilotOptionBatch } from "@/lib/ai/pitch-lab-pilot-option-format";
+import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
-import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
+import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope, type PitchLabWriterContext } from "@/lib/pitch-lab-idea-envelope";
 import {
   compilePitchLabInstructions,
   formatPitchLabInstructionControls,
@@ -36,7 +39,28 @@ const WRITER_SOURCE_BLOCK_LIMIT = 20_000;
 
 type PitchLabPhase = "premises" | "pilots";
 type ParsedPremise = { title: string; premiseText: string; appealLane: string; transformationNotes: string };
-type ParsedPilot = { title: string; ideaText: string; kernel: string; beats: string; clarityChecks: string; adaptationNotes: string };
+type ParsedPilotOption = { title: string; ideaText: string; kernel: string; beats: string; clarityChecks: string; adaptationNotes: string };
+
+function mergeWriterContext(...contexts: Array<PitchLabWriterContext | undefined>): PitchLabWriterContext | undefined {
+  const merged = contexts.reduce<PitchLabWriterContext>((acc, context) => ({
+    ...acc,
+    ...Object.fromEntries(Object.entries(context ?? {}).filter(([, value]) => typeof value === "string" && value.trim())),
+  }), {});
+  return Object.values(merged).some(Boolean) ? merged : undefined;
+}
+
+function formatWriterContext(context: PitchLabWriterContext | undefined): string {
+  if (!context) return "";
+  const lines = [
+    "WRITER CONTEXT - CARRY THIS THROUGH",
+    context.workspaceBrief ? `- Original writer brief: ${context.workspaceBrief}` : "",
+    context.latestInstruction ? `- Latest writer instruction: ${context.latestInstruction}` : "",
+    context.selectedIdea ? `- Selected Idea: ${context.selectedIdea}` : "",
+    context.selectedPilotOption ? `- Selected Pilot Option: ${context.selectedPilotOption}` : "",
+    context.carriedNotes ? `- Carried notes: ${context.carriedNotes}` : "",
+  ].filter(Boolean);
+  return lines.length > 1 ? lines.join("\n") : "";
+}
 
 function logPitchLabGenerationOutput(input: {
   workspaceId: string;
@@ -96,7 +120,7 @@ function parsePremises(text: string): ParsedPremise[] {
     const candidate = item as Record<string, unknown>;
     if (typeof candidate.title !== "string" || typeof candidate.premiseText !== "string") return null;
     const title = cleanPitchLabTitle(candidate.title);
-    const premiseText = candidate.premiseText.trim();
+    const premiseText = assertPitchLabIdeaSeedText(candidate.premiseText.trim());
     return title && premiseText && isValidPitchLabTitle(title) ? {
       title,
       premiseText,
@@ -108,15 +132,15 @@ function parsePremises(text: string): ParsedPremise[] {
   return premises;
 }
 
-function parseIdeas(text: string): ParsedPilot[] {
+function parsePilotOptions(text: string, context: { selectedIdea?: string; instruction?: string } = {}): ParsedPilotOption[] {
   const parsed = parseModelJson(text);
-  if (!Array.isArray(parsed)) throw new Error("The model returned an invalid pitch route list.");
+  if (!Array.isArray(parsed)) throw new Error("The model returned an invalid Pilot Option list.");
   const ideas = parsed.map((item) => {
     if (!item || typeof item !== "object") return null;
     const candidate = item as Record<string, unknown>;
     if (typeof candidate.title !== "string" || typeof candidate.ideaText !== "string") return null;
     const title = cleanPitchLabTitle(candidate.title);
-    const ideaText = candidate.ideaText.trim();
+    const ideaText = assertPitchLabPilotOptionText(candidate.ideaText.trim());
     return title && ideaText && isValidPitchLabTitle(title) ? {
       title,
       ideaText,
@@ -125,8 +149,10 @@ function parseIdeas(text: string): ParsedPilot[] {
       clarityChecks: typeof candidate.clarityChecks === "string" ? candidate.clarityChecks.trim() : "",
       adaptationNotes: typeof candidate.adaptationNotes === "string" ? candidate.adaptationNotes.trim() : "",
     } : null;
-  }).filter((idea): idea is ParsedPilot => Boolean(idea));
-  if (ideas.length !== PITCH_LAB_IDEA_COUNT) throw new Error(`The model returned ${ideas.length} valid pitch routes with one- or two-word titles; expected ${PITCH_LAB_IDEA_COUNT}. Please regenerate.`);
+  }).filter((idea): idea is ParsedPilotOption => Boolean(idea));
+  if (ideas.length !== PITCH_LAB_IDEA_COUNT) throw new Error(`The model returned ${ideas.length} valid Pilot Options with one- or two-word titles; expected ${PITCH_LAB_IDEA_COUNT}. Please regenerate.`);
+  const batchErrors = validatePitchLabPilotOptionBatch(ideas.map((idea) => idea.ideaText), context);
+  if (batchErrors.length) throw new Error(batchErrors.join(" "));
   return ideas;
 }
 
@@ -309,7 +335,7 @@ export async function POST(req: Request) {
   const generationType = body?.generationType === "adaptation" ? "adaptation" : "framework";
   const adaptationStyle = body?.adaptationStyle === "close" ? "close" : "loose";
   if (phase === "pilots" && !selectedPremise) {
-    return NextResponse.json({ error: "Choose an idea before generating pitch routes." }, { status: 400 });
+    return NextResponse.json({ error: "Choose an Idea before generating Pilot Options." }, { status: 400 });
   }
   if (generationType === "adaptation" && !sourceDocumentId && !pastedSource && !sourceUrl) {
     return NextResponse.json({ error: "Choose a Writer story, add a public story link, or paste story material to adapt." }, { status: 400 });
@@ -346,6 +372,17 @@ export async function POST(req: Request) {
       .limit(1)
       .get()?.ideaText || "")
     : null;
+  if (phase === "pilots" && selectedPremiseId && workspaceRow?.id) {
+    const selectedIdeaRow = db.select({ ideaText: pitchIdeas.ideaText, status: pitchIdeas.status })
+      .from(pitchIdeas)
+      .where(and(eq(pitchIdeas.workspaceId, workspaceRow.id), eq(pitchIdeas.id, selectedPremiseId)))
+      .limit(1)
+      .get();
+    const state = selectedIdeaRow ? getPitchLabContentState(selectedIdeaRow.status, selectedIdeaRow.ideaText) : null;
+    if (!state || state.contentKind !== "idea_seed" || !state.isValid) {
+      return NextResponse.json({ error: "Choose a valid Idea before generating Pilot Options. Regenerate invalid legacy rows." }, { status: 400 });
+    }
+  }
   const carriedPromiseContext = phase === "pilots"
     ? buildCarriedPromiseContext({
         selectedPremiseEnvelope,
@@ -355,8 +392,20 @@ export async function POST(req: Request) {
     ? [brief || workspaceRow?.brief || "", carriedPromiseContext ? `Carried selected-idea context:\n${carriedPromiseContext}` : ""].filter(Boolean).join("\n\n")
     : brief;
   const workspaceBriefToSave = phase === "pilots" ? (brief || workspaceRow?.brief || "") : brief;
+  const writerContext = phase === "pilots"
+    ? mergeWriterContext(selectedPremiseEnvelope?.writerContext, {
+        workspaceBrief: workspaceBriefToSave,
+        latestInstruction: instruction || selectedPremiseEnvelope?.writerContext?.latestInstruction,
+        selectedIdea: selectedPremise,
+        carriedNotes: carriedPromiseContext || selectedPremiseEnvelope?.adaptationNotes,
+      })
+    : mergeWriterContext({
+        workspaceBrief: brief,
+        latestInstruction: instruction,
+      });
+  const writerContextBlock = formatWriterContext(writerContext);
   const instructionControls = compilePitchLabInstructions({
-    stage: phase === "premises" ? "ideas" : "routes",
+    stage: phase === "premises" ? "ideas" : "pilot_options",
     brief: effectiveBrief || brief,
     instruction,
     selectedIdea: phase === "pilots" ? selectedPremise : "",
@@ -368,7 +417,7 @@ export async function POST(req: Request) {
   let qaWarnings: PitchLabQaWarning[] = [];
 
   let parsedPremises: ParsedPremise[] | null = null;
-  let parsedIdeas: ParsedPilot[] | null = null;
+  let parsedIdeas: ParsedPilotOption[] | null = null;
   let isPlaceholder = false;
   try {
     if (isPitchLabSampleMode()) {
@@ -387,10 +436,17 @@ export async function POST(req: Request) {
           selectedPremise,
         });
         if (sampleIdeas.length !== PITCH_LAB_IDEA_COUNT) {
-          throw new Error(`Sample pitch batch returned ${sampleIdeas.length} routes; expected ${PITCH_LAB_IDEA_COUNT}.`);
+          throw new Error(`Sample pitch batch returned ${sampleIdeas.length} Pilot Options; expected ${PITCH_LAB_IDEA_COUNT}.`);
         }
-        parsedIdeas = sampleIdeas.map((idea) => ({ ...idea, kernel: selectedPremise, beats: "", clarityChecks: "", adaptationNotes: "" }));
-        qaWarnings = scanPitchLabOutput(instructionControls, "routes", parsedIdeas.map((idea) => idea.ideaText));
+        parsedIdeas = sampleIdeas.map((idea) => ({
+          ...idea,
+          ideaText: assertPitchLabPilotOptionText(idea.ideaText),
+          kernel: selectedPremise,
+          beats: "",
+          clarityChecks: "",
+          adaptationNotes: "",
+        }));
+        qaWarnings = scanPitchLabOutput(instructionControls, "pilot_options", parsedIdeas.map((idea) => idea.ideaText));
       }
       isPlaceholder = true;
     } else {
@@ -402,23 +458,67 @@ export async function POST(req: Request) {
       let lastError: unknown = null;
       for (const candidate of candidates) {
         try {
-          const result = await generateText({
-            model: await getAIModel(candidate.modelId),
-            system: phase === "premises"
-              ? buildPitchLabPremiseSystemPrompt(tasteBrief)
-              : buildPitchLabPilotBatchSystemPrompt(tasteBrief),
-            prompt: phase === "premises"
-              ? buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, instructionControls: instructionControlsBlock })
-              : buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief: effectiveBrief, instruction, sourceMaterial, selectedPremise, instructionControls: instructionControlsBlock }),
-            maxOutputTokens: phase === "premises" ? 9000 : 14000,
-            maxRetries: 0,
-          });
           if (phase === "premises") {
-            parsedPremises = parsePremises(result.text);
+            const basePrompt = buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, instructionControls: instructionControlsBlock, writerContext: writerContextBlock });
+            let parseError: unknown = null;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+              const result = await generateText({
+                model: await getAIModel(candidate.modelId),
+                system: buildPitchLabPremiseSystemPrompt(tasteBrief),
+                prompt: attempt === 0 ? basePrompt : `${basePrompt}
+
+FORMAT REPAIR RETRY
+Your previous answer did not match the required Idea format.
+Return exactly ${PITCH_LAB_PREMISE_COUNT} JSON items. Each premiseText must:
+- start with FL
+- include ML
+- be one compact seed, 8-28 words
+- read like "FL nurse saves ML mobster's life and is offered a live-in contract"
+Do not start with A, An, or The. Do not use em dashes, semicolons, series language, episode language, or polished premise prose.`,
+                maxOutputTokens: 9000,
+                maxRetries: 0,
+              });
+              try {
+                parsedPremises = parsePremises(result.text);
+                parseError = null;
+                break;
+              } catch (err) {
+                parseError = err;
+              }
+            }
+            if (!parsedPremises) throw parseError instanceof Error ? parseError : new Error("Idea generation failed format validation.");
             qaWarnings = scanPitchLabOutput(instructionControls, "ideas", parsedPremises.map((premise) => premise.premiseText));
           } else {
-            parsedIdeas = parseIdeas(result.text);
-            qaWarnings = scanPitchLabOutput(instructionControls, "routes", parsedIdeas.map((idea) => idea.ideaText));
+            const basePrompt = buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief: effectiveBrief, instruction, sourceMaterial, selectedPremise, instructionControls: instructionControlsBlock, writerContext: writerContextBlock });
+            let parseError: unknown = null;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
+              const result = await generateText({
+                model: await getAIModel(candidate.modelId),
+                system: buildPitchLabPilotBatchSystemPrompt(tasteBrief),
+                prompt: attempt === 0 ? basePrompt : `${basePrompt}
+
+FORMAT REPAIR RETRY
+Your previous answer did not match the required Pilot Option format.
+Return exactly ${PITCH_LAB_IDEA_COUNT} JSON items. Each ideaText must be exactly:
+Hook: one short event
+Escalation: one short complication
+Cliffhanger: one short next-action turn
+Do not use route/routes, series arc, season, runway, Pilot arc, or episode-plan labels.
+Do not introduce royal, palace, court, medieval, clan, magic, bloodline, lord/lady, or fantasy texture unless the selected Idea or latest instruction explicitly requested it.
+Keep each option simple: one trigger, one complication, one next action. Do not stack multiple threats, institutions, rivals, investigations, family problems, and reveals in one option.`,
+                maxOutputTokens: 14000,
+                maxRetries: 0,
+              });
+              try {
+                parsedIdeas = parsePilotOptions(result.text, { selectedIdea: selectedPremise, instruction });
+                parseError = null;
+                break;
+              } catch (err) {
+                parseError = err;
+              }
+            }
+            if (!parsedIdeas) throw parseError instanceof Error ? parseError : new Error("Pilot Option generation failed format validation.");
+            qaWarnings = scanPitchLabOutput(instructionControls, "pilot_options", parsedIdeas.map((idea) => idea.ideaText));
           }
           lastError = null;
           break;
@@ -472,18 +572,22 @@ export async function POST(req: Request) {
           ideaText: serializePitchIdeaEnvelope({
             originalText: premise.premiseText,
             currentText: premise.premiseText,
+            contentKind: "idea_seed",
             turns: [{
               instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea",
               ideaText: premise.premiseText,
               createdAt: now.toISOString(),
               kind: "initial",
+              contentKind: "idea_seed",
               instructionControls,
               qaWarnings,
+              writerContext,
             }],
             premise: premise.premiseText,
             adaptationNotes: [premise.appealLane, premise.transformationNotes].filter(Boolean).join(" | "),
             instructionControls,
             qaWarnings,
+            writerContext,
           }),
           status: "premise" as const, position: startPosition + index, createdAt: now, updatedAt: now,
         }));
@@ -493,7 +597,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ...saved, phase, isPlaceholder });
     }
 
-    if (!parsedIdeas) throw new Error("Pitch route generation returned no routes.");
+    if (!parsedIdeas) throw new Error("Pilot Option generation returned no options.");
     const ideasToSave = parsedIdeas;
     const saved = db.transaction((tx) => {
       const now = new Date();
@@ -533,17 +637,20 @@ export async function POST(req: Request) {
         ideaText: serializePitchIdeaEnvelope({
           originalText: idea.ideaText,
           currentText: idea.ideaText,
+          contentKind: "pilot_option",
           turns: [{
             instruction: [
               `Selected idea: ${selectedPremise}`,
               carriedPromiseContext ? `Carried creative context: ${carriedPromiseContext}` : "",
-              instruction ? `Route instruction: ${instruction}` : "",
+              instruction ? `Pilot Option instruction: ${instruction}` : "",
             ].filter(Boolean).join("\n"),
             ideaText: idea.ideaText,
             createdAt: now.toISOString(),
             kind: "initial",
+            contentKind: "pilot_option",
             instructionControls,
             qaWarnings,
+              writerContext: mergeWriterContext(writerContext, { selectedPilotOption: idea.ideaText }),
           }],
           premise: selectedPremise,
           premiseId: selectedPremiseId || undefined,
@@ -556,6 +663,7 @@ export async function POST(req: Request) {
           adaptationNotes: idea.adaptationNotes,
           instructionControls,
           qaWarnings,
+          writerContext: mergeWriterContext(writerContext, { selectedPilotOption: idea.ideaText }),
         }),
         status: "generated" as const, position: startPosition + index, createdAt: now, updatedAt: now,
       }));

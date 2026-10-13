@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "lineage:export-report": "node scripts/lineage-export-report.cjs",
-    "test:plot-lab": "node --experimental-strip-types scripts/plot-lab-regression.test.mjs"
+    "test:plot-lab": "node --experimental-strip-types scripts/plot-lab-regression.test.mjs",
+    "test:pitch-lab": "node --experimental-strip-types scripts/pitch-lab-regression.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.66",

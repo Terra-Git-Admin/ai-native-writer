@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchWorkspaces } from "@/lib/db/schema";
 import { cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
+import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { parsePitchIdeaEnvelope, serializePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 
@@ -28,6 +29,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!existing) return NextResponse.json({ error: "Idea not found." }, { status: 404 });
   const now = new Date();
   const envelope = parsePitchIdeaEnvelope(existing.ideaText);
+  const state = getPitchLabContentState(existing.status, existing.ideaText);
+  if (status === "shortlisted" && (existing.status !== "generated" || state.contentKind !== "pilot_option" || !state.isValid)) {
+    return NextResponse.json({ error: "Only valid Pilot Options can be moved to Shortlist." }, { status: 400 });
+  }
+  if (status === "premise" && state.contentKind !== "idea_seed") {
+    return NextResponse.json({ error: "Only valid Ideas can be restored to Ideas." }, { status: 400 });
+  }
+  if (status === "generated" && state.contentKind !== "pilot_option") {
+    return NextResponse.json({ error: "Only valid Pilot Options can be restored to Pilot Options." }, { status: 400 });
+  }
   const ideaText = status === "shortlisted" && !envelope.shortlistedAt
     ? serializePitchIdeaEnvelope({ ...envelope, shortlistedAt: now.toISOString() })
     : existing.ideaText;

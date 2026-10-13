@@ -21,6 +21,9 @@ type Idea = {
   title: string;
   ideaText: string;
   status: IdeaStatus;
+  contentKind?: "idea_seed" | "pilot_option" | "pilot_plot" | null;
+  contentValid?: boolean;
+  contentErrors?: string[];
   promotedDocumentId?: string | null;
   updatedAt?: string | Date | null;
   isPlaceholder?: boolean;
@@ -53,7 +56,7 @@ const MAX_SHORTLISTED_PILOTS = 20;
 const MAX_PARALLEL_PILOT_GENERATIONS = 2;
 const DIRECTION_PLACEHOLDER = "Type anything: billionaire CEO disguised as an intern, contract marriage, revenge affair...";
 const DIRECTION_EXAMPLE_TEXT = "Try: billionaire CEO disguised as an intern, contract marriage, revenge affair, fake fiance, debt trap, secret heir.";
-const PILOT_GENERATION_STAGES = ["Reading idea", "Building route set", "Checking fit", "Saving routes"];
+const PILOT_GENERATION_STAGES = ["Reading idea", "Building pilot options", "Checking hooks", "Saving options"];
 const IDEA_REGENERATION_STAGES = ["Reading instruction", "Reworking idea", "Saving version"];
 type GeneratedBatch = {
   id: string;
@@ -84,18 +87,18 @@ const OPERATION_COPY: Record<OperationKind, { label: string; stages: string[]; s
     slowHint: "Regeneration waits for the full model response before replacing the current idea.",
   },
   refine: {
-    label: "Developing Episode 1",
-    stages: ["Reading Live File", "Applying feedback", "Building situation", "Saving option"],
-    slowHint: "Studio can take a minute when real AI mode is enabled.",
+    label: "Developing Pilot Plot",
+    stages: ["Reading Live File", "Applying feedback", "Building pilot plot", "Saving option"],
+    slowHint: "Pilot Plots can take a minute when real AI mode is enabled.",
   },
   save: {
     label: "Saving edit",
-    stages: ["Reading edit", "Saving Live File", "Updating Studio"],
+    stages: ["Reading edit", "Saving Live File", "Updating Shortlist"],
     slowHint: "This is usually quick; if it waits, the local database may be busy.",
   },
   restore: {
     label: "Updating Live File",
-    stages: ["Reading option", "Saving Live File", "Updating Studio"],
+    stages: ["Reading option", "Saving Live File", "Updating Shortlist"],
     slowHint: "This is usually quick; if it waits, the local database may be busy.",
   },
   finalize: {
@@ -168,6 +171,7 @@ export default function PitchLabStudioPage() {
   const [pilotInstructionId, setPilotInstructionId] = useState<string | null>(null);
   const [pilotInstructionDrafts, setPilotInstructionDrafts] = useState<Record<string, string>>({});
   const [pilotGenerationTasks, setPilotGenerationTasks] = useState<Record<string, PilotGenerationTask>>({});
+  const [pilotGenerationErrors, setPilotGenerationErrors] = useState<Record<string, string>>({});
   const [ideaRegenerationTask, setIdeaRegenerationTask] = useState<IdeaRegenerationTask | null>(null);
   const [pilotGenerationTick, setPilotGenerationTick] = useState(0);
   const [selectedPremiseId, setSelectedPremiseId] = useState<string | null>(null);
@@ -192,7 +196,6 @@ export default function PitchLabStudioPage() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [shortlistCandidate, setShortlistCandidate] = useState<Idea | null>(null);
   const [shortlistTitle, setShortlistTitle] = useState("");
-  const [expandedPilotIds, setExpandedPilotIds] = useState<Set<string>>(() => new Set());
   const [pendingTimelineItem, setPendingTimelineItem] = useState<(TimelineItem & { ideaId: string }) | null>(null);
   const [editingOptionIds, setEditingOptionIds] = useState<Set<string>>(() => new Set());
   const [optionDrafts, setOptionDrafts] = useState<Record<string, string>>({});
@@ -245,7 +248,8 @@ export default function PitchLabStudioPage() {
         setSourceDocumentId(writerSource?.sourceDocumentId ?? "");
         setPastedSource((pasted?.textSnapshot ?? "").replace(/^Pasted source material:\s*/i, ""));
         setSourceUrl((external?.textSnapshot ?? "").match(/^Source URL:\s*(\S+)/m)?.[1] ?? "");
-        setIdeas(Array.isArray(data.ideas) ? data.ideas.map(markSampleIdea) : []);
+        const loadedIdeas = Array.isArray(data.ideas) ? data.ideas.map(markSampleIdea) : [];
+        setIdeas(loadedIdeas);
       })
       .catch(() => undefined);
 
@@ -538,15 +542,6 @@ export default function PitchLabStudioPage() {
     URL.revokeObjectURL(url);
   }
 
-  function togglePilotExpanded(id: string) {
-    setExpandedPilotIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function toggleSelectedPremise(id: string) {
     const scrollNode = mainScrollRef.current;
     const previousScrollTop = scrollNode?.scrollTop ?? null;
@@ -610,7 +605,7 @@ export default function PitchLabStudioPage() {
     if (hasReplaceableWork) {
       setConfirmDialog({
         title: "Create new ideas?",
-        body: "This will create a new list of ideas. Only routes already moved to Studio will remain. Are you sure?",
+        body: "This will create a new list of Ideas. Only Pilot Options already moved to Shortlist will remain. Are you sure?",
         confirmLabel: "Yes",
         onConfirm: () => {
           setConfirmDialog(null);
@@ -627,23 +622,28 @@ export default function PitchLabStudioPage() {
     const premiseId = premiseIdOverride || selectedPremiseId || "";
     const instruction = instructionOverride.trim();
     if (!premiseText.trim()) {
-      setError("Choose an idea before generating pitch routes.");
+      setError("Choose an Idea before generating Pilot Options.");
       setStage(premises.length ? "premises" : "inputs");
       return;
     }
     if (!premiseId) {
-      setError("Choose an idea before generating pitch routes.");
+      setError("Choose an Idea before generating Pilot Options.");
       return;
     }
     if (pilotGenerationTasks[premiseId]) return;
     if (activePilotGenerationCount >= MAX_PARALLEL_PILOT_GENERATIONS) {
-      setError(`Wait for one route generation to finish. You can run ${MAX_PARALLEL_PILOT_GENERATIONS} at a time.`);
+      setError(`Wait for one Pilot Option generation to finish. You can run ${MAX_PARALLEL_PILOT_GENERATIONS} at a time.`);
       return;
     }
     setConfirmDialog(null);
     setError(null);
     setSelectedPremiseId(premiseId);
     setPilotInstructionId(null);
+    setPilotGenerationErrors((current) => {
+      const next = { ...current };
+      delete next[premiseId];
+      return next;
+    });
     setPilotGenerationTasks((current) => ({ ...current, [premiseId]: { startedAt: Date.now(), instruction } }));
     try {
       const response = await fetch("/api/pitch-lab/generate", {
@@ -669,6 +669,11 @@ export default function PitchLabStudioPage() {
         ...current.filter((idea) => !newIdeas.some((newIdea: Idea) => newIdea.id === idea.id)),
         ...newIdeas,
       ]);
+      setPilotGenerationErrors((current) => {
+        const next = { ...current };
+        delete next[premiseId];
+        return next;
+      });
       setShowDiscarded(false);
       setPilotInstructionDrafts((current) => {
         const next = { ...current };
@@ -677,7 +682,11 @@ export default function PitchLabStudioPage() {
       });
       setStage("premises");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate pitch routes.");
+      const message = err instanceof Error ? err.message : "Could not generate Pilot Options.";
+      setError(message);
+      setStage("premises");
+      setSelectedPremiseId(premiseId);
+      setPilotGenerationErrors((current) => ({ ...current, [premiseId]: message }));
     } finally {
       setPilotGenerationTasks((current) => {
         const next = { ...current };
@@ -836,7 +845,7 @@ export default function PitchLabStudioPage() {
         id: pendingId,
         version: timelineItems.length + 1,
         instruction,
-        ideaText: "Studio is developing this route...",
+        ideaText: "Pilot Plots is developing this option...",
         status: "running",
       });
       setIdeaInstructions("");
@@ -866,7 +875,7 @@ export default function PitchLabStudioPage() {
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id ? { ...idea, title: cleanTitle, ideaText: data.ideaText, isPlaceholder } : idea));
       setPendingTimelineItem(null);
       setIsCurrentEditable(false);
-      setCurrentVersionNotice(instruction ? "Episode 1 option added below the Live File." : "Manual edits saved to the Live File.");
+      setCurrentVersionNotice(instruction ? "Pilot Plot option added below the Live File." : "Manual edits saved to the Live File.");
       setCurrentVersionInstruction(instruction || null);
       finishOperation();
     } catch (err) {
@@ -918,7 +927,7 @@ export default function PitchLabStudioPage() {
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || "Could not save Episode 1 option.");
+      if (!response.ok) throw new Error(data?.error || "Could not save Pilot Plot option.");
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id ? { ...idea, ideaText: data.ideaText } : idea));
       setEditingOptionIds((current) => {
         const next = new Set(current);
@@ -926,11 +935,11 @@ export default function PitchLabStudioPage() {
         return next;
       });
       setOptionDrafts((current) => ({ ...current, [item.id]: editedText }));
-      setCurrentVersionNotice("Generated option saved. Live File was not changed.");
+      setCurrentVersionNotice("Pilot Plot option saved. Live File was not changed.");
       setCurrentVersionInstruction(null);
       finishOperation();
     } catch (err) {
-      failOperation(err instanceof Error ? err.message : "Could not save Episode 1 option.");
+      failOperation(err instanceof Error ? err.message : "Could not save Pilot Plot option.");
     }
   }
 
@@ -985,7 +994,7 @@ export default function PitchLabStudioPage() {
   function openShortlistDialog(idea: Idea) {
     setError(null);
     if (shortlisted.length >= MAX_SHORTLISTED_PILOTS) {
-      setError(`Studio is full at ${MAX_SHORTLISTED_PILOTS} routes. Discard items from Studio before adding more.`);
+      setError(`Shortlist is full at ${MAX_SHORTLISTED_PILOTS} Pilot Options. Discard items from Shortlist before adding more.`);
       return;
     }
     setShortlistCandidate(idea);
@@ -996,7 +1005,7 @@ export default function PitchLabStudioPage() {
     if (!shortlistCandidate) return;
     const title = cleanPilotName(shortlistTitle);
     if (!isValidPilotName(title)) {
-      setError("Use a route name of one or two words.");
+      setError("Use a Pilot Option name of one or two words.");
       return;
     }
     const ok = await setIdeaStatus(shortlistCandidate.id, "shortlisted", { title, select: false });
@@ -1020,7 +1029,7 @@ export default function PitchLabStudioPage() {
       <article role="status" aria-live="polite" aria-busy="true" className="rounded-lg border border-amber-300 bg-card p-4 dark:border-amber-900">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-foreground">{operation.kind === "generate" || operation.kind === "regenerate" ? "Pitch Lab" : operation.kind === "finalize" ? "Writer Doc Builder" : "Studio"}</h2>
+            <h2 className="text-sm font-semibold text-foreground">{operation.kind === "generate" || operation.kind === "regenerate" ? "Pitch Lab" : operation.kind === "finalize" ? "Writer Doc Builder" : "Pilot Plots"}</h2>
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-200">RUNNING</span>
           </div>
           <span className="text-xs font-medium text-muted-foreground">{formatElapsed(elapsedSeconds)}</span>
@@ -1057,14 +1066,14 @@ export default function PitchLabStudioPage() {
       <article role="status" aria-live="polite" aria-busy="true" className="rounded-lg border border-amber-300 bg-card p-4 dark:border-amber-900">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-foreground">Pitch Routes</h2>
+            <h2 className="text-sm font-semibold text-foreground">Pilot Options</h2>
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-200">RUNNING</span>
           </div>
           <span className="text-xs font-medium text-muted-foreground">{formatElapsed(seconds)}</span>
         </div>
-        <p className="text-sm font-medium text-foreground">Generating 4 pitch routes.</p>
+        <p className="text-sm font-medium text-foreground">Generating 4 Pilot Options.</p>
         {task.instruction && <p className="mt-1 text-xs font-medium text-sky-700 dark:text-sky-300">Instruction: {task.instruction}</p>}
-        <p className="mt-1 text-sm text-muted-foreground">This idea will show its route set as soon as the result is saved.</p>
+        <p className="mt-1 text-sm text-muted-foreground">This Idea will show its Pilot Options as soon as the result is saved.</p>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {PILOT_GENERATION_STAGES.map((step, index) => {
             const isCurrent = index === stageIndex;
@@ -1104,9 +1113,9 @@ export default function PitchLabStudioPage() {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4" role="presentation">
         <section role="dialog" aria-modal="true" aria-labelledby="shortlist-confirm-title" className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-xl">
-          <h2 id="shortlist-confirm-title" className="text-base font-semibold text-foreground">Move route to Studio?</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">Give this route a name before moving it to Studio.</p>
-          <label htmlFor="shortlist-pilot-title" className="mt-4 block text-sm font-medium text-foreground">Route name</label>
+          <h2 id="shortlist-confirm-title" className="text-base font-semibold text-foreground">Move Pilot Option to Shortlist?</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Give this Pilot Option a name before moving it to Shortlist.</p>
+          <label htmlFor="shortlist-pilot-title" className="mt-4 block text-sm font-medium text-foreground">Pilot Option name</label>
           <input id="shortlist-pilot-title" value={shortlistTitle} onChange={(event) => setShortlistTitle(event.target.value)} className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" />
           <p className={`mt-2 text-xs ${isValid ? "text-muted-foreground" : "text-red-600 dark:text-red-300"}`}>Use the most powerful identifiable noun, 1-2 words.</p>
           <div className="mt-5 flex justify-end gap-2">
@@ -1174,7 +1183,7 @@ export default function PitchLabStudioPage() {
                 className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm leading-6 outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 placeholder="Make this more female-led, less wedding-heavy, or more emotionally dangerous..."
               />
-              <p className="mt-2 text-xs leading-5 text-muted-foreground">This updates the idea only. Pitch routes are generated later from the version you choose.</p>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">This updates the Idea only. Pilot Options are generated later from the version you choose.</p>
             </>
           )}
 
@@ -1208,8 +1217,8 @@ export default function PitchLabStudioPage() {
           <div className="mt-4 flex gap-3 rounded-md border border-amber-300 bg-amber-50/80 p-3 text-sm leading-6 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden="true" />
             <div>
-              <p className="font-semibold text-amber-950 dark:text-amber-100">Current ideas and their generated pitch routes will be replaced.</p>
-              <p className="mt-1">Only routes already moved to Studio will stay saved.</p>
+              <p className="font-semibold text-amber-950 dark:text-amber-100">Current Ideas and their generated Pilot Options will be replaced.</p>
+              <p className="mt-1">Only Pilot Options already moved to Shortlist will stay saved.</p>
             </div>
           </div>
           <label htmlFor="regenerate-all-ideas-instruction" className="mt-4 block text-sm font-medium text-foreground">Batch regeneration instruction</label>
@@ -1301,55 +1310,48 @@ export default function PitchLabStudioPage() {
   function renderPilotOptionCard(idea: Idea) {
     const isShortlisted = idea.status === "shortlisted";
     const isDiscarded = idea.status === "discarded";
+    const isInvalid = idea.contentValid === false;
     const isDiscarding = pendingIdeaAction === `${idea.id}:discarded`;
-    const isExpanded = expandedPilotIds.has(idea.id);
     const isShortlistFull = shortlisted.length >= MAX_SHORTLISTED_PILOTS;
     const text = currentIdeaText(idea);
     return (
       <article key={idea.id} className={`rounded-md border border-border ${isDiscarded ? "bg-muted/40 opacity-75" : "bg-card"}`} aria-busy={isDiscarding}>
-        <div className="grid gap-3 px-3 py-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+        <div className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
           <div className="min-w-0 text-left">
             <div className="flex min-w-0 items-center gap-2">
               <h3 className="truncate text-sm font-semibold text-foreground">{displayTitle(idea.title)}</h3>
-              {statusTag("Route", "blue")}
-              {isShortlisted && <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"><CheckCircle className="h-3 w-3" aria-hidden="true" />In Studio</span>}
+              {statusTag("Pilot Option", "blue")}
+              {isInvalid && statusTag("Regenerate required", "amber")}
+              {isShortlisted && <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"><CheckCircle className="h-3 w-3" aria-hidden="true" />Shortlisted</span>}
               {isDiscarded && statusTag("Discarded", "red")}
               {isDiscarding && <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Discarding</span>}
             </div>
-            {!isExpanded && <p className="mt-1 overflow-hidden text-sm leading-5 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{text}</p>}
+            <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">{text}</pre>
+            {isInvalid && <p role="alert" className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{idea.contentErrors?.[0] || "This legacy option must be regenerated before it can move forward."}</p>}
           </div>
-          <div className="flex items-center gap-2 md:justify-end">
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
             {isShortlisted ? (
-              <span className="inline-flex min-h-10 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">In Studio</span>
+              <span className="inline-flex min-h-10 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">Shortlisted</span>
             ) : null}
-            <button type="button" onClick={() => togglePilotExpanded(idea.id)} aria-expanded={isExpanded} className="inline-flex min-h-10 items-center gap-1 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition duration-150 active:scale-[0.98] hover:bg-muted hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
-              {isExpanded ? "Hide" : "View more"}
-              <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-        {isExpanded && (
-          <div className="border-t border-border px-3 py-3">
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{text}</pre>
             {(isDiscarded || !isShortlisted) && (
-              <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+              <div className="flex flex-wrap justify-end gap-2">
                 {isDiscarded ? (
                   <button type="button" onClick={() => void setIdeaStatus(idea.id, "generated")} disabled={Boolean(pendingIdeaAction)} className={secondaryButtonClass}>{ctaLabel(pendingIdeaAction === `${idea.id}:generated` ? "Restoring" : "Restore", pendingIdeaAction === `${idea.id}:generated`)}</button>
                 ) : (
                   <>
                     {isShortlistFull && (
                       <p role="alert" className="mr-auto max-w-xl rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                        Studio is full at {MAX_SHORTLISTED_PILOTS}/{MAX_SHORTLISTED_PILOTS}. Delete or reject an item from Studio, then add this route.
+                        Shortlist is full at {MAX_SHORTLISTED_PILOTS}/{MAX_SHORTLISTED_PILOTS}. Delete or reject an item from Shortlist, then add this Pilot Option.
                       </p>
                     )}
-                    <button type="button" onClick={() => openShortlistDialog(idea)} disabled={Boolean(pendingIdeaAction) || isShortlistFull} className={primaryButtonClass}>{isShortlistFull ? "Studio full" : "Move to Studio"}</button>
+                    <button type="button" onClick={() => openShortlistDialog(idea)} disabled={Boolean(pendingIdeaAction) || isShortlistFull || isInvalid} className={primaryButtonClass}>{isInvalid ? "Regenerate required" : isShortlistFull ? "Shortlist full" : "Move to Shortlist"}</button>
                     <button type="button" onClick={() => void setIdeaStatus(idea.id, "discarded")} disabled={Boolean(pendingIdeaAction)} className={secondaryButtonClass}>{ctaLabel(isDiscarding ? "Deleting" : "Discard", isDiscarding)}</button>
                   </>
                 )}
               </div>
             )}
           </div>
-        )}
+        </div>
       </article>
     );
   }
@@ -1383,12 +1385,14 @@ export default function PitchLabStudioPage() {
             visiblePremises.map((idea) => {
             const isSelected = selectedPremise?.id === idea.id;
             const isDiscarded = idea.status === "discarded";
+            const isInvalid = idea.contentValid === false;
             const isDiscarding = pendingIdeaAction === `${idea.id}:discarded`;
             const text = currentIdeaText(idea);
             const envelope = parsePitchIdeaEnvelope(idea.ideaText);
             const feedback = envelope.feedback;
             const isSavingFeedback = pendingIdeaAction === `${idea.id}:feedback`;
             const pilotTask = pilotGenerationTasks[idea.id];
+            const pilotError = pilotGenerationErrors[idea.id];
             const isGeneratingThis = Boolean(pilotTask);
             const isRegeneratingThis = ideaRegenerationTask?.ideaId === idea.id;
             const isEditingThis = editingPremiseId === idea.id;
@@ -1398,9 +1402,9 @@ export default function PitchLabStudioPage() {
             const batchIdeas = generatedBatches.filter((batch) => batch.premiseId === idea.id).flatMap((batch) => batch.ideas);
             const hasGeneratedPilots = batchIdeas.length > 0;
             const draft = premiseDrafts[idea.id] ?? { ideaText: text };
-            const canEditIdea = !isBusy && !isDiscarded && !hasGeneratedPilots && !isGeneratingThis && !isRegeneratingIdea && !Boolean(pendingIdeaAction);
+            const canEditIdea = !isBusy && !isDiscarded && !isInvalid && !hasGeneratedPilots && !isGeneratingThis && !isRegeneratingIdea && !Boolean(pendingIdeaAction);
             const canRegenerateIdea = canEditIdea && !isEditingThis;
-            const canStartPilotGeneration = !isBusy && !isEditingThis && !isGeneratingThis && activePilotGenerationCount < MAX_PARALLEL_PILOT_GENERATIONS;
+            const canStartPilotGeneration = !isInvalid && !isBusy && !isEditingThis && !isGeneratingThis && activePilotGenerationCount < MAX_PARALLEL_PILOT_GENERATIONS;
             const directionCardClass = isGeneratingThis
               ? "border-amber-500 shadow-[0_0_0_1px_rgba(245,158,11,0.35)]"
               : isRegeneratingThis
@@ -1418,11 +1422,12 @@ export default function PitchLabStudioPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-sm font-semibold text-foreground">{displayTitle(idea.title)}</h2>
                       {statusTag("Idea", generationMode === "adaptation" ? "blue" : "neutral")}
+                      {isInvalid && statusTag("Regenerate required", "amber")}
                       {isGeneratingThis && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Running</span>}
                       {isRegeneratingThis && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Regenerating</span>}
                       {isSavingThis && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Saving</span>}
                       {premiseNotice[idea.id] && !isEditingThis && !isRegeneratingThis && statusTag(premiseNotice[idea.id], "emerald")}
-                      {batchIdeas.length > 0 && statusTag("Routes ready", "blue")}
+                      {batchIdeas.length > 0 && statusTag("Options ready", "blue")}
                       {isDiscarded && statusTag("Discarded", "red")}
                       {isDiscarding && <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Discarding</span>}
                     </div>
@@ -1437,10 +1442,11 @@ export default function PitchLabStudioPage() {
                     ) : (
                       <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">{text}</p>
                     )}
+                    {isInvalid && <p role="alert" className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{idea.contentErrors?.[0] || "This legacy idea must be regenerated before it can move forward."}</p>}
                     {hasGeneratedPilots && !isSelected && (
                       <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 dark:text-blue-300">
                         <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />
-                        Routes generated. Expand to view options.
+                        Pilot Options generated. Open to view options.
                       </p>
                     )}
                   </div>
@@ -1480,7 +1486,7 @@ export default function PitchLabStudioPage() {
                           </>
                         )}
                         {!hasGeneratedPilots && (
-                          <button type="button" title="Add optional instructions before creating 4 pitch routes." onClick={() => {
+                          <button type="button" title="Add optional instructions before creating 4 Pilot Options." onClick={() => {
                             setSelectedPremiseId(idea.id);
                             setPilotInstructionId((current) => current === idea.id ? null : idea.id);
                           }} disabled={(!canStartPilotGeneration && !isGeneratingThis) || isRegeneratingThis} className={`${isPilotInstructionOpen ? secondaryButtonClass : primaryButtonClass} w-32 px-2`}>
@@ -1491,7 +1497,7 @@ export default function PitchLabStudioPage() {
                     )}
                     {hasGeneratedPilots && (
                       <div className="flex w-32 justify-end">
-                        <button type="button" onClick={() => toggleSelectedPremise(idea.id)} aria-label={isSelected ? `Hide ${displayTitle(idea.title)} routes` : `Show ${displayTitle(idea.title)} routes`} title={isSelected ? "Hide routes" : "Show routes"} aria-expanded={isSelected} className={iconButtonClass}>
+                        <button type="button" onClick={() => toggleSelectedPremise(idea.id)} aria-label={isSelected ? `Hide ${displayTitle(idea.title)} Pilot Options` : `Show ${displayTitle(idea.title)} Pilot Options`} title={isSelected ? "Hide Pilot Options" : "Show Pilot Options"} aria-expanded={isSelected} className={iconButtonClass}>
                           <ChevronDown className={`h-4 w-4 transition-transform ${isSelected ? "rotate-180" : ""}`} aria-hidden="true" />
                         </button>
                       </div>
@@ -1503,22 +1509,27 @@ export default function PitchLabStudioPage() {
                     {envelope.adaptationNotes && <p className="mt-2 break-words text-xs text-muted-foreground">{envelope.adaptationNotes}</p>}
                     {isPilotInstructionOpen && !hasGeneratedPilots && !isGeneratingThis && !isEditingThis && (
                       <div className={envelope.adaptationNotes ? "mt-3 rounded-md border border-border bg-background/60 p-3" : "rounded-md border border-border bg-background/60 p-3"}>
-                        <label htmlFor={`pilot-instruction-${idea.id}`} className="block text-sm font-medium">Route instruction</label>
-                        <textarea id={`pilot-instruction-${idea.id}`} value={pilotInstruction} onChange={(event) => setPilotInstructionDrafts((current) => ({ ...current, [idea.id]: event.target.value }))} disabled={isGeneratingThis} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder="Optional: make the idea more active, avoid caregiver routes, change the emotional engine..." />
-                        {activePilotGenerationCount >= MAX_PARALLEL_PILOT_GENERATIONS && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Two route generations are already running.</p>}
+                        <label htmlFor={`pilot-instruction-${idea.id}`} className="block text-sm font-medium">Pilot Option instruction</label>
+                        <textarea id={`pilot-instruction-${idea.id}`} value={pilotInstruction} onChange={(event) => setPilotInstructionDrafts((current) => ({ ...current, [idea.id]: event.target.value }))} disabled={isGeneratingThis} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition-colors focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-60" placeholder="Optional: make the Idea more active, avoid caregiver setups, change the emotional engine..." />
+                        {activePilotGenerationCount >= MAX_PARALLEL_PILOT_GENERATIONS && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Two Pilot Option generations are already running.</p>}
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" onClick={() => setPilotInstructionId(null)} className={secondaryButtonClass}>Cancel</button>
-                          <button type="button" onClick={() => requestGeneratePilots(idea.id, text, pilotInstruction)} disabled={!canStartPilotGeneration} className={primaryButtonClass}>{ctaLabel(isGeneratingThis ? "Generating routes" : "Generate routes", isGeneratingThis)}</button>
+                          <button type="button" onClick={() => requestGeneratePilots(idea.id, text, pilotInstruction)} disabled={!canStartPilotGeneration} className={primaryButtonClass}>{ctaLabel(isGeneratingThis ? "Generating options" : "Generate options", isGeneratingThis)}</button>
                         </div>
                       </div>
                     )}
                     {pilotTask && <div className={envelope.adaptationNotes || isPilotInstructionOpen ? "mt-3" : ""}>{renderPilotGenerationCard(pilotTask)}</div>}
+                    {!pilotTask && pilotError && !hasGeneratedPilots && (
+                      <div role="alert" className={envelope.adaptationNotes || isPilotInstructionOpen ? "mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100" : "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100"}>
+                        Pilot Options were not saved: {pilotError}
+                      </div>
+                    )}
                     {batchIdeas.length > 0 && (
                       <div className={`${envelope.adaptationNotes || isGeneratingThis ? "mt-4 border-t pt-3" : ""} space-y-3 border-border`}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-sm font-semibold text-foreground">Current routes</h3>
-                            {statusTag("Route set", "blue")}
+                            <h3 className="text-sm font-semibold text-foreground">Current Pilot Options</h3>
+                            {statusTag("Option set", "blue")}
                           </div>
                           <p className="text-xs text-muted-foreground">{batchIdeas.length} option{batchIdeas.length === 1 ? "" : "s"}</p>
                         </div>
@@ -1572,12 +1583,12 @@ export default function PitchLabStudioPage() {
   }
 
   function renderPitchTimeline() {
-    if (shortlisted.length === 0) return <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">Move a pitch route to Studio to develop it.</section>;
+    if (shortlisted.length === 0) return <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">Move a Pilot Option to Shortlist to develop it.</section>;
     return (
       <section className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <aside className="rounded-lg border border-border bg-card p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-foreground">Studio routes</h2>
+            <h2 className="text-sm font-semibold text-foreground">Shortlist</h2>
             {statusTag(`${shortlisted.length}/${MAX_SHORTLISTED_PILOTS}`, shortlisted.length >= MAX_SHORTLISTED_PILOTS ? "amber" : "neutral")}
           </div>
           <div className="space-y-2">
@@ -1596,7 +1607,7 @@ export default function PitchLabStudioPage() {
                     <h3 className="truncate text-sm font-semibold text-foreground">{displayTitle(idea.title)}</h3>
                     {isActive && <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Selected</span>}
                   </div>
-                  <p className="mt-1 overflow-hidden text-xs leading-5 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">{text}</p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">{text}</p>
                 </button>
               );
             })}
@@ -1604,12 +1615,12 @@ export default function PitchLabStudioPage() {
         </aside>
 
         {!selectedIdea ? (
-          <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">Select a Studio route to develop it.</section>
+          <section className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">Select a shortlisted Pilot Option to develop it.</section>
         ) : (
           <section className="space-y-4">
             <section className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Studio</p><h2 className="mt-1 text-lg font-semibold">{savedTitle || "Selected route"}</h2></div>
+                <div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Pilot Plots</p><h2 className="mt-1 text-lg font-semibold">{savedTitle || "Selected option"}</h2></div>
                 <button type="button" onClick={() => void setIdeaStatus(selectedIdea.id, "discarded")} disabled={isBusy || Boolean(pendingIdeaAction)} className={secondaryButtonClass}>{ctaLabel(pendingIdeaAction === `${selectedIdea.id}:discarded` ? "Rejecting" : "Reject", pendingIdeaAction === `${selectedIdea.id}:discarded`)}</button>
               </div>
               {currentVersionNotice && (
@@ -1631,7 +1642,7 @@ export default function PitchLabStudioPage() {
                   {!isCurrentEditable && (
                     <div className="flex flex-wrap items-center gap-2">
                       <button type="button" onClick={() => { setIsCurrentEditable(true); requestAnimationFrame(() => ideaTextRef.current?.focus()); }} disabled={isBusy} className={compactButtonClass}>Edit</button>
-                      <button type="button" onClick={() => saveIdea("Develop the Live File into a concrete Episode 1 pitch.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
+                      <button type="button" onClick={() => saveIdea("Develop the Live File into a sharper Pilot Plot.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
                       <button type="button" onClick={() => copyText(savedText, "live-file-top")} className={compactButtonClass}>{copyTarget === "live-file-top" ? "Copied" : "Copy"}</button>
                     </div>
                   )}
@@ -1669,7 +1680,7 @@ export default function PitchLabStudioPage() {
                   <article key={item.id} aria-busy={isRunning} className={`rounded-lg border bg-card p-4 ${isFailed ? "border-red-300 dark:border-red-900" : "border-border"}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h2 className="text-sm font-semibold text-foreground">Episode 1 Option</h2>
+                        <h2 className="text-sm font-semibold text-foreground">Pilot Plot Option</h2>
                         {isRunning ? statusTag("Running", "amber") : isFailed ? statusTag("Failed", "red") : statusTag(`Option ${item.version}`, "neutral")}
                       </div>
                       {!isRunning && !isFailed && (
@@ -1679,7 +1690,7 @@ export default function PitchLabStudioPage() {
                           ) : (
                             <button type="button" onClick={() => toggleOptionEdit(item)} disabled={isBusy} className={compactButtonClass}>Edit</button>
                           )}
-                          <button type="button" onClick={() => saveIdea("Regenerate this Episode 1 option.", optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Regenerating" : "Regenerate", operation?.kind === "refine")}</button>
+                          <button type="button" onClick={() => saveIdea("Regenerate this Pilot Plot option.", optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Regenerating" : "Regenerate", operation?.kind === "refine")}</button>
                           <button type="button" onClick={() => copyText(optionText, `${item.id}-top`)} className={compactButtonClass}>{copyTarget === `${item.id}-top` ? "Copied" : "Copy"}</button>
                         </div>
                       )}
@@ -1689,14 +1700,14 @@ export default function PitchLabStudioPage() {
                     )}
                     {isRunning ? (
                       <div role="status" aria-live="polite" className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                        <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Studio is generating an option.</span>
+                        <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Pilot Plots is generating an option.</span>
                       </div>
                     ) : isFailed ? (
                       <div role="alert" className="rounded-md border border-red-200 bg-red-50/80 px-3 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100">
-                        {item.error || "Studio failed. Try again."}
+                        {item.error || "Pilot Plots failed. Try again."}
                       </div>
                     ) : isEditingOption ? (
-                      <textarea value={optionDrafts[item.id] ?? item.ideaText} onChange={(event) => setOptionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} rows={8} className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground outline-none focus:border-emerald-500" aria-label="Edit Episode 1 option" />
+                      <textarea value={optionDrafts[item.id] ?? item.ideaText} onChange={(event) => setOptionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} rows={8} className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground outline-none focus:border-emerald-500" aria-label="Edit Pilot Plot option" />
                     ) : (
                       <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{optionText}</pre>
                     )}
@@ -1710,12 +1721,12 @@ export default function PitchLabStudioPage() {
               })}
             </div>
             <section className="rounded-lg border border-border bg-card p-4">
-              <label htmlFor="idea-instructions" className="block text-sm font-medium">What should change in the concrete Episode 1 pitch?</label>
-              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Ask Studio to close the route into a specific scene, sharpen the pressure, or change the Episode 2 hook." />
+              <label htmlFor="idea-instructions" className="block text-sm font-medium">What should change in this Pilot Plot?</label>
+              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Ask Pilot Plots to sharpen the hook, change the escalation, or strengthen the cliffhanger." />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <button type="button" onClick={() => setStage("premises")} className={secondaryButtonClass}>Ideas</button>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className={primaryButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop Episode 1", operation?.kind === "refine")}</button>
+                  <button type="button" onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className={primaryButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop Pilot Plot", operation?.kind === "refine")}</button>
                 </div>
               </div>
             </section>
@@ -1756,7 +1767,7 @@ export default function PitchLabStudioPage() {
               {([
                 ["inputs", "Setup", true],
                 ["premises", "Ideas", premises.length > 0],
-                ["pitch", "Studio", shortlisted.length > 0],
+                ["pitch", "Shortlist", shortlisted.length > 0],
               ] as [PitchStage, string, boolean][]).map(([item, label, enabled]) => <button key={item} type="button" disabled={!enabled} onClick={() => setStage(item)} className={`min-h-9 rounded px-3 py-1 font-medium transition duration-150 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 ${stage === item ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`} aria-current={stage === item ? "step" : undefined}>{label}</button>)}
             </div>
             <ThemeToggle />

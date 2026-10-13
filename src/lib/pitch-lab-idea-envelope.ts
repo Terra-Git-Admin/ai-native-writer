@@ -3,17 +3,30 @@ export type PitchIdeaTurn = {
   ideaText: string;
   createdAt: string;
   kind?: "initial" | "rewrite" | "manual_edit" | "restore" | "rerun";
+  contentKind?: PitchLabContentKind;
   kernel?: string;
   beats?: string;
   clarityChecks?: string;
   adaptationNotes?: string;
   instructionControls?: unknown;
   qaWarnings?: unknown[];
+  writerContext?: PitchLabWriterContext;
+};
+
+export type PitchLabContentKind = "idea_seed" | "pilot_option" | "pilot_plot";
+
+export type PitchLabWriterContext = {
+  workspaceBrief?: string;
+  latestInstruction?: string;
+  selectedIdea?: string;
+  selectedPilotOption?: string;
+  carriedNotes?: string;
 };
 
 export type PitchIdeaEnvelope = {
   originalText: string;
   currentText: string;
+  contentKind?: PitchLabContentKind;
   turns: PitchIdeaTurn[];
   feedback?: {
     rating: "up" | "down";
@@ -32,6 +45,7 @@ export type PitchIdeaEnvelope = {
   adaptationNotes?: string;
   instructionControls?: unknown;
   qaWarnings?: unknown[];
+  writerContext?: PitchLabWriterContext;
 };
 
 export function cleanPitchIdeaText(value: string): string {
@@ -45,6 +59,22 @@ export function cleanPitchIdeaText(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function parseContentKind(value: unknown): PitchLabContentKind | undefined {
+  return value === "idea_seed" || value === "pilot_option" || value === "pilot_plot" ? value : undefined;
+}
+
+function parseWriterContext(value: unknown): PitchLabWriterContext | undefined {
+  if (!isRecord(value)) return undefined;
+  const context: PitchLabWriterContext = {
+    workspaceBrief: typeof value.workspaceBrief === "string" ? cleanPitchIdeaText(value.workspaceBrief) : undefined,
+    latestInstruction: typeof value.latestInstruction === "string" ? cleanPitchIdeaText(value.latestInstruction) : undefined,
+    selectedIdea: typeof value.selectedIdea === "string" ? cleanPitchIdeaText(value.selectedIdea) : undefined,
+    selectedPilotOption: typeof value.selectedPilotOption === "string" ? cleanPitchIdeaText(value.selectedPilotOption) : undefined,
+    carriedNotes: typeof value.carriedNotes === "string" ? cleanPitchIdeaText(value.carriedNotes) : undefined,
+  };
+  return Object.values(context).some(Boolean) ? context : undefined;
 }
 
 export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
@@ -64,12 +94,14 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
               ideaText: cleanPitchIdeaText(turn.ideaText),
               createdAt: typeof turn.createdAt === "string" ? turn.createdAt : "",
               kind: typeof turn.kind === "string" ? turn.kind as PitchIdeaTurn["kind"] : undefined,
+              contentKind: parseContentKind(turn.contentKind),
               kernel: typeof turn.kernel === "string" ? turn.kernel : undefined,
               beats: typeof turn.beats === "string" ? turn.beats : undefined,
               clarityChecks: typeof turn.clarityChecks === "string" ? turn.clarityChecks : undefined,
               adaptationNotes: typeof turn.adaptationNotes === "string" ? turn.adaptationNotes : undefined,
               instructionControls: turn.instructionControls,
               qaWarnings: Array.isArray(turn.qaWarnings) ? turn.qaWarnings : undefined,
+              writerContext: parseWriterContext(turn.writerContext),
             };
           })
           .filter((turn): turn is PitchIdeaTurn => Boolean(turn))
@@ -86,6 +118,7 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
     return {
       originalText,
       currentText: cleanPitchIdeaText(parsed.currentText),
+      contentKind: parseContentKind(parsed.contentKind),
       turns,
       feedback,
       premise: typeof parsed.premise === "string" ? parsed.premise : undefined,
@@ -100,17 +133,35 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
       adaptationNotes: typeof parsed.adaptationNotes === "string" ? parsed.adaptationNotes : undefined,
       instructionControls: parsed.instructionControls,
       qaWarnings: Array.isArray(parsed.qaWarnings) ? parsed.qaWarnings : undefined,
+      writerContext: parseWriterContext(parsed.writerContext),
     };
   } catch {
     return { originalText: fallback, currentText: fallback, turns: [] };
   }
 }
 
+function serializeWriterContext(context: PitchLabWriterContext | undefined): PitchLabWriterContext | undefined {
+  if (!context) return undefined;
+  const serialized: PitchLabWriterContext = {
+    workspaceBrief: context.workspaceBrief ? cleanPitchIdeaText(context.workspaceBrief) : undefined,
+    latestInstruction: context.latestInstruction ? cleanPitchIdeaText(context.latestInstruction) : undefined,
+    selectedIdea: context.selectedIdea ? cleanPitchIdeaText(context.selectedIdea) : undefined,
+    selectedPilotOption: context.selectedPilotOption ? cleanPitchIdeaText(context.selectedPilotOption) : undefined,
+    carriedNotes: context.carriedNotes ? cleanPitchIdeaText(context.carriedNotes) : undefined,
+  };
+  return Object.values(serialized).some(Boolean) ? serialized : undefined;
+}
+
 export function serializePitchIdeaEnvelope(envelope: PitchIdeaEnvelope): string {
   return JSON.stringify({
     originalText: cleanPitchIdeaText(envelope.originalText),
     currentText: cleanPitchIdeaText(envelope.currentText),
-    turns: envelope.turns.map((turn) => ({ ...turn, ideaText: cleanPitchIdeaText(turn.ideaText) })),
+    contentKind: envelope.contentKind,
+    turns: envelope.turns.map((turn) => ({
+      ...turn,
+      ideaText: cleanPitchIdeaText(turn.ideaText),
+      writerContext: serializeWriterContext(turn.writerContext),
+    })),
     feedback: envelope.feedback
       ? {
           rating: envelope.feedback.rating,
@@ -130,5 +181,6 @@ export function serializePitchIdeaEnvelope(envelope: PitchIdeaEnvelope): string 
     adaptationNotes: envelope.adaptationNotes,
     instructionControls: envelope.instructionControls,
     qaWarnings: envelope.qaWarnings,
+    writerContext: serializeWriterContext(envelope.writerContext),
   });
 }
