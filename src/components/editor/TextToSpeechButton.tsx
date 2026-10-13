@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Square, Volume2 } from "lucide-react";
+import { Loader2, Pause, Play, Volume2, X } from "lucide-react";
 import { extractEpisodeSections, type EpisodeSection } from "@/lib/editor/episode-sections";
 
-type PlaybackState = "idle" | "generating" | "playing";
+type PlaybackState = "idle" | "generating" | "playing" | "paused";
 
 interface TextToSpeechButtonProps {
   getContentJSON: () => string | null;
@@ -74,7 +74,7 @@ export default function TextToSpeechButton({
   const cancelledRef = useRef(false);
   const audioCacheRef = useRef<Map<string, string[]>>(new Map());
 
-  const stopPlayback = useCallback((resetUi = true) => {
+  const resetPlayback = useCallback((resetUi = true) => {
     cancelledRef.current = true;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -92,6 +92,28 @@ export default function TextToSpeechButton({
     setChunkTotal(0);
     setMessage("");
   }, []);
+
+  const pausePlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.pause();
+    setPlaybackState("paused");
+    setMessage(`Paused ${chunkIndex}/${chunkTotal}`);
+  }, [chunkIndex, chunkTotal]);
+
+  const resumePlayback = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setPlaybackState("playing");
+    setMessage(`Playing ${chunkIndex}/${chunkTotal}`);
+    audio.play().catch((error) => {
+      if (cancelledRef.current) return;
+      setPlaybackState("idle");
+      setMessage(error instanceof Error ? error.message : "Audio playback failed");
+    });
+  }, [chunkIndex, chunkTotal]);
 
   const refreshEpisodes = useCallback(
     (preferLatest: boolean) => {
@@ -120,14 +142,14 @@ export default function TextToSpeechButton({
   }, [selectedEpisodeIndex]);
 
   useEffect(() => {
-    return () => stopPlayback(false);
-  }, [stopPlayback]);
+    return () => resetPlayback(false);
+  }, [resetPlayback]);
 
   useEffect(() => {
-    stopPlayback();
+    resetPlayback();
     audioCacheRef.current.clear();
     refreshEpisodes(true);
-  }, [cancelKey, refreshEpisodes, stopPlayback]);
+  }, [cancelKey, refreshEpisodes, resetPlayback]);
 
   const playAudioUrls = useCallback(async (
     audioUrls: string[],
@@ -168,7 +190,7 @@ export default function TextToSpeechButton({
       return;
     }
 
-    stopPlayback();
+    resetPlayback();
     cancelledRef.current = false;
     setChunkTotal(chunks.length);
     setPlaybackState("generating");
@@ -211,12 +233,12 @@ export default function TextToSpeechButton({
           }
 
           generatedAudioUrls.push(data.audioDataUrl);
-          await playAudioUrls([data.audioDataUrl], false, chunks.length, index);
-          setPlaybackState("generating");
         }
 
         if (!cancelledRef.current) {
           audioCacheRef.current.set(cacheKey, generatedAudioUrls);
+          setMessage("Ready");
+          await playAudioUrls(generatedAudioUrls, false);
         }
       }
 
@@ -233,9 +255,24 @@ export default function TextToSpeechButton({
     cancelKey,
     playAudioUrls,
     refreshEpisodes,
+    resetPlayback,
     selectedEpisodeIndex,
-    stopPlayback,
   ]);
+
+  const handleButtonClick = useCallback(() => {
+    if (playbackState === "generating") {
+      return;
+    }
+    if (playbackState === "playing") {
+      pausePlayback();
+      return;
+    }
+    if (playbackState === "paused") {
+      resumePlayback();
+      return;
+    }
+    void startPlayback();
+  }, [pausePlayback, playbackState, resumePlayback, startPlayback]);
 
   const active = playbackState !== "idle";
   const progress = useMemo(() => {
@@ -244,6 +281,15 @@ export default function TextToSpeechButton({
   }, [chunkIndex, chunkTotal]);
   const selectedEpisode = episodes.find((episode) => episode.index === selectedEpisodeIndex);
   const noEpisodes = episodes.length === 0;
+  const showStopButton = playbackState !== "idle";
+  const mainButtonShape =
+    episodes.length > 1
+      ? showStopButton
+        ? "border-l border-border"
+        : "rounded-r-lg border-l border-border"
+      : showStopButton
+        ? "rounded-l-lg"
+        : "rounded-lg";
 
   return (
     <div className="flex items-center gap-2">
@@ -267,7 +313,7 @@ export default function TextToSpeechButton({
             onFocus={() => refreshEpisodes(false)}
             onPointerDown={() => refreshEpisodes(false)}
             onChange={(event) => {
-              stopPlayback();
+              resetPlayback();
               setSelectedEpisodeIndex(Number(event.target.value));
               setMessage("");
             }}
@@ -287,32 +333,55 @@ export default function TextToSpeechButton({
         )}
         <button
           type="button"
-          onClick={active ? () => stopPlayback() : startPlayback}
+          onClick={handleButtonClick}
+          disabled={playbackState === "generating"}
           aria-pressed={active}
           aria-label={
-            active
-              ? "Stop Gemini text to speech"
-              : selectedEpisode
-                ? `Listen to ${selectedEpisode.label} with Gemini text to speech`
-                : "No predefined episodes available to listen to"
+            playbackState === "generating"
+              ? "Generating Gemini text to speech"
+              : playbackState === "playing"
+                ? "Pause Gemini text to speech"
+                : playbackState === "paused"
+                  ? "Resume Gemini text to speech"
+                  : selectedEpisode
+                    ? `Listen to ${selectedEpisode.label} with Gemini text to speech`
+                    : "No predefined episodes available to listen to"
           }
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-            episodes.length > 1 ? "rounded-r-lg border-l border-border" : "rounded-lg"
+            mainButtonShape
           } ${
             active
               ? "bg-sky-100 text-sky-700 hover:bg-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/70"
               : "text-muted-foreground hover:bg-muted"
-          }`}
+          } disabled:cursor-wait disabled:opacity-80`}
         >
           {playbackState === "generating" ? (
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          ) : active ? (
-            <Square className="h-4 w-4" aria-hidden="true" />
+          ) : playbackState === "playing" ? (
+            <Pause className="h-4 w-4" aria-hidden="true" />
+          ) : playbackState === "paused" ? (
+            <Play className="h-4 w-4" aria-hidden="true" />
           ) : (
             <Volume2 className="h-4 w-4" aria-hidden="true" />
           )}
-          {active ? "Stop" : "Listen"}
+          {playbackState === "generating"
+            ? "Generating"
+            : playbackState === "playing"
+              ? "Pause"
+              : playbackState === "paused"
+                ? "Resume"
+                : "Listen"}
         </button>
+        {showStopButton && (
+          <button
+            type="button"
+            onClick={() => resetPlayback()}
+            aria-label="Stop Gemini text to speech"
+            className="inline-flex items-center rounded-r-lg border-l border-border px-2 py-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
       <div className="w-32" aria-live="polite">
         {message || noEpisodes ? (
