@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchSources, pitchWorkspaces } from "@/lib/db/schema";
+import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 
 export async function GET() {
@@ -16,5 +17,12 @@ export async function GET() {
     db.select().from(pitchIdeas).where(eq(pitchIdeas.workspaceId, workspace.id)).orderBy(desc(pitchIdeas.position)),
     db.select().from(pitchSources).where(eq(pitchSources.workspaceId, workspace.id)),
   ]);
-  return NextResponse.json({ workspace, ideas, sources });
+  return NextResponse.json({
+    workspace,
+    ideas: ideas.map((idea) => {
+      const state = getPitchLabContentState(idea.status, idea.ideaText);
+      return { ...idea, contentKind: state.contentKind, contentValid: state.isValid, contentErrors: state.errors };
+    }),
+    sources,
+  });
 }

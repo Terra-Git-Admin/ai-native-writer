@@ -45,8 +45,16 @@ export async function PUT(req: Request) {
     );
   }
 
+  const key = String(apiKey).trim();
+  if (provider === "openai" && !key.startsWith("sk-")) {
+    return NextResponse.json(
+      { error: "OpenAI API key should start with sk-. Paste the provider key, not ENCRYPTION_KEY." },
+      { status: 400 }
+    );
+  }
+
   try {
-    const encryptedKey = encrypt(apiKey);
+    const encryptedKey = encrypt(key);
 
     const existing = await db.query.aiSettings.findFirst({
       where: eq(aiSettings.id, provider),

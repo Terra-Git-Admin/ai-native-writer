@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { buildCanonicalTabRows, CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
 import { documents, pitchIdeas, pitchWorkspaces, tabs } from "@/lib/db/schema";
 import { parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
+import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
@@ -73,7 +74,9 @@ export async function POST(req: Request) {
           alreadyPromoted: true,
         };
       }
-      if (idea.status !== "shortlisted") throw new Error("Move this route to Studio before finalizing it.");
+      if (idea.status !== "shortlisted") throw new Error("Move this Pilot Option to Shortlist before finalizing it.");
+      const state = getPitchLabContentState(idea.status, idea.ideaText);
+      if (state.contentKind !== "pilot_plot" || !state.isValid) throw new Error("Develop this shortlisted Pilot Option into a valid Pilot Plot before finalizing it.");
       const currentText = envelope.currentText.trim();
       if (!currentText) throw new Error("Idea plot is required.");
 

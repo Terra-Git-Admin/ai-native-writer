@@ -20,43 +20,43 @@ export type PitchLabSamplePremise = {
   transformationNotes: string;
 };
 
-// Prompt/sample title constraints v1.2 (2026-10-12): every title is one or two words.
-const FRAMEWORK_ROUTES = [
-  ["Refusal", "Build a route around a heroine whose clean refusal exposes a powerful lead's weakness. The pilot should promise attraction through integrity, public consequence, and a later concrete situation where saying no changes the power balance."],
-  ["Witness", "Build a route around public misreading and private recognition. The heroine looks guilty or foolish to everyone else, while the opposing lead sees she may be the only person with usable access, courage, or truth."],
-  ["Leverage", "Build a route around mismatched status: the heroine has one practical advantage the powerful lead cannot buy. The pilot should promise bargaining, suspicion, and romantic dependence before Shortlist Studio chooses the exact pressure object."],
-  ["Exposure", "Build a route around image versus truth. The heroine can damage a family's, company's, or celebrity's perfect surface, and the opposing lead must decide whether to silence, use, or protect her."],
+// Prompt/sample title constraints v1.4 (2026-10-13): Pilot Options stay short while varying hook/escalation/cliffhanger type.
+const FRAMEWORK_OPTIONS = [
+  ["Refusal", "Hook: FL rejects ML's rescue at a clinic fundraiser\nEscalation: His family threatens her ward funding\nCliffhanger: ML offers a live-in nurse contract"],
+  ["Witness", "Hook: FL cleaner sees ML destroy evidence\nEscalation: A blackout traps her with his enemies\nCliffhanger: ML arrives before they open her cart"],
+  ["Leverage", "Hook: FL debt counselor blocks ML's marriage deal\nEscalation: Her shelter account is frozen\nCliffhanger: ML offers fiancee status for protection"],
+  ["Exposure", "Hook: FL singer catches a bribe backstage\nEscalation: The family frames her as extortionist\nCliffhanger: ML claims she is his wife"],
 ] as const;
 
-const ADAPTATION_TITLES = ["Floodgate", "Runaway", "Last Route", "Blackout"] as const;
+const ADAPTATION_TITLES = ["Floodgate", "Runaway", "Last Line", "Blackout"] as const;
 
 const ADAPTATION_VARIANTS = [
   ["ER nurse", "fire investigator", "a shuttered seaside hotel"],
   ["wedding planner", "divorce lawyer", "an empty wedding venue"],
-  ["night bus driver", "missing-person detective", "the last route through downtown"],
+  ["night bus driver", "missing-person detective", "the last line through downtown"],
   ["small-town pharmacist", "undercover officer", "a pharmacy during a blackout"],
 ] as const;
 
 const FRAMEWORK_PREMISES: PitchLabSamplePremise[] = [
-  { title: "Debt Bride", premiseText: "A working-class heroine is pulled toward a powerful family that treats marriage as leverage, promising romance where love, debt, and public status keep changing who owns the bargain.", appealLane: "status leverage", transformationNotes: "Frames the contract fantasy without choosing the incident." },
-  { title: "Fireline", premiseText: "A careful rule-follower and a reckless protector keep colliding because each crisis proves the other's competence is both dangerous and irresistible.", appealLane: "competence collision", transformationNotes: "Keeps workplace heat while leaving the arena open." },
-  { title: "Wrong Verdict", premiseText: "A low-status woman with hidden access to truth is forced into an alliance with a colder, higher-status defender, promising justice, family secrets, and reluctant dependence.", appealLane: "legal leverage", transformationNotes: "Preserves procedural pressure without plotting a file swap." },
-  { title: "Last Route", premiseText: "A woman whose job makes her publicly accountable keeps getting trapped with a privileged man whose secrets make every ordinary choice look suspicious.", appealLane: "public danger", transformationNotes: "Keeps moving public pressure without choosing the vehicle incident." },
-  { title: "Storm Key", premiseText: "A guarded caretaker must decide whether sheltering a stranger is rescue, betrayal, or the first clue to a family wound she has avoided for years.", appealLane: "rescue suspicion", transformationNotes: "Uses intimate storm pressure without an incident reveal." },
-  { title: "False Guest", premiseText: "A woman hiding from scandal and a powerful man guarding family image need each other's false identity, promising public performance, private recognition, and romantic exposure.", appealLane: "mistaken access", transformationNotes: "Keeps ceremony stakes but delays the collision." },
-  { title: "Open Mic", premiseText: "A woman whose voice is her only power becomes dangerous to a man who controls the room, promising secrets exposed through performance, sound, and reputation.", appealLane: "voice trap", transformationNotes: "Audio pressure becomes a broad promise, not a fixed call." },
-  { title: "Cold Room", premiseText: "A practical heroine protecting her livelihood clashes with a status figure who can ruin or save it, promising competence, suspicion, and attraction under business pressure.", appealLane: "ambition pressure", transformationNotes: "Keeps food-world stakes without a freezer incident." },
+  { title: "Debt Bride", premiseText: "FL debt counselor blocks ML heir's forced-marriage contract, then needs his name to save her shelter.", appealLane: "status leverage", transformationNotes: "Short contract fantasy with immediate bargain pressure." },
+  { title: "Fireline", premiseText: "FL safety inspector saves reckless ML firefighter, then must prove he did not start the blaze.", appealLane: "competence collision", transformationNotes: "Competence romance with crisis-born dependence." },
+  { title: "Wrong Verdict", premiseText: "FL court clerk finds proof ML lawyer's family hid, making her his weakest witness and only leverage.", appealLane: "legal leverage", transformationNotes: "Truth access creates reluctant alliance." },
+  { title: "Night Line", premiseText: "FL night bus driver protects ML heir from an ambush, then is blamed for helping him vanish.", appealLane: "public danger", transformationNotes: "Ordinary duty turns into romantic danger." },
+  { title: "Storm Key", premiseText: "FL caretaker shelters wounded ML stranger during a typhoon, then finds his key opens her family's sealed room.", appealLane: "rescue suspicion", transformationNotes: "Rescue intimacy with family mystery." },
+  { title: "False Guest", premiseText: "FL wedding planner is mistaken for ML's fiancee, and both need the lie to survive his mother's trap.", appealLane: "mistaken access", transformationNotes: "Public performance makes the romance playable." },
+  { title: "Open Mic", premiseText: "FL lounge singer records ML donor's coercion, then must perform for the same room to expose him.", appealLane: "voice trap", transformationNotes: "Performance pressure gives her active power." },
+  { title: "Cold Room", premiseText: "FL chef locks herself in with ML investor to save her restaurant stock and discovers his secret debt.", appealLane: "ambition pressure", transformationNotes: "Business pressure turns intimate fast." },
 ];
 
 const ADAPTATION_PREMISES: PitchLabSamplePremise[] = [
-  { title: "Cold Room", premiseText: "A small-business heroine and a powerful investor are bound by crisis-born gratitude, promising attraction where help always risks ownership.", appealLane: "competence under pressure", transformationNotes: "Preserves attachment while changing job, setting, and obligation." },
-  { title: "Fire Audit", premiseText: "A rule-bound heroine and a reckless protector keep saving each other in ways that can end their careers, promising gratitude, blame, and public competence.", appealLane: "dangerous gratitude", transformationNotes: "Transforms caregiver surface into workplace pressure." },
-  { title: "Last Table", premiseText: "A woman protecting her everyday kingdom attracts a dangerous regular whose charm may be shelter or threat, promising intimacy under public pressure.", appealLane: "protective ambiguity", transformationNotes: "Keeps nerve-plus-charm pressure while changing the trap." },
-  { title: "Open Stage", premiseText: "A woman who manages public performance becomes the only person who can expose a powerful donor's coercion, promising romance through spectacle and risk.", appealLane: "public coercion", transformationNotes: "Replaces private care with performance pressure." },
-  { title: "Storm Escort", premiseText: "A competent woman helps a dangerous passenger and becomes implicated by that help, promising accidental alliance, suspicion, and storm-bound trust.", appealLane: "accidental alliance", transformationNotes: "Changes occupation stakes and defers the cliffhanger." },
-  { title: "False Note", premiseText: "A heroine's rare skill makes her useful to a powerful man with hidden money trouble, promising romance where performance, class, and evidence keep crossing.", appealLane: "skill trap", transformationNotes: "Keeps performance-world charge without caregiver logic." },
-  { title: "Back Room", premiseText: "A woman who handles other people's money becomes necessary to a dangerous VIP, promising status reversal where usefulness can turn into disposability or desire.", appealLane: "status reversal", transformationNotes: "Preserves dangerous male pressure but keeps heroine active." },
-  { title: "Locked Lens", premiseText: "A woman paid to preserve family image becomes the person who can destroy it, promising wedding glamour, visual evidence, and forbidden alliance.", appealLane: "evidence trap", transformationNotes: "Transforms rescue into visual evidence pressure." },
+  { title: "Cold Room", premiseText: "FL cafe owner saves ML investor during a freezer sabotage, then needs his money before he owns her.", appealLane: "competence under pressure", transformationNotes: "Preserves attachment while changing job and obligation." },
+  { title: "Fire Audit", premiseText: "FL inspector rescues ML contractor from a fire, then must decide whether his company caused it.", appealLane: "dangerous gratitude", transformationNotes: "Transforms caregiver surface into workplace pressure." },
+  { title: "Last Table", premiseText: "FL diner owner hides wounded ML regular, then learns his enemies booked every table.", appealLane: "protective ambiguity", transformationNotes: "Keeps nerve-plus-charm pressure in public space." },
+  { title: "Open Stage", premiseText: "FL stage manager can expose ML donor's coercion only by keeping his gala running.", appealLane: "public coercion", transformationNotes: "Replaces private care with performance pressure." },
+  { title: "Storm Escort", premiseText: "FL driver saves ML passenger during a storm, then police accuse her of helping his escape.", appealLane: "accidental alliance", transformationNotes: "Changes occupation stakes and keeps her active." },
+  { title: "False Note", premiseText: "FL pianist reads ML's hidden account code in sheet music and becomes useful to the wrong family.", appealLane: "skill trap", transformationNotes: "Keeps performance-world charge." },
+  { title: "Back Room", premiseText: "FL cashier handles ML VIP's secret payment, then his missing money makes her disposable.", appealLane: "status reversal", transformationNotes: "Preserves dangerous male pressure but keeps heroine active." },
+  { title: "Locked Lens", premiseText: "FL wedding photographer captures ML family's lie, then must fake loyalty to leave alive.", appealLane: "evidence trap", transformationNotes: "Transforms rescue into visual evidence pressure." },
 ];
 
 export function buildPitchLabSamplePremises(input: SampleInput): PitchLabSamplePremise[] {
@@ -69,39 +69,39 @@ export function buildPitchLabSampleIdeas(input: SampleInput): { title: string; i
     const lowerPremise = premise.toLocaleLowerCase();
     if (lowerPremise.includes("truth") || lowerPremise.includes("justice")) {
       return [
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Live File`, ideaText: "Lean into a procedural romance route where the heroine's overlooked access makes her the only person the defender can trust. The pilot should deliver public stakes, family shame, and reluctant alliance before Shortlist Studio chooses the exact record, hearing, or proof mechanism." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Witness Seat`, ideaText: "Shape the route around visible belief: the heroine is used to being ignored until the opposing lead makes her testimony matter. The pilot should promise status reversal, public pressure, and a partnership that risks both families without fixing the opening incident yet." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Court Lock`, ideaText: "Use a contained-pressure route where bureaucracy becomes romantic friction. The heroine and opposing lead need each other's access and nerve, but the exact file, room, or public accusation should be selected later in Shortlist Studio." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Plea Trap`, ideaText: "Build toward a moral-bind route: the heroine can protect herself or help expose a larger wrong. The pilot should carry legal leverage, family consequence, and attraction through competence while leaving the concrete trigger unresolved." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Live File`, ideaText: "Hook: FL court clerk finds ML's missing file\nEscalation: The judge's aide calls her the leak\nCliffhanger: She names the source live" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Witness Seat`, ideaText: "Hook: FL witness interrupts ML's press conference\nEscalation: His family calls her paid\nCliffhanger: ML asks her to testify as fiancee" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Court Lock`, ideaText: "Hook: FL and ML are locked in archives\nEscalation: Her badge opens the evidence room\nCliffhanger: ML finds evidence in her lunchbox" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Plea Trap`, ideaText: "Hook: FL spots ML's false plea offer\nEscalation: Signing saves her family\nCliffhanger: She tears it up on camera" },
       ];
     }
     if (lowerPremise.includes("publicly accountable") || lowerPremise.includes("ordinary choice")) {
       return [
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Last Stop`, ideaText: "Take the public-accountability route: the heroine's job makes every choice visible, while the privileged lead's secrets make every request suspicious. The pilot should promise class tension, moving danger, and reluctant dependence without choosing the exact alert or stop." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Route Nine`, ideaText: "Use a route built on bought access versus public duty. The powerful lead can open doors the heroine cannot, she controls the journey he needs, and Shortlist Studio can later decide the concrete schedule, witness, or threat." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Night Fare`, ideaText: "Make the pilot a moral-pressure route where rule-following becomes heroic and inconvenient. The lead's secret should test whether procedure protects people or exposes them, but the exact checkpoint or proof stays open." },
-        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Terminal Light`, ideaText: "Choose an atmospheric suspense route: an ordinary public system turns intimate because the heroine understands how it works and the lead understands why someone wants to disappear. Keep the final mechanism for Shortlist Studio." },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Last Stop`, ideaText: "Hook: FL lets wounded ML board late\nEscalation: Cameras tag her as kidnapper\nCliffhanger: He handcuffs himself to her wheel" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Line Nine`, ideaText: "Hook: FL refuses ML's checkpoint bribe\nEscalation: A fake officer boards\nCliffhanger: She drives into the closed tunnel" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Night Fare`, ideaText: "Hook: FL recognizes ML's panic code\nEscalation: Every driver cancels\nCliffhanger: ML asks her to pose as fiancee" },
+        { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}Terminal Light`, ideaText: "Hook: FL hides ML at lost property\nEscalation: His watch exposes her booth\nCliffhanger: Her address fills the station screens" },
       ];
     }
-    return FRAMEWORK_ROUTES.map(([title, ideaText]) => ({
+    return FRAMEWORK_OPTIONS.map(([title, ideaText]) => ({
       title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`,
       ideaText,
     }));
   }
 
   if (input.generationType === "framework") {
-    return FRAMEWORK_ROUTES.map(([title, ideaText]) => ({
+    return FRAMEWORK_OPTIONS.map(([title, ideaText]) => ({
       title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`,
       ideaText,
     }));
   }
 
-  return ADAPTATION_VARIANTS.map(([lead, counterpart, setting], index) => {
+  return ADAPTATION_VARIANTS.map(([lead, counterpart], index) => {
     const title = ADAPTATION_TITLES[index];
 
     const ideaText = input.adaptationStyle === "close"
-      ? `Sample placeholder based on "${input.sourceTitle}". Preserve the source's major emotional promise and relationship turns, but recast the heroine as a ${lead} and the male lead as a ${counterpart}. Keep this as a route direction; Shortlist Studio can later choose the exact incident, proof, and final turn.`
-      : `Sample placeholder inspired by "${input.sourceTitle}". Keep its central emotional engine, but rebuild the route around a ${lead} and a ${counterpart} with pressure from ${setting}. Their opposing goals should suggest cooperation and suspicion without closing the Episode 1 situation yet.`;
+      ? `Hook: FL ${lead} saves ML ${counterpart}\nEscalation: The witnesses blame her\nCliffhanger: He offers protection as fiancee`
+      : `Hook: FL ${lead} catches ML ${counterpart}'s secret\nEscalation: Her fix exposes his family lie\nCliffhanger: He names her as alibi`;
     return { title: `${PITCH_LAB_SAMPLE_TITLE_PREFIX}${title}`, ideaText };
   });
 }
