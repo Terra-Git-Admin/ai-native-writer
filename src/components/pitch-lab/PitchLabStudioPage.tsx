@@ -21,7 +21,7 @@ type Idea = {
   title: string;
   ideaText: string;
   status: IdeaStatus;
-  contentKind?: "idea_seed" | "pilot_option" | "pilot_plot" | null;
+  contentKind?: "idea_seed" | "pilot_option" | "pilot_plot" | "episode_pilot" | null;
   contentValid?: boolean;
   contentErrors?: string[];
   promotedDocumentId?: string | null;
@@ -44,6 +44,7 @@ type TimelineItem = {
   ideaText: string;
   status?: "complete" | "running" | "failed";
   error?: string;
+  feedback?: { rating: "up" | "down"; reason?: string; updatedAt: string };
 };
 type ConfirmDialogState = {
   title: string;
@@ -87,9 +88,9 @@ const OPERATION_COPY: Record<OperationKind, { label: string; stages: string[]; s
     slowHint: "Regeneration waits for the full model response before replacing the current idea.",
   },
   refine: {
-    label: "Developing Pilot Plot",
+    label: "Developing Episode 1",
     stages: ["Reading Live File", "Applying feedback", "Building pilot plot", "Saving option"],
-    slowHint: "Pilot Plots can take a minute when real AI mode is enabled.",
+    slowHint: "Episode 1 development can take a minute with real AI.",
   },
   save: {
     label: "Saving edit",
@@ -372,6 +373,7 @@ export default function PitchLabStudioPage() {
         instruction: turn.instruction,
         ideaText: cleanPitchIdeaText(turn.ideaText),
         status: "complete",
+        feedback: turn.feedback,
       });
       return current;
     }, []);
@@ -462,11 +464,11 @@ export default function PitchLabStudioPage() {
     return parsePitchIdeaEnvelope(idea.ideaText).feedback;
   }
 
-  async function saveIdeaFeedback(idea: Idea, rating: "up" | "down") {
-    const currentFeedback = ideaFeedback(idea);
-    const reason = rating === "down"
-      ? window.prompt("Why is this not good?", currentFeedback?.rating === "down" ? currentFeedback.reason ?? "" : "")?.trim() ?? ""
-      : "";
+  async function saveIdeaFeedback(idea: Idea, rating: "up" | "down", turnIndex?: number) {
+    const currentFeedback = turnIndex === undefined ? ideaFeedback(idea) : parsePitchIdeaEnvelope(idea.ideaText).turns[turnIndex]?.feedback;
+    const answer = window.prompt(rating === "down" ? "Why is this not good?" : "What works well? (optional)", currentFeedback?.rating === rating ? currentFeedback.reason ?? "" : "");
+    if (answer === null) return;
+    const reason = answer.trim();
     if (rating === "down" && !reason) {
       setError("Add a reason for thumbs down.");
       return;
@@ -479,6 +481,7 @@ export default function PitchLabStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ideaId: idea.id,
+          turnIndex,
           feedback: { rating, reason },
         }),
       });
@@ -517,6 +520,8 @@ export default function PitchLabStudioPage() {
           text: cleanPitchIdeaText(envelope.currentText),
           originalText: cleanPitchIdeaText(envelope.originalText),
           feedback: envelope.feedback ?? null,
+          contentKind: envelope.contentKind ?? null,
+          generation: envelope.generation ?? null,
           premise: envelope.premise ?? null,
           premiseId: envelope.premiseId ?? null,
           batchId: envelope.batchId ?? null,
@@ -845,7 +850,7 @@ export default function PitchLabStudioPage() {
         id: pendingId,
         version: timelineItems.length + 1,
         instruction,
-        ideaText: "Pilot Plots is developing this option...",
+        ideaText: "Developing Episode 1...",
         status: "running",
       });
       setIdeaInstructions("");
@@ -875,7 +880,7 @@ export default function PitchLabStudioPage() {
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id ? { ...idea, title: cleanTitle, ideaText: data.ideaText, isPlaceholder } : idea));
       setPendingTimelineItem(null);
       setIsCurrentEditable(false);
-      setCurrentVersionNotice(instruction ? "Pilot Plot option added below the Live File." : "Manual edits saved to the Live File.");
+      setCurrentVersionNotice(instruction ? "Episode 1 revision added below the Live File." : "Manual edits saved to the Live File.");
       setCurrentVersionInstruction(instruction || null);
       finishOperation();
     } catch (err) {
@@ -927,7 +932,7 @@ export default function PitchLabStudioPage() {
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || "Could not save Pilot Plot option.");
+      if (!response.ok) throw new Error(data?.error || "Could not save Episode 1 revision.");
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id ? { ...idea, ideaText: data.ideaText } : idea));
       setEditingOptionIds((current) => {
         const next = new Set(current);
@@ -935,11 +940,11 @@ export default function PitchLabStudioPage() {
         return next;
       });
       setOptionDrafts((current) => ({ ...current, [item.id]: editedText }));
-      setCurrentVersionNotice("Pilot Plot option saved. Live File was not changed.");
+      setCurrentVersionNotice("Episode 1 revision saved. Live File was not changed.");
       setCurrentVersionInstruction(null);
       finishOperation();
     } catch (err) {
-      failOperation(err instanceof Error ? err.message : "Could not save Pilot Plot option.");
+      failOperation(err instanceof Error ? err.message : "Could not save Episode 1 revision.");
     }
   }
 
@@ -1029,7 +1034,7 @@ export default function PitchLabStudioPage() {
       <article role="status" aria-live="polite" aria-busy="true" className="rounded-lg border border-amber-300 bg-card p-4 dark:border-amber-900">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-foreground">{operation.kind === "generate" || operation.kind === "regenerate" ? "Pitch Lab" : operation.kind === "finalize" ? "Writer Doc Builder" : "Pilot Plots"}</h2>
+            <h2 className="text-sm font-semibold text-foreground">{operation.kind === "generate" || operation.kind === "regenerate" ? "Pitch Lab" : operation.kind === "finalize" ? "Writer Doc Builder" : "Episode 1"}</h2>
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-200">RUNNING</span>
           </div>
           <span className="text-xs font-medium text-muted-foreground">{formatElapsed(elapsedSeconds)}</span>
@@ -1620,7 +1625,7 @@ export default function PitchLabStudioPage() {
           <section className="space-y-4">
             <section className="rounded-lg border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Pilot Plots</p><h2 className="mt-1 text-lg font-semibold">{savedTitle || "Selected option"}</h2></div>
+                <div><p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Episode 1</p><h2 className="mt-1 text-lg font-semibold">{savedTitle || "Selected option"}</h2></div>
                 <button type="button" onClick={() => void setIdeaStatus(selectedIdea.id, "discarded")} disabled={isBusy || Boolean(pendingIdeaAction)} className={secondaryButtonClass}>{ctaLabel(pendingIdeaAction === `${selectedIdea.id}:discarded` ? "Rejecting" : "Reject", pendingIdeaAction === `${selectedIdea.id}:discarded`)}</button>
               </div>
               {currentVersionNotice && (
@@ -1641,8 +1646,10 @@ export default function PitchLabStudioPage() {
                   </div>
                   {!isCurrentEditable && (
                     <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "up")} disabled={isBusy || Boolean(pendingIdeaAction)} aria-label="Like selected pilot" aria-pressed={selectedEnvelope?.feedback?.rating === "up"} title="Like pilot" className={`${feedbackButtonClass} ${selectedEnvelope?.feedback?.rating === "up" ? "text-emerald-700" : ""}`}><ThumbsUp className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "down")} disabled={isBusy || Boolean(pendingIdeaAction)} aria-label="Dislike selected pilot" aria-pressed={selectedEnvelope?.feedback?.rating === "down"} title="Dislike pilot" className={`${feedbackButtonClass} ${selectedEnvelope?.feedback?.rating === "down" ? "text-red-700" : ""}`}><ThumbsDown className="h-4 w-4" /></button>
                       <button type="button" onClick={() => { setIsCurrentEditable(true); requestAnimationFrame(() => ideaTextRef.current?.focus()); }} disabled={isBusy} className={compactButtonClass}>Edit</button>
-                      <button type="button" onClick={() => saveIdea("Develop the Live File into a sharper Pilot Plot.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
+                      <button type="button" onClick={() => saveIdea("Develop this Episode 1 pilot into a sharper first episode.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
                       <button type="button" onClick={() => copyText(savedText, "live-file-top")} className={compactButtonClass}>{copyTarget === "live-file-top" ? "Copied" : "Copy"}</button>
                     </div>
                   )}
@@ -1680,17 +1687,19 @@ export default function PitchLabStudioPage() {
                   <article key={item.id} aria-busy={isRunning} className={`rounded-lg border bg-card p-4 ${isFailed ? "border-red-300 dark:border-red-900" : "border-border"}`}>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h2 className="text-sm font-semibold text-foreground">Pilot Plot Option</h2>
+                        <h2 className="text-sm font-semibold text-foreground">Episode 1 Revision</h2>
                         {isRunning ? statusTag("Running", "amber") : isFailed ? statusTag("Failed", "red") : statusTag(`Option ${item.version}`, "neutral")}
                       </div>
                       {!isRunning && !isFailed && (
                         <div className="flex flex-wrap items-center gap-2">
+                          <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "up", item.turnIndex)} disabled={isBusy || Boolean(pendingIdeaAction) || item.turnIndex === undefined} aria-label={`Like pilot revision ${item.version}`} aria-pressed={item.feedback?.rating === "up"} title="Like revision" className={`${feedbackButtonClass} ${item.feedback?.rating === "up" ? "text-emerald-700" : ""}`}><ThumbsUp className="h-4 w-4" /></button>
+                          <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "down", item.turnIndex)} disabled={isBusy || Boolean(pendingIdeaAction) || item.turnIndex === undefined} aria-label={`Dislike pilot revision ${item.version}`} aria-pressed={item.feedback?.rating === "down"} title="Dislike revision" className={`${feedbackButtonClass} ${item.feedback?.rating === "down" ? "text-red-700" : ""}`}><ThumbsDown className="h-4 w-4" /></button>
                           {isEditingOption ? (
                             <button type="button" onClick={() => saveOptionEdit(item)} disabled={isBusy || item.turnIndex === undefined || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "save" ? "Saving" : "Save", operation?.kind === "save")}</button>
                           ) : (
                             <button type="button" onClick={() => toggleOptionEdit(item)} disabled={isBusy} className={compactButtonClass}>Edit</button>
                           )}
-                          <button type="button" onClick={() => saveIdea("Regenerate this Pilot Plot option.", optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Regenerating" : "Regenerate", operation?.kind === "refine")}</button>
+                          <button type="button" onClick={() => saveIdea("Regenerate this Episode 1 revision.", optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Regenerating" : "Regenerate", operation?.kind === "refine")}</button>
                           <button type="button" onClick={() => copyText(optionText, `${item.id}-top`)} className={compactButtonClass}>{copyTarget === `${item.id}-top` ? "Copied" : "Copy"}</button>
                         </div>
                       )}
@@ -1700,14 +1709,14 @@ export default function PitchLabStudioPage() {
                     )}
                     {isRunning ? (
                       <div role="status" aria-live="polite" className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                        <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Pilot Plots is generating an option.</span>
+                        <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Developing Episode 1.</span>
                       </div>
                     ) : isFailed ? (
                       <div role="alert" className="rounded-md border border-red-200 bg-red-50/80 px-3 py-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100">
-                        {item.error || "Pilot Plots failed. Try again."}
+                        {item.error || "Episode 1 development failed. Try again."}
                       </div>
                     ) : isEditingOption ? (
-                      <textarea value={optionDrafts[item.id] ?? item.ideaText} onChange={(event) => setOptionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} rows={8} className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground outline-none focus:border-emerald-500" aria-label="Edit Pilot Plot option" />
+                      <textarea value={optionDrafts[item.id] ?? item.ideaText} onChange={(event) => setOptionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} rows={8} className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground outline-none focus:border-emerald-500" aria-label="Edit Episode 1 revision" />
                     ) : (
                       <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{optionText}</pre>
                     )}
@@ -1721,12 +1730,12 @@ export default function PitchLabStudioPage() {
               })}
             </div>
             <section className="rounded-lg border border-border bg-card p-4">
-              <label htmlFor="idea-instructions" className="block text-sm font-medium">What should change in this Pilot Plot?</label>
-              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Ask Pilot Plots to sharpen the hook, change the escalation, or strengthen the cliffhanger." />
+              <label htmlFor="idea-instructions" className="block text-sm font-medium">What should change in this Episode 1?</label>
+              <textarea id="idea-instructions" value={ideaInstructions} onChange={(event) => setIdeaInstructions(event.target.value)} rows={3} className="mt-2 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-emerald-500" placeholder="Change the opening, a character choice, or the final turn." />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <button type="button" onClick={() => setStage("premises")} className={secondaryButtonClass}>Ideas</button>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className={primaryButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop Pilot Plot", operation?.kind === "refine")}</button>
+                  <button type="button" onClick={() => saveIdea(ideaInstructions)} disabled={isBusy || !ideaInstructions.trim()} className={primaryButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop Episode 1", operation?.kind === "refine")}</button>
                 </div>
               </div>
             </section>

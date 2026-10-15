@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents, pitchIdeas, pitchSources, pitchWorkspaces, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
+import { getAIModel, getConfiguredProviders, getPitchLabGeminiModel } from "@/lib/ai/providers";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import { buildPitchLabSampleIdeas, buildPitchLabSamplePremises, isPitchLabSampleMode } from "@/lib/ai/pitch-lab-samples";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
@@ -15,6 +15,9 @@ import { splitTabByH3, tiptapJsonToTagged, extractEpisodeNumber } from "@/lib/ai
 import {
   buildPitchLabPilotBatchPrompt,
   buildPitchLabPilotBatchSystemPrompt,
+  buildPitchLabEpisodePilotPrompt,
+  buildPitchLabEpisodePilotSystemPrompt,
+  PITCH_LAB_EPISODE_PROMPT_VERSION,
   buildPitchLabPremisePrompt,
   buildPitchLabPremiseSystemPrompt,
   cleanPitchLabTitle,
@@ -23,6 +26,7 @@ import {
   PITCH_LAB_PREMISE_COUNT,
 } from "@/lib/ai/pitch-lab-prompts";
 import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
+import { parsePitchLabEpisodePilots } from "@/lib/ai/pitch-lab-episode-pilot";
 import { assertPitchLabPilotOptionText, validatePitchLabPilotOptionBatch } from "@/lib/ai/pitch-lab-pilot-option-format";
 import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { loadExternalStorySource } from "@/lib/ai/pitch-lab-source-url";
@@ -81,7 +85,6 @@ function logPitchLabGenerationOutput(input: {
       index,
       ideaId: idea.id,
       title: idea.title,
-      ideaText: idea.ideaText,
       wordCount: idea.ideaText.split(/\s+/).filter(Boolean).length,
     })),
   });
@@ -419,6 +422,7 @@ export async function POST(req: Request) {
   let parsedPremises: ParsedPremise[] | null = null;
   let parsedIdeas: ParsedPilotOption[] | null = null;
   let isPlaceholder = false;
+  const episodePilot = phase === "pilots" && generationType === "framework" && !isPitchLabSampleMode();
   try {
     if (isPitchLabSampleMode()) {
       if (phase === "premises") {
@@ -451,6 +455,30 @@ export async function POST(req: Request) {
       isPlaceholder = true;
     } else {
       const providers = await getConfiguredProviders();
+      if (episodePilot) {
+        if (!providers.includes("google")) return NextResponse.json({ error: "Episode 1 pilots require a configured Google/Gemini API key." }, { status: 503 });
+        const model = await getPitchLabGeminiModel();
+        const prompt = buildPitchLabEpisodePilotPrompt({ selectedPremise, brief: workspaceBriefToSave, instruction });
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const result = await generateText({
+              model,
+              system: buildPitchLabEpisodePilotSystemPrompt(),
+              prompt: attempt === 0 ? prompt : `${prompt}\n\nReturn exactly four options using the required markers. Repair only the separators.`,
+              maxOutputTokens: 12000,
+              maxRetries: 0,
+              providerOptions: { google: { thinkingConfig: { thinkingLevel: "high" } } },
+            });
+            const options = parsePitchLabEpisodePilots(result.text, PITCH_LAB_IDEA_COUNT);
+            parsedIdeas = options.map((option) => ({ ...option, title: cleanPitchLabTitle(option.title), kernel: "", beats: "", clarityChecks: "", adaptationNotes: "" }));
+            console.info("[pitch-lab] episode-pilot", { attempt: attempt + 1, modelId: result.response.modelId, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens, promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION });
+            lastError = null;
+            break;
+          } catch (error) { lastError = error; }
+        }
+        if (!parsedIdeas) throw lastError instanceof Error ? lastError : new Error("Episode 1 pilot generation failed.");
+      } else {
       const tasteBrief = await getActivePitchLabFramework();
       const candidates = getPitchLabModelCandidates(providers);
       if (!candidates.length) return NextResponse.json({ error: "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
@@ -537,6 +565,7 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
       }
       if (phase === "pilots" && !parsedIdeas) {
         return NextResponse.json({ error: `All configured AI providers failed. Last error: ${pitchLabErrorMessage(lastError)}` }, { status: 502 });
+      }
       }
     }
 
@@ -637,7 +666,8 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
         ideaText: serializePitchIdeaEnvelope({
           originalText: idea.ideaText,
           currentText: idea.ideaText,
-          contentKind: "pilot_option",
+          contentKind: episodePilot ? "episode_pilot" : "pilot_option",
+          generation: episodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
           turns: [{
             instruction: [
               `Selected idea: ${selectedPremise}`,
@@ -647,7 +677,8 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
             ideaText: idea.ideaText,
             createdAt: now.toISOString(),
             kind: "initial",
-            contentKind: "pilot_option",
+            contentKind: episodePilot ? "episode_pilot" : "pilot_option",
+            generation: episodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
             instructionControls,
             qaWarnings,
               writerContext: mergeWriterContext(writerContext, { selectedPilotOption: idea.ideaText }),

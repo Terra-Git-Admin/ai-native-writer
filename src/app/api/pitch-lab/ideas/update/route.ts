@@ -2,11 +2,11 @@ import { generateText } from "ai";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
+import { getAIModel, getConfiguredProviders, getPitchLabGeminiModel } from "@/lib/ai/providers";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchWorkspaces } from "@/lib/db/schema";
 import { isPitchLabSampleMode, PITCH_LAB_SAMPLE_TITLE_PREFIX } from "@/lib/ai/pitch-lab-samples";
-import { cleanPitchIdeaText, parsePitchIdeaEnvelope, serializePitchIdeaEnvelope, type PitchLabWriterContext } from "@/lib/pitch-lab-idea-envelope";
+import { cleanPitchIdeaText, parsePitchIdeaEnvelope, serializePitchIdeaEnvelope, type PitchLabFeedback, type PitchLabWriterContext } from "@/lib/pitch-lab-idea-envelope";
 import { getPitchLabModelCandidates, pitchLabErrorMessage } from "@/lib/pitch-lab-models";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import {
@@ -14,11 +14,15 @@ import {
   buildPitchLabPremiseRefinementSystemPrompt,
   buildPitchLabRefinementPrompt,
   buildPitchLabRefinementSystemPrompt,
+  buildPitchLabEpisodeRefinementPrompt,
+  buildPitchLabEpisodeRefinementSystemPrompt,
+  PITCH_LAB_EPISODE_PROMPT_VERSION,
   cleanPitchLabTitle,
   isValidPitchLabTitle,
 } from "@/lib/ai/pitch-lab-prompts";
 import { assertPitchLabPilotOptionText } from "@/lib/ai/pitch-lab-pilot-option-format";
 import { assertPitchLabPilotPlotText } from "@/lib/ai/pitch-lab-pilot-plot-format";
+import { assertPitchLabEpisodePilotText } from "@/lib/ai/pitch-lab-episode-pilot";
 import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
 import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
@@ -139,14 +143,13 @@ export async function POST(req: Request) {
     const reason = typeof feedback.reason === "string" ? feedback.reason.trim().slice(0, 1000) : "";
     if (!rating) return NextResponse.json({ error: "Choose thumbs up or thumbs down." }, { status: 400 });
     if (rating === "down" && !reason) return NextResponse.json({ error: "Add a reason for thumbs down." }, { status: 400 });
-    const storedEnvelope = serializePitchIdeaEnvelope({
-      ...envelope,
-      feedback: {
-        rating,
-        reason: rating === "down" ? reason : undefined,
-        updatedAt: new Date().toISOString(),
-      },
-    });
+    const savedFeedback: PitchLabFeedback = { rating, reason: reason || undefined, updatedAt: new Date().toISOString() };
+    if (turnIndex !== null && (!envelope.turns[turnIndex] || envelope.turns[turnIndex].kind !== "rewrite" || idea.status !== "shortlisted")) {
+      return NextResponse.json({ error: "Pilot revision not found." }, { status: 404 });
+    }
+    const storedEnvelope = serializePitchIdeaEnvelope(turnIndex !== null
+      ? { ...envelope, turns: envelope.turns.map((turn, index) => index === turnIndex ? { ...turn, feedback: savedFeedback } : turn) }
+      : { ...envelope, feedback: savedFeedback });
     await db.update(pitchIdeas).set({
       ideaText: storedEnvelope,
       updatedAt: new Date(),
@@ -159,7 +162,7 @@ export async function POST(req: Request) {
     if (!turn || turn.kind !== "rewrite") return NextResponse.json({ error: "Generated option not found." }, { status: 404 });
     const storedEnvelope = serializePitchIdeaEnvelope({
       ...envelope,
-      turns: envelope.turns.map((item, index) => index === turnIndex ? { ...item, ideaText: assertPitchLabPilotPlotText(ideaText), contentKind: "pilot_plot" as const } : item),
+      turns: envelope.turns.map((item, index) => index === turnIndex ? { ...item, ideaText: item.contentKind === "episode_pilot" ? assertPitchLabEpisodePilotText(ideaText) : assertPitchLabPilotPlotText(ideaText), contentKind: item.contentKind === "episode_pilot" ? "episode_pilot" as const : "pilot_plot" as const } : item),
     });
     await db.update(pitchIdeas).set({
       ideaText: storedEnvelope,
@@ -173,6 +176,7 @@ export async function POST(req: Request) {
   let refinedIdea: ReturnType<typeof parseRefinedPilotPlot> | null = null;
   let refinedPremise: ReturnType<typeof parseRefinedPremise> | null = null;
   const isPremise = idea.status === "premise";
+  const isEpisodePilot = existingState.contentKind === "episode_pilot";
   const writerContext = mergeWriterContext(envelope.writerContext, {
     workspaceBrief: workspace.brief || undefined,
     latestInstruction: instruction || envelope.writerContext?.latestInstruction,
@@ -196,6 +200,21 @@ export async function POST(req: Request) {
           instruction,
         });
       isPlaceholder = true;
+    } else if (isEpisodePilot) {
+      try {
+        const result = await generateText({
+          model: await getPitchLabGeminiModel(),
+          system: buildPitchLabEpisodeRefinementSystemPrompt(),
+          prompt: buildPitchLabEpisodeRefinementPrompt({ premise: envelope.premise || "", original: envelope.originalText, current: updatedText, instruction, brief: workspace.brief || "" }),
+          maxOutputTokens: 6000,
+          maxRetries: 0,
+          providerOptions: { google: { thinkingConfig: { thinkingLevel: "high" } } },
+        });
+        updatedText = assertPitchLabEpisodePilotText(result.text);
+        console.info("[pitch-lab] episode-pilot-refinement", { modelId: result.response.modelId, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens, promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION });
+      } catch (error) {
+        return NextResponse.json({ error: pitchLabErrorMessage(error) }, { status: 502 });
+      }
     } else {
       const providers = await getConfiguredProviders();
       const candidates = getPitchLabModelCandidates(providers);
@@ -261,9 +280,11 @@ export async function POST(req: Request) {
 
   if (!isPremise) {
     try {
-      updatedText = instruction || existingState.contentKind === "pilot_plot"
-        ? assertPitchLabPilotPlotText(updatedText)
-        : assertPitchLabPilotOptionText(updatedText);
+      updatedText = isEpisodePilot
+        ? assertPitchLabEpisodePilotText(updatedText)
+        : instruction || existingState.contentKind === "pilot_plot"
+          ? assertPitchLabPilotPlotText(updatedText)
+          : assertPitchLabPilotOptionText(updatedText);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Pilot Plot must use Opening, Plot progression, and Final cliffhanger.";
       return NextResponse.json({ error: message }, { status: 400 });
@@ -280,7 +301,7 @@ export async function POST(req: Request) {
 
   const cleanTitle = cleanPitchLabTitle((instruction && !isPremise ? idea.title : updatedTitle).replace(/^\[Sample\]\s*/i, ""));
   if (!isValidPitchLabTitle(cleanTitle)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
-  const nextContentKind = isPremise ? "idea_seed" as const : instruction ? "pilot_plot" as const : (existingState.contentKind ?? "pilot_option");
+  const nextContentKind = isPremise ? "idea_seed" as const : isEpisodePilot ? "episode_pilot" as const : instruction ? "pilot_plot" as const : (existingState.contentKind ?? "pilot_option");
   const currentText = updatedText;
   const adaptationNotes = refinedPremise
     ? [refinedPremise.appealLane, refinedPremise.transformationNotes].filter(Boolean).join(" | ")
@@ -296,13 +317,14 @@ export async function POST(req: Request) {
           createdAt: new Date().toISOString(),
           kind: isPremise ? "rerun" as const : "rewrite" as const,
           contentKind: nextContentKind,
+          generation: isEpisodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "episode-pilot-refinement", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
           kernel: refinedIdea?.kernel || envelope.kernel,
           beats: refinedIdea?.beats || envelope.beats,
           clarityChecks: refinedIdea?.clarityChecks || envelope.clarityChecks,
           adaptationNotes: refinedIdea?.adaptationNotes || adaptationNotes,
           writerContext,
         }]
-      : isPremise && updatedText !== envelope.currentText
+      : updatedText !== envelope.currentText
         ? [...envelope.turns, { instruction: "Manual edit", ideaText: updatedText, createdAt: new Date().toISOString(), kind: "manual_edit" as const, contentKind: nextContentKind, writerContext }]
         : envelope.turns,
     premise: isPremise ? currentText : envelope.premise,
@@ -310,6 +332,7 @@ export async function POST(req: Request) {
     batchId: envelope.batchId,
     batchNumber: envelope.batchNumber,
     feedback: envelope.feedback,
+    generation: envelope.generation,
     generatedAt: envelope.generatedAt,
     shortlistedAt: envelope.shortlistedAt,
     kernel: refinedIdea?.kernel || envelope.kernel,

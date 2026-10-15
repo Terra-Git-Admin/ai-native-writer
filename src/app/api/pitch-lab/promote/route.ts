@@ -39,8 +39,6 @@ function logPitchLabFinalizedOutput(input: {
     refinementCount: input.refinementCount,
     originalWordCount: input.originalText.split(/\s+/).filter(Boolean).length,
     finalWordCount: input.finalText.split(/\s+/).filter(Boolean).length,
-    originalText: input.originalText,
-    finalText: input.finalText,
   });
 }
 
@@ -76,7 +74,7 @@ export async function POST(req: Request) {
       }
       if (idea.status !== "shortlisted") throw new Error("Move this Pilot Option to Shortlist before finalizing it.");
       const state = getPitchLabContentState(idea.status, idea.ideaText);
-      if (state.contentKind !== "pilot_plot" || !state.isValid) throw new Error("Develop this shortlisted Pilot Option into a valid Pilot Plot before finalizing it.");
+      if (!["pilot_plot", "episode_pilot"].includes(state.contentKind ?? "") || !state.isValid) throw new Error("Develop this shortlisted Pilot Option into a valid Episode 1 before finalizing it.");
       const currentText = envelope.currentText.trim();
       if (!currentText) throw new Error("Idea plot is required.");
 

@@ -1,4 +1,6 @@
-// Pitch Lab prompt version 2.25, updated 2026-10-13.
+// Pitch Lab prompt version 2.37, updated 2026-10-15.
+// Changelog 2026-10-15: use a single-call Gemini microdrama Episode 1 pilot and compact free-form shortlist development.
+export const PITCH_LAB_EPISODE_PROMPT_VERSION = "2.37";
 // Changelog 2026-10-13: carry writer instructions through every Pitch Lab stage and simplify Pilot Plots to one setup, one turn, and one cliffhanger.
 // Changelog 2026-10-13: simplify Pilot Options into short direction cards with varied hook/escalation/cliffhanger types and no hidden pilot-construction fields.
 // Changelog 2026-10-13: add inverse world guard and microdrama plot-sense rules for Pilot Options so contemporary ideas do not drift into unrequested fantasy/medieval variants.
@@ -26,6 +28,32 @@
 // Changelog 2026-09-24: move changing framework guidance into a hidden admin Taste Brief; keep output story-first and remove visible framework/compliance language.
 export const PITCH_LAB_IDEA_COUNT = 4;
 export const PITCH_LAB_PREMISE_COUNT = 8;
+
+export function buildPitchLabEpisodePilotSystemPrompt(): string {
+  return `You are Pitch Lab's senior microdrama pilot writer. Episode 1 must win over a cold viewer; it is not a synopsis of the series. In about 90 seconds of screen action, reveal a lead under pressure through a vivid, legible moment. Make the selected Idea's relationship trope collide on screen and change the leads' leverage. Cut on an unresolved turn that makes Episode 2 necessary.
+
+Give four different dramatic bets on the same Idea. Vary the source of leverage or emotional dynamic, not merely the setting or wording of one reveal. Use character description, dialogue, sensory detail, or a brief flashback when it sharpens the episode; none is mandatory.`;
+}
+
+export function buildPitchLabEpisodePilotPrompt(input: { selectedPremise: string; brief: string; instruction: string }): string {
+  const direction = [
+    input.brief ? `Original writer brief: ${input.brief}` : "",
+    input.instruction ? `Latest writer instruction: ${input.instruction}` : "",
+  ].filter(Boolean).join("\n");
+  return `Selected Idea: ${input.selectedPremise}
+${direction ? `\n${direction}\n` : ""}
+Write four distinct Microdrama Episode 1 pilot options from this Idea. Show what actually plays in the pilot, not a summary of later plot. Choose the presentation that makes each episode compelling.
+
+Return only the four options. Start each with ---PILOT OPTION N--- on its own line (N = 1, 2, 3, 4), followed by Title: <short title> on the next line.`;
+}
+
+export function buildPitchLabEpisodeRefinementSystemPrompt(): string {
+  return `You are developing one shortlisted microdrama Episode 1 pilot. Keep it a compact, playable first episode, not a series synopsis or screenplay. Honor the writer's latest instruction and preserve the selected pilot's dramatic engine unless the writer asks to change it. Show the pressure, the leads' choices, the turn in leverage, and the unresolved cut through clear onscreen events. Use dialogue, visual details, or a brief flashback only when they earn their place. Return only the revised episode pitch, without a title, analysis, or format labels.`;
+}
+
+export function buildPitchLabEpisodeRefinementPrompt(input: { premise: string; original: string; current: string; instruction: string; brief: string }): string {
+  return `Selected Idea: ${input.premise}\nOriginal pilot: ${input.original}\nCurrent pilot: ${input.current}\nWriter brief: ${input.brief || "None"}\nLatest instruction: ${input.instruction}\n\nDevelop this same Microdrama Episode 1 pilot. Return only the revised pilot.`;
+}
 
 const TITLE_FILLER_WORDS = new Set(["a", "an", "the", "and", "or", "but", "nor", "i", "me", "my", "mine", "we", "us", "our", "ours", "you", "your", "yours", "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their", "theirs"]);
 

@@ -12,6 +12,7 @@ import {
 import {
   assertPitchLabPilotPlotText,
 } from "../src/lib/ai/pitch-lab-pilot-plot-format.ts";
+import { assertPitchLabEpisodePilotText, parsePitchLabEpisodePilots } from "../src/lib/ai/pitch-lab-episode-pilot.ts";
 import {
   serializePitchIdeaEnvelope,
   parsePitchIdeaEnvelope,
@@ -42,6 +43,26 @@ function testPilotOptionContract() {
     Cliffhanger: "She finds his blood type matches her missing brother",
   });
   assert.equal(assertPitchLabPilotOptionText(text), text);
+}
+
+function testEpisodePilotContract() {
+  const output = Array.from({ length: 4 }, (_, index) => `---PILOT OPTION ${index + 1}---\nTitle: Hidden Ring\nShe hides in his hotel kitchen. He notices her ring and blocks the exit.`).join("\n");
+  const options = parsePitchLabEpisodePilots(output);
+  assert.equal(options.length, 4);
+  assert.equal(options[0].title, "Hidden Ring");
+  assert.equal(assertPitchLabEpisodePilotText(options[0].ideaText), options[0].ideaText);
+  assert.equal(parsePitchLabEpisodePilots(output.replace("OPTION 4", "OPTION 3")).length, 4);
+  assert.throws(() => parsePitchLabEpisodePilots(output.replace("---PILOT OPTION 4---", "")), /expected 4/);
+  const envelope = parsePitchIdeaEnvelope(serializePitchIdeaEnvelope({
+    originalText: options[0].ideaText,
+    currentText: options[0].ideaText,
+    contentKind: "episode_pilot",
+    generation: { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "single-call-episode-pilot", promptVersion: "2.37", thinkingLevel: "high" },
+    turns: [{ instruction: "Tighten the reveal", ideaText: options[0].ideaText, createdAt: "2026-10-15T00:00:00Z", kind: "rewrite", contentKind: "episode_pilot", feedback: { rating: "down", reason: "Weak reveal", updatedAt: "2026-10-15T00:01:00Z" } }],
+  }));
+  assert.equal(envelope.contentKind, "episode_pilot");
+  assert.equal(envelope.generation?.model, "gemini-3.1-pro-preview");
+  assert.equal(envelope.turns[0].feedback?.reason, "Weak reveal");
 }
 
 function testIdeaSeedContract() {
@@ -257,6 +278,7 @@ function testPilotOptionCardsAreNotCollapsed() {
 }
 
 testPilotOptionContract();
+testEpisodePilotContract();
 testIdeaSeedContract();
 testPilotOptionRejections();
 testPilotOptionBatchAcceptsModelOutput();
