@@ -11,9 +11,14 @@ export type PitchIdeaTurn = {
   instructionControls?: unknown;
   qaWarnings?: unknown[];
   writerContext?: PitchLabWriterContext;
+  feedback?: PitchLabFeedback;
+  generation?: PitchLabGeneration;
 };
 
-export type PitchLabContentKind = "idea_seed" | "pilot_option" | "pilot_plot";
+export type PitchLabContentKind = "idea_seed" | "pilot_option" | "pilot_plot" | "episode_pilot";
+
+export type PitchLabFeedback = { rating: "up" | "down"; reason?: string; updatedAt: string };
+export type PitchLabGeneration = { provider: "google"; model: string; pipeline: string; promptVersion: string; thinkingLevel: "high" };
 
 export type PitchLabWriterContext = {
   workspaceBrief?: string;
@@ -28,11 +33,8 @@ export type PitchIdeaEnvelope = {
   currentText: string;
   contentKind?: PitchLabContentKind;
   turns: PitchIdeaTurn[];
-  feedback?: {
-    rating: "up" | "down";
-    reason?: string;
-    updatedAt: string;
-  };
+  feedback?: PitchLabFeedback;
+  generation?: PitchLabGeneration;
   premise?: string;
   premiseId?: string;
   batchId?: string;
@@ -62,7 +64,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseContentKind(value: unknown): PitchLabContentKind | undefined {
-  return value === "idea_seed" || value === "pilot_option" || value === "pilot_plot" ? value : undefined;
+  return value === "idea_seed" || value === "pilot_option" || value === "pilot_plot" || value === "episode_pilot" ? value : undefined;
+}
+
+function parseFeedback(value: unknown): PitchLabFeedback | undefined {
+  if (!isRecord(value) || (value.rating !== "up" && value.rating !== "down")) return undefined;
+  return { rating: value.rating, reason: typeof value.reason === "string" ? value.reason.trim() : undefined, updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "" };
+}
+
+function parseGeneration(value: unknown): PitchLabGeneration | undefined {
+  if (!isRecord(value) || value.provider !== "google" || typeof value.model !== "string" || typeof value.pipeline !== "string" || typeof value.promptVersion !== "string" || value.thinkingLevel !== "high") return undefined;
+  return { provider: "google", model: value.model, pipeline: value.pipeline, promptVersion: value.promptVersion, thinkingLevel: "high" };
 }
 
 function parseWriterContext(value: unknown): PitchLabWriterContext | undefined {
@@ -102,25 +114,20 @@ export function parsePitchIdeaEnvelope(value: string): PitchIdeaEnvelope {
               instructionControls: turn.instructionControls,
               qaWarnings: Array.isArray(turn.qaWarnings) ? turn.qaWarnings : undefined,
               writerContext: parseWriterContext(turn.writerContext),
+              feedback: parseFeedback(turn.feedback),
+              generation: parseGeneration(turn.generation),
             };
           })
           .filter((turn): turn is PitchIdeaTurn => Boolean(turn))
       : [];
-    const feedbackRecord = isRecord(parsed.feedback) ? parsed.feedback : null;
-    let feedback: PitchIdeaEnvelope["feedback"];
-    if (feedbackRecord?.rating === "up" || feedbackRecord?.rating === "down") {
-      feedback = {
-        rating: feedbackRecord.rating,
-        reason: typeof feedbackRecord.reason === "string" ? feedbackRecord.reason.trim() : undefined,
-        updatedAt: typeof feedbackRecord.updatedAt === "string" ? feedbackRecord.updatedAt : "",
-      };
-    }
+    const feedback = parseFeedback(parsed.feedback);
     return {
       originalText,
       currentText: cleanPitchIdeaText(parsed.currentText),
       contentKind: parseContentKind(parsed.contentKind),
       turns,
       feedback,
+      generation: parseGeneration(parsed.generation),
       premise: typeof parsed.premise === "string" ? parsed.premise : undefined,
       premiseId: typeof parsed.premiseId === "string" ? parsed.premiseId : undefined,
       batchId: typeof parsed.batchId === "string" ? parsed.batchId : undefined,
@@ -169,6 +176,7 @@ export function serializePitchIdeaEnvelope(envelope: PitchIdeaEnvelope): string 
           updatedAt: envelope.feedback.updatedAt,
         }
       : undefined,
+    generation: envelope.generation,
     premise: envelope.premise,
     premiseId: envelope.premiseId,
     batchId: envelope.batchId,

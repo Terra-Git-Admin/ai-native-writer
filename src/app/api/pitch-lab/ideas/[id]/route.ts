@@ -30,13 +30,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const now = new Date();
   const envelope = parsePitchIdeaEnvelope(existing.ideaText);
   const state = getPitchLabContentState(existing.status, existing.ideaText);
-  if (status === "shortlisted" && (existing.status !== "generated" || state.contentKind !== "pilot_option" || !state.isValid)) {
+  if (status === "shortlisted" && (existing.status !== "generated" || !["pilot_option", "episode_pilot"].includes(state.contentKind ?? "") || !state.isValid)) {
     return NextResponse.json({ error: "Only valid Pilot Options can be moved to Shortlist." }, { status: 400 });
   }
   if (status === "premise" && state.contentKind !== "idea_seed") {
     return NextResponse.json({ error: "Only valid Ideas can be restored to Ideas." }, { status: 400 });
   }
-  if (status === "generated" && state.contentKind !== "pilot_option") {
+  if (status === "generated" && !["pilot_option", "episode_pilot"].includes(state.contentKind ?? "")) {
     return NextResponse.json({ error: "Only valid Pilot Options can be restored to Pilot Options." }, { status: 400 });
   }
   const ideaText = status === "shortlisted" && !envelope.shortlistedAt

@@ -1,6 +1,7 @@
 import { assertPitchLabIdeaSeedText } from "./pitch-lab-idea-seed-format";
 import { assertPitchLabPilotOptionText } from "./pitch-lab-pilot-option-format";
 import { assertPitchLabPilotPlotText } from "./pitch-lab-pilot-plot-format";
+import { assertPitchLabEpisodePilotText } from "./pitch-lab-episode-pilot";
 import { parsePitchIdeaEnvelope, type PitchIdeaEnvelope, type PitchLabContentKind } from "../pitch-lab-idea-envelope";
 
 const CONTENT_KIND_BY_STATUS: Record<string, PitchLabContentKind | null> = {
@@ -14,6 +15,7 @@ const CONTENT_KIND_BY_STATUS: Record<string, PitchLabContentKind | null> = {
 export function assertPitchLabTextForKind(contentKind: PitchLabContentKind, text: string): string {
   if (contentKind === "idea_seed") return assertPitchLabIdeaSeedText(text);
   if (contentKind === "pilot_option") return assertPitchLabPilotOptionText(text);
+  if (contentKind === "episode_pilot") return assertPitchLabEpisodePilotText(text);
   return assertPitchLabPilotPlotText(text);
 }
 
