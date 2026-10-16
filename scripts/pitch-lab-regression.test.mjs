@@ -4,6 +4,7 @@ import fs from "node:fs";
 import {
   assertPitchLabIdeaSeedText,
 } from "../src/lib/ai/pitch-lab-idea-seed-format.ts";
+import { buildMinimalFreshIdeaPrompt, parseMinimalIdeaLines, pickMinimalIdeaHeading } from "../src/lib/ai/pitch-lab-minimal-ideas.ts";
 import {
   assertPitchLabPilotOptionText,
   parsePitchLabPilotOptionText,
@@ -28,6 +29,11 @@ import {
   buildPitchLabPilotBatchPrompt,
   buildPitchLabPremisePrompt,
   buildPitchLabRefinementPrompt,
+  buildPitchLabEpisodePilotPrompt,
+  buildPitchLabEpisodePilotSystemPrompt,
+  buildPitchLabEpisodeRefinementPrompt,
+  buildPitchLabEpisodeRefinementSystemPrompt,
+  PITCH_LAB_SHORTLIST_PROMPT_VERSION,
 } from "../src/lib/ai/pitch-lab-prompts.ts";
 
 function testPilotOptionContract() {
@@ -46,6 +52,16 @@ function testPilotOptionContract() {
 }
 
 function testEpisodePilotContract() {
+  const pilotPrompt = buildPitchLabEpisodePilotPrompt({ selectedPremise: "A masked surgeon saves the director's brother.", brief: "secret identity", instruction: "" });
+  assert.match(pilotPrompt, /six short bullet points/);
+  assert.match(pilotPrompt, /Do not use timestamps/);
+  assert.match(buildPitchLabEpisodePilotSystemPrompt(), /engine of the conflict early/);
+  const shortlistPrompt = buildPitchLabEpisodeRefinementPrompt({ premise: "Elena is a prosecutor posing as an intern.", current: "Elena plants a bug. Julian catches her.", instruction: "Connect the events." });
+  assert.equal(PITCH_LAB_SHORTLIST_PROMPT_VERSION, "1.1");
+  assert.match(shortlistPrompt, /Current Episode 1 plot: Elena plants a bug\. Julian catches her\./);
+  assert.match(shortlistPrompt, /Writer instruction: Connect the events\./);
+  assert.doesNotMatch(shortlistPrompt, /Original pilot:|Writer brief:/);
+  assert.match(buildPitchLabEpisodeRefinementSystemPrompt(), /filling only missing causes and character reactions/);
   const output = Array.from({ length: 4 }, (_, index) => `---PILOT OPTION ${index + 1}---\nTitle: Hidden Ring\nShe hides in his hotel kitchen. He notices her ring and blocks the exit.`).join("\n");
   const options = parsePitchLabEpisodePilots(output);
   assert.equal(options.length, 4);
@@ -73,10 +89,8 @@ function testIdeaSeedContract() {
     "FL designer meets ML billionaire and must navigate secrets together."
   );
 
-  assert.throws(
-    () => assertPitchLabIdeaSeedText("A broke medical resident signs a one-year marriage contract with a disfigured chaebol heir to fund her mother's surgery."),
-    /start with FL|include ML/
-  );
+  assert.equal(assertPitchLabIdeaSeedText("A broke medical resident signs a one-year marriage contract with a disfigured chaebol heir to fund her mother's surgery."), "A broke medical resident signs a one-year marriage contract with a disfigured chaebol heir to fund her mother's surgery.");
+  assert.throws(() => assertPitchLabIdeaSeedText("   "), /cannot be empty/);
   assert.equal(
     assertPitchLabIdeaSeedText("FL medical resident signs ML heir's marriage contract to fund surgery--then treats the accident meant to erase him."),
     "FL medical resident signs ML heir's marriage contract to fund surgery--then treats the accident meant to erase him."
@@ -85,6 +99,21 @@ function testIdeaSeedContract() {
     assertPitchLabIdeaSeedText("FL nurse saves ML mobster's life and the season follows their contract romance across dangerous episodes"),
     "FL nurse saves ML mobster's life and the season follows their contract romance across dangerous episodes"
   );
+}
+
+function testMinimalIdeaExperiment() {
+  const prompt = buildMinimalFreshIdeaPrompt("secret identity", "Give me 10 single line ideas for Pilot Episode 1");
+  assert.match(prompt, /one-line ideas for possible Episode 1 microdrama plots/);
+  assert.match(prompt, /each lead's gender clear through names or gendered words/);
+  assert.match(prompt, /secret identity/);
+  assert.match(prompt, /Give me 10 single line ideas for Pilot Episode 1/);
+  assert.doesNotMatch(prompt, /premiseText|start with FL|8-28 words|Taste Brief|JSON/);
+  const ideas = parseMinimalIdeaLines("1. A surgeon hides her identity.\n2. The heiress takes a clerk job.\n");
+  assert.deepEqual(ideas, ["A surgeon hides her identity.", "The heiress takes a clerk job."]);
+  assert.equal(pickMinimalIdeaHeading("To survive a scandal, an exiled heiress disguises herself as a paralegal."), "Heiress");
+  assert.equal(pickMinimalIdeaHeading("A disgraced surgeon secretly works as a street medic."), "Surgeon");
+  assert.equal(pickMinimalIdeaHeading("Forced to pretend to be her dead twin brother, she enters a boardroom showdown."), "Twin");
+  assert.equal(pickMinimalIdeaHeading("A violinist blackmails the owner."), "Violinist");
 }
 
 function testPilotOptionRejections() {
@@ -280,6 +309,7 @@ function testPilotOptionCardsAreNotCollapsed() {
 testPilotOptionContract();
 testEpisodePilotContract();
 testIdeaSeedContract();
+testMinimalIdeaExperiment();
 testPilotOptionRejections();
 testPilotOptionBatchAcceptsModelOutput();
 testPilotPlotContractAndContentKind();

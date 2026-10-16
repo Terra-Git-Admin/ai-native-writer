@@ -1,6 +1,13 @@
-// Pitch Lab prompt version 2.37, updated 2026-10-15.
+// Pitch Lab prompt version 2.40, updated 2026-10-16.
+// Changelog 2026-10-16 (2.40): route Fresh Pilot Options through Argon; keep the six-bullet output contract.
+// Changelog 2026-10-16 (2.39): present Pilot Option beats as bullets without timestamps.
+// Changelog 2026-10-16 (2.38): make Pilot Options six compact, chronological 15-second beats with the episode mechanic visible early.
 // Changelog 2026-10-15: use a single-call Gemini microdrama Episode 1 pilot and compact free-form shortlist development.
-export const PITCH_LAB_EPISODE_PROMPT_VERSION = "2.37";
+export const PITCH_LAB_EPISODE_PROMPT_VERSION = "2.40";
+// Shortlist development prompt version 1.1, updated 2026-10-16.
+// Changelog 2026-10-16 (1.1): keep development close to source length unless a causal gap needs more context.
+// Changelog 2026-10-16 (1.0): connect the selected plot with only necessary causal context; use the current Live File once.
+export const PITCH_LAB_SHORTLIST_PROMPT_VERSION = "1.1";
 // Changelog 2026-10-13: carry writer instructions through every Pitch Lab stage and simplify Pilot Plots to one setup, one turn, and one cliffhanger.
 // Changelog 2026-10-13: simplify Pilot Options into short direction cards with varied hook/escalation/cliffhanger types and no hidden pilot-construction fields.
 // Changelog 2026-10-13: add inverse world guard and microdrama plot-sense rules for Pilot Options so contemporary ideas do not drift into unrequested fantasy/medieval variants.
@@ -30,9 +37,7 @@ export const PITCH_LAB_IDEA_COUNT = 4;
 export const PITCH_LAB_PREMISE_COUNT = 8;
 
 export function buildPitchLabEpisodePilotSystemPrompt(): string {
-  return `You are Pitch Lab's senior microdrama pilot writer. Episode 1 must win over a cold viewer; it is not a synopsis of the series. In about 90 seconds of screen action, reveal a lead under pressure through a vivid, legible moment. Make the selected Idea's relationship trope collide on screen and change the leads' leverage. Cut on an unresolved turn that makes Episode 2 necessary.
-
-Give four different dramatic bets on the same Idea. Vary the source of leverage or emotional dynamic, not merely the setting or wording of one reveal. Use character description, dialogue, sensory detail, or a brief flashback when it sharpens the episode; none is mandatory.`;
+  return `You write clear, fast Episode 1 microdrama plots. Give four different ways the selected Idea could play. In each, establish the simple engine of the conflict early, show the heroine act and the male lead respond, then cut on a concrete unresolved turn. Keep each beat short and playable on screen.`;
 }
 
 export function buildPitchLabEpisodePilotPrompt(input: { selectedPremise: string; brief: string; instruction: string }): string {
@@ -42,17 +47,17 @@ export function buildPitchLabEpisodePilotPrompt(input: { selectedPremise: string
   ].filter(Boolean).join("\n");
   return `Selected Idea: ${input.selectedPremise}
 ${direction ? `\n${direction}\n` : ""}
-Write four distinct Microdrama Episode 1 pilot options from this Idea. Show what actually plays in the pilot, not a summary of later plot. Choose the presentation that makes each episode compelling.
+Write four distinct Episode 1 options from this Idea. Show what happens in order. Keep the four options similar in length. For each option, write six short bullet points, each with one clear action or change. Do not use timestamps.
 
 Return only the four options. Start each with ---PILOT OPTION N--- on its own line (N = 1, 2, 3, 4), followed by Title: <short title> on the next line.`;
 }
 
 export function buildPitchLabEpisodeRefinementSystemPrompt(): string {
-  return `You are developing one shortlisted microdrama Episode 1 pilot. Keep it a compact, playable first episode, not a series synopsis or screenplay. Honor the writer's latest instruction and preserve the selected pilot's dramatic engine unless the writer asks to change it. Show the pressure, the leads' choices, the turn in leverage, and the unresolved cut through clear onscreen events. Use dialogue, visual details, or a brief flashback only when they earn their place. Return only the revised episode pitch, without a title, analysis, or format labels.`;
+  return `Develop one selected microdrama Episode 1 plot. Connect its events in concise prose, filling only missing causes and character reactions. Stay close to the source length unless a causal gap needs more context. Preserve the plot's strongest actions and unresolved final turn unless the writer asks to change them. Honor focused changes or a complete rewrite. Return only the plot.`;
 }
 
-export function buildPitchLabEpisodeRefinementPrompt(input: { premise: string; original: string; current: string; instruction: string; brief: string }): string {
-  return `Selected Idea: ${input.premise}\nOriginal pilot: ${input.original}\nCurrent pilot: ${input.current}\nWriter brief: ${input.brief || "None"}\nLatest instruction: ${input.instruction}\n\nDevelop this same Microdrama Episode 1 pilot. Return only the revised pilot.`;
+export function buildPitchLabEpisodeRefinementPrompt(input: { premise: string; current: string; instruction: string }): string {
+  return `Selected Idea: ${input.premise}\nCurrent Episode 1 plot: ${input.current}\nWriter instruction: ${input.instruction}\n\nConnect the events and add only context needed to follow the action.`;
 }
 
 const TITLE_FILLER_WORDS = new Set(["a", "an", "the", "and", "or", "but", "nor", "i", "me", "my", "mine", "we", "us", "our", "ours", "you", "your", "yours", "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their", "theirs"]);

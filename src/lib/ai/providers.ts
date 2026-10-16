@@ -54,6 +54,12 @@ export async function getPitchLabGeminiModel() {
   return createGoogleGenerativeAI({ apiKey })("gemini-3.1-pro-preview");
 }
 
+export async function getPitchLabArgonModel() {
+  const apiKey = await getProviderApiKey("google");
+  if (!apiKey) throw new Error("Pitch Lab requires a decryptable Google/Gemini API key in Settings.");
+  return createGoogleGenerativeAI({ apiKey })("gemini-4-argon");
+}
+
 export async function getAIModel(modelId: string, thinking: boolean = false) {
   // Determine provider from model ID
   const modelDef = AI_MODELS.find((m) => m.id === modelId && m.thinking === thinking)

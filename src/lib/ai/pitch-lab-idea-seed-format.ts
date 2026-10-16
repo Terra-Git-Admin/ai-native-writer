@@ -5,9 +5,7 @@ export function normalizePitchLabIdeaSeedText(text: string): string {
 export function validatePitchLabIdeaSeedText(text: string): string[] {
   const value = normalizePitchLabIdeaSeedText(text);
   const errors: string[] = [];
-  if (!/^FL\b/.test(value)) errors.push("Idea must start with FL.");
-  if (!/\bML\b/.test(value)) errors.push("Idea must include ML.");
-  if (/[.!?].+[.!?]/.test(value)) errors.push("Idea must be one sentence or fragment.");
+  if (!value) errors.push("Idea cannot be empty.");
   return errors;
 }
 
