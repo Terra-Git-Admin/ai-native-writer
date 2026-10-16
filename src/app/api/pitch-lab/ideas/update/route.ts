@@ -2,7 +2,7 @@ import { generateText } from "ai";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getAIModel, getConfiguredProviders, getPitchLabGeminiModel } from "@/lib/ai/providers";
+import { getAIModel, getConfiguredProviders, getPitchLabArgonModel, getPitchLabGeminiModel } from "@/lib/ai/providers";
 import { db } from "@/lib/db";
 import { pitchIdeas, pitchWorkspaces } from "@/lib/db/schema";
 import { isPitchLabSampleMode, PITCH_LAB_SAMPLE_TITLE_PREFIX } from "@/lib/ai/pitch-lab-samples";
@@ -16,7 +16,7 @@ import {
   buildPitchLabRefinementSystemPrompt,
   buildPitchLabEpisodeRefinementPrompt,
   buildPitchLabEpisodeRefinementSystemPrompt,
-  PITCH_LAB_EPISODE_PROMPT_VERSION,
+  PITCH_LAB_SHORTLIST_PROMPT_VERSION,
   cleanPitchLabTitle,
   isValidPitchLabTitle,
 } from "@/lib/ai/pitch-lab-prompts";
@@ -205,27 +205,29 @@ export async function POST(req: Request) {
         const result = await generateText({
           model: await getPitchLabGeminiModel(),
           system: buildPitchLabEpisodeRefinementSystemPrompt(),
-          prompt: buildPitchLabEpisodeRefinementPrompt({ premise: envelope.premise || "", original: envelope.originalText, current: updatedText, instruction, brief: workspace.brief || "" }),
+          prompt: buildPitchLabEpisodeRefinementPrompt({ premise: envelope.premise || "", current: updatedText, instruction }),
           maxOutputTokens: 6000,
           maxRetries: 0,
           providerOptions: { google: { thinkingConfig: { thinkingLevel: "high" } } },
         });
         updatedText = assertPitchLabEpisodePilotText(result.text);
-        console.info("[pitch-lab] episode-pilot-refinement", { modelId: result.response.modelId, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens, promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION });
+        console.info("[pitch-lab] episode-pilot-refinement", { modelId: result.response.modelId, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens, promptVersion: PITCH_LAB_SHORTLIST_PROMPT_VERSION });
       } catch (error) {
         return NextResponse.json({ error: pitchLabErrorMessage(error) }, { status: 502 });
       }
     } else {
       const providers = await getConfiguredProviders();
-      const candidates = getPitchLabModelCandidates(providers);
-      if (!candidates.length) return NextResponse.json({ error: "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
+      const candidates = isPremise
+        ? (providers.includes("google") ? [{ provider: "google" as const, modelId: "gemini-4-argon" }] : [])
+        : getPitchLabModelCandidates(providers);
+      if (!candidates.length) return NextResponse.json({ error: isPremise ? "Idea seed edits require a configured Google/Gemini API key for Argon." : "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
       let lastError: unknown = null;
       const tasteBrief = await getActivePitchLabFramework();
       const priorTurns = buildCompactPriorTurns(envelope.turns);
       for (const candidate of candidates) {
         try {
           const result = await generateText({
-            model: await getAIModel(candidate.modelId),
+            model: isPremise ? await getPitchLabArgonModel() : await getAIModel(candidate.modelId),
             system: isPremise
               ? buildPitchLabPremiseRefinementSystemPrompt(tasteBrief)
               : buildPitchLabRefinementSystemPrompt(tasteBrief),
@@ -252,8 +254,9 @@ export async function POST(req: Request) {
                 adaptationNotes: envelope.adaptationNotes,
                 writerContext: writerContextBlock,
               }),
-            maxOutputTokens: isPremise ? 1200 : 2400,
+            maxOutputTokens: isPremise ? 32768 : 2400,
             maxRetries: 0,
+            ...(isPremise ? { providerOptions: { google: { thinkingConfig: { thinkingLevel: "medium" } } } } : {}),
           });
           if (isPremise) refinedPremise = parseRefinedPremise(result.text, updatedTitle);
           else refinedIdea = parseRefinedPilotPlot(result.text, updatedTitle);
@@ -317,7 +320,7 @@ export async function POST(req: Request) {
           createdAt: new Date().toISOString(),
           kind: isPremise ? "rerun" as const : "rewrite" as const,
           contentKind: nextContentKind,
-          generation: isEpisodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "episode-pilot-refinement", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
+          generation: isEpisodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "episode-pilot-refinement", promptVersion: PITCH_LAB_SHORTLIST_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
           kernel: refinedIdea?.kernel || envelope.kernel,
           beats: refinedIdea?.beats || envelope.beats,
           clarityChecks: refinedIdea?.clarityChecks || envelope.clarityChecks,

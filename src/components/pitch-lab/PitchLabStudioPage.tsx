@@ -121,6 +121,24 @@ function currentIdeaText(idea: Idea) {
   return cleanPitchIdeaText(parsePitchIdeaEnvelope(idea.ideaText).currentText);
 }
 
+function episodeBeatItems(text: string): string[] | null {
+  const lines = text.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length !== 6) return null;
+  const beats = lines.map((line) => line.match(/^(?:(?:\d{1,2}-\d{1,2}s):\s*|[-*•]\s+)(.+)$/)?.[1]?.trim());
+  return beats.every(Boolean) ? beats as string[] : null;
+}
+
+function EpisodePlotText({ text }: { text: string }) {
+  const beats = episodeBeatItems(text);
+  return beats ? (
+    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-foreground">
+      {beats.map((beat, index) => <li key={index} className="pl-1">{beat}</li>)}
+    </ul>
+  ) : (
+    <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">{text}</p>
+  );
+}
+
 function cleanPilotName(value: string) {
   return value.replace(/^\[Sample\]\s*/i, "").replace(/\s+/g, " ").trim();
 }
@@ -880,7 +898,7 @@ export default function PitchLabStudioPage() {
       setIdeas((current) => current.map((idea) => idea.id === selectedIdea.id ? { ...idea, title: cleanTitle, ideaText: data.ideaText, isPlaceholder } : idea));
       setPendingTimelineItem(null);
       setIsCurrentEditable(false);
-      setCurrentVersionNotice(instruction ? "Episode 1 revision added below the Live File." : "Manual edits saved to the Live File.");
+      setCurrentVersionNotice(instruction ? "Episode 1 revision added below and is now the Live File." : "Manual edits saved to the Live File.");
       setCurrentVersionInstruction(instruction || null);
       finishOperation();
     } catch (err) {
@@ -1331,7 +1349,7 @@ export default function PitchLabStudioPage() {
               {isDiscarded && statusTag("Discarded", "red")}
               {isDiscarding && <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />Discarding</span>}
             </div>
-            <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-foreground">{text}</pre>
+            <EpisodePlotText text={text} />
             {isInvalid && <p role="alert" className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">{idea.contentErrors?.[0] || "This legacy option must be regenerated before it can move forward."}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -1649,7 +1667,7 @@ export default function PitchLabStudioPage() {
                       <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "up")} disabled={isBusy || Boolean(pendingIdeaAction)} aria-label="Like selected pilot" aria-pressed={selectedEnvelope?.feedback?.rating === "up"} title="Like pilot" className={`${feedbackButtonClass} ${selectedEnvelope?.feedback?.rating === "up" ? "text-emerald-700" : ""}`}><ThumbsUp className="h-4 w-4" /></button>
                       <button type="button" onClick={() => void saveIdeaFeedback(selectedIdea, "down")} disabled={isBusy || Boolean(pendingIdeaAction)} aria-label="Dislike selected pilot" aria-pressed={selectedEnvelope?.feedback?.rating === "down"} title="Dislike pilot" className={`${feedbackButtonClass} ${selectedEnvelope?.feedback?.rating === "down" ? "text-red-700" : ""}`}><ThumbsDown className="h-4 w-4" /></button>
                       <button type="button" onClick={() => { setIsCurrentEditable(true); requestAnimationFrame(() => ideaTextRef.current?.focus()); }} disabled={isBusy} className={compactButtonClass}>Edit</button>
-                      <button type="button" onClick={() => saveIdea("Develop this Episode 1 pilot into a sharper first episode.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
+                      <button type="button" onClick={() => saveIdea("Connect this Episode 1 plot, adding only context needed to follow the action.", savedText)} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "refine" ? "Developing" : "Develop", operation?.kind === "refine")}</button>
                       <button type="button" onClick={() => copyText(savedText, "live-file-top")} className={compactButtonClass}>{copyTarget === "live-file-top" ? "Copied" : "Copy"}</button>
                     </div>
                   )}
@@ -1664,7 +1682,7 @@ export default function PitchLabStudioPage() {
                 ) : (
                   <>
                     <h3 className="text-base font-semibold">{savedTitle}</h3>
-                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{savedText}</pre>
+                    <EpisodePlotText text={savedText} />
                   </>
                 )}
                 <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
@@ -1718,7 +1736,7 @@ export default function PitchLabStudioPage() {
                     ) : isEditingOption ? (
                       <textarea value={optionDrafts[item.id] ?? item.ideaText} onChange={(event) => setOptionDrafts((current) => ({ ...current, [item.id]: event.target.value }))} rows={8} className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-sans text-sm leading-relaxed text-foreground outline-none focus:border-emerald-500" aria-label="Edit Episode 1 revision" />
                     ) : (
-                      <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">{optionText}</pre>
+                      <EpisodePlotText text={optionText} />
                     )}
                     {!isRunning && !isFailed && (
                       <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
@@ -1754,6 +1772,10 @@ export default function PitchLabStudioPage() {
         <p className="text-sm font-medium text-muted-foreground">Pitch Lab is disabled in this environment while the Writer portal and database migration are being verified.</p>
       </main>
     );
+  }
+
+  if (session.user.role !== "admin") {
+    return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-muted-foreground">Pitch Lab is available to admins.</main>;
   }
 
   return (

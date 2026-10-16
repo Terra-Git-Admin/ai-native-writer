@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { documents, pitchIdeas, pitchSources, pitchWorkspaces, tabs } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { getAIModel, getConfiguredProviders, getPitchLabGeminiModel } from "@/lib/ai/providers";
+import { getAIModel, getConfiguredProviders, getPitchLabArgonModel } from "@/lib/ai/providers";
 import { getActivePitchLabFramework } from "@/lib/ai/pitch-lab-framework";
 import { buildPitchLabSampleIdeas, buildPitchLabSamplePremises, isPitchLabSampleMode } from "@/lib/ai/pitch-lab-samples";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
@@ -26,6 +26,7 @@ import {
   PITCH_LAB_PREMISE_COUNT,
 } from "@/lib/ai/pitch-lab-prompts";
 import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
+import { buildMinimalFreshIdeaPrompt, FRESH_IDEA_INSIGHTS, parseMinimalIdeaLines, pickMinimalIdeaHeading, PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION } from "@/lib/ai/pitch-lab-minimal-ideas";
 import { parsePitchLabEpisodePilots } from "@/lib/ai/pitch-lab-episode-pilot";
 import { assertPitchLabPilotOptionText, validatePitchLabPilotOptionBatch } from "@/lib/ai/pitch-lab-pilot-option-format";
 import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
@@ -336,6 +337,7 @@ export async function POST(req: Request) {
   const selectedPremise = typeof body?.selectedPremise === "string" ? body.selectedPremise.trim() : "";
   const selectedPremiseId = typeof body?.selectedPremiseId === "string" ? body.selectedPremiseId : "";
   const generationType = body?.generationType === "adaptation" ? "adaptation" : "framework";
+  const minimalFreshIdeas = phase === "premises" && generationType === "framework" && process.env.PITCH_LAB_IDEA_EXPERIMENT_ARM === "A";
   const adaptationStyle = body?.adaptationStyle === "close" ? "close" : "loose";
   if (phase === "pilots" && !selectedPremise) {
     return NextResponse.json({ error: "Choose an Idea before generating Pilot Options." }, { status: 400 });
@@ -417,6 +419,7 @@ export async function POST(req: Request) {
     generationType,
   });
   const instructionControlsBlock = formatPitchLabInstructionControls(instructionControls);
+  const ideaInstructionControls = minimalFreshIdeas ? undefined : instructionControls;
   let qaWarnings: PitchLabQaWarning[] = [];
 
   let parsedPremises: ParsedPremise[] | null = null;
@@ -457,7 +460,7 @@ export async function POST(req: Request) {
       const providers = await getConfiguredProviders();
       if (episodePilot) {
         if (!providers.includes("google")) return NextResponse.json({ error: "Episode 1 pilots require a configured Google/Gemini API key." }, { status: 503 });
-        const model = await getPitchLabGeminiModel();
+        const model = await getPitchLabArgonModel();
         const prompt = buildPitchLabEpisodePilotPrompt({ selectedPremise, brief: workspaceBriefToSave, instruction });
         let lastError: unknown = null;
         for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -479,19 +482,38 @@ export async function POST(req: Request) {
         }
         if (!parsedIdeas) throw lastError instanceof Error ? lastError : new Error("Episode 1 pilot generation failed.");
       } else {
-      const tasteBrief = await getActivePitchLabFramework();
-      const candidates = getPitchLabModelCandidates(providers);
-      if (!candidates.length) return NextResponse.json({ error: "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
+      const tasteBrief = minimalFreshIdeas ? "" : await getActivePitchLabFramework();
+      const candidates = phase === "premises"
+        ? (providers.includes("google") ? [{ provider: "google" as const, modelId: "gemini-4-argon" }] : [])
+        : getPitchLabModelCandidates(providers);
+      if (!candidates.length) return NextResponse.json({ error: phase === "premises" ? "Idea seeds require a configured Google/Gemini API key for Argon." : "No AI provider is configured. Ask an admin to add an API key." }, { status: 503 });
 
       let lastError: unknown = null;
       for (const candidate of candidates) {
         try {
           if (phase === "premises") {
+            if (minimalFreshIdeas) {
+              const result = await generateText({
+                model: await getPitchLabArgonModel(),
+                prompt: buildMinimalFreshIdeaPrompt(brief, instruction),
+                maxOutputTokens: 32768,
+                maxRetries: 0,
+                providerOptions: { google: { thinkingConfig: { thinkingLevel: "medium" } } },
+              });
+              parsedPremises = parseMinimalIdeaLines(result.text).map((premiseText) => ({
+                title: pickMinimalIdeaHeading(premiseText),
+                premiseText: assertPitchLabIdeaSeedText(premiseText),
+                appealLane: "",
+                transformationNotes: "",
+              }));
+              console.info("[pitch-lab] idea-experiment", { arm: "A", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, modelId: result.response.modelId, itemCount: parsedPremises.length, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens });
+              qaWarnings = [];
+            } else {
             const basePrompt = buildPitchLabPremisePrompt({ generationType, adaptationStyle, brief, instruction, sourceMaterial, instructionControls: instructionControlsBlock, writerContext: writerContextBlock });
             let parseError: unknown = null;
             for (let attempt = 0; attempt < 2; attempt += 1) {
               const result = await generateText({
-                model: await getAIModel(candidate.modelId),
+                model: await getPitchLabArgonModel(),
                 system: buildPitchLabPremiseSystemPrompt(tasteBrief),
                 prompt: attempt === 0 ? basePrompt : `${basePrompt}
 
@@ -503,11 +525,13 @@ Return exactly ${PITCH_LAB_PREMISE_COUNT} JSON items. Each premiseText must:
 - be one compact seed, 8-28 words
 - read like "FL nurse saves ML mobster's life and is offered a live-in contract"
 Do not start with A, An, or The. Do not use em dashes, semicolons, series language, episode language, or polished premise prose.`,
-                maxOutputTokens: 9000,
+                maxOutputTokens: 32768,
                 maxRetries: 0,
+                providerOptions: { google: { thinkingConfig: { thinkingLevel: "medium" } } },
               });
               try {
                 parsedPremises = parsePremises(result.text);
+                console.info("[pitch-lab] idea-seeds", { modelId: result.response.modelId, finishReason: result.finishReason, inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, reasoningTokens: result.usage.outputTokenDetails.reasoningTokens });
                 parseError = null;
                 break;
               } catch (err) {
@@ -516,6 +540,7 @@ Do not start with A, An, or The. Do not use em dashes, semicolons, series langua
             }
             if (!parsedPremises) throw parseError instanceof Error ? parseError : new Error("Idea generation failed format validation.");
             qaWarnings = scanPitchLabOutput(instructionControls, "ideas", parsedPremises.map((premise) => premise.premiseText));
+            }
           } else {
             const basePrompt = buildPitchLabPilotBatchPrompt({ generationType, adaptationStyle, brief: effectiveBrief, instruction, sourceMaterial, selectedPremise, instructionControls: instructionControlsBlock, writerContext: writerContextBlock });
             let parseError: unknown = null;
@@ -602,19 +627,21 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
             originalText: premise.premiseText,
             currentText: premise.premiseText,
             contentKind: "idea_seed",
+            generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
             turns: [{
               instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea",
               ideaText: premise.premiseText,
               createdAt: now.toISOString(),
               kind: "initial",
               contentKind: "idea_seed",
-              instructionControls,
+              generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
+              instructionControls: ideaInstructionControls,
               qaWarnings,
               writerContext,
             }],
             premise: premise.premiseText,
             adaptationNotes: [premise.appealLane, premise.transformationNotes].filter(Boolean).join(" | "),
-            instructionControls,
+            instructionControls: ideaInstructionControls,
             qaWarnings,
             writerContext,
           }),
@@ -667,7 +694,7 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
           originalText: idea.ideaText,
           currentText: idea.ideaText,
           contentKind: episodePilot ? "episode_pilot" : "pilot_option",
-          generation: episodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
+          generation: episodePilot ? { provider: "google", model: "gemini-4-argon", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
           turns: [{
             instruction: [
               `Selected idea: ${selectedPremise}`,
@@ -678,7 +705,7 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
             createdAt: now.toISOString(),
             kind: "initial",
             contentKind: episodePilot ? "episode_pilot" : "pilot_option",
-            generation: episodePilot ? { provider: "google", model: "gemini-3.1-pro-preview", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
+            generation: episodePilot ? { provider: "google", model: "gemini-4-argon", pipeline: "single-call-episode-pilot", promptVersion: PITCH_LAB_EPISODE_PROMPT_VERSION, thinkingLevel: "high" } : undefined,
             instructionControls,
             qaWarnings,
               writerContext: mergeWriterContext(writerContext, { selectedPilotOption: idea.ideaText }),

@@ -18,7 +18,7 @@ export type PitchIdeaTurn = {
 export type PitchLabContentKind = "idea_seed" | "pilot_option" | "pilot_plot" | "episode_pilot";
 
 export type PitchLabFeedback = { rating: "up" | "down"; reason?: string; updatedAt: string };
-export type PitchLabGeneration = { provider: "google"; model: string; pipeline: string; promptVersion: string; thinkingLevel: "high" };
+export type PitchLabGeneration = { provider: "google"; model: string; pipeline: string; promptVersion: string; thinkingLevel: "medium" | "high"; frameworkInsights?: string[] };
 
 export type PitchLabWriterContext = {
   workspaceBrief?: string;
@@ -73,8 +73,8 @@ function parseFeedback(value: unknown): PitchLabFeedback | undefined {
 }
 
 function parseGeneration(value: unknown): PitchLabGeneration | undefined {
-  if (!isRecord(value) || value.provider !== "google" || typeof value.model !== "string" || typeof value.pipeline !== "string" || typeof value.promptVersion !== "string" || value.thinkingLevel !== "high") return undefined;
-  return { provider: "google", model: value.model, pipeline: value.pipeline, promptVersion: value.promptVersion, thinkingLevel: "high" };
+  if (!isRecord(value) || value.provider !== "google" || typeof value.model !== "string" || typeof value.pipeline !== "string" || typeof value.promptVersion !== "string" || (value.thinkingLevel !== "medium" && value.thinkingLevel !== "high")) return undefined;
+  return { provider: "google", model: value.model, pipeline: value.pipeline, promptVersion: value.promptVersion, thinkingLevel: value.thinkingLevel, frameworkInsights: Array.isArray(value.frameworkInsights) ? value.frameworkInsights.filter((insight): insight is string => typeof insight === "string") : undefined };
 }
 
 function parseWriterContext(value: unknown): PitchLabWriterContext | undefined {
