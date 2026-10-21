@@ -6,7 +6,7 @@ This offline evaluator compares an AI first-generation script with its accepted 
 
 An accepted export is the first evaluation trigger. The existing metadata lineage writes a `final_export` snapshot and export event at that point; the earlier `first_generation` snapshot must already exist. The export UI then requests an AI-labelled report separately, so report failure does not invalidate the export link. Opening the latest report is the other trigger. Both use stored snapshots; there is no continuous background scoring.
 
-The in-app report endpoint is owner/admin only. It labels changed groups with a configured AI model, caps each request at 24 model calls, and stores the AI labels against the exact first/final snapshot pair in the final snapshot metadata. Reopening a completed report reuses those labels. Scores remain marked provisional pending human calibration; missing lineage, model failures, long changes, or a call-cap cutoff leave affected episode scores pending. The offline CLI remains available for detailed review and fixed-fixture trend analysis.
+The in-app report UI and endpoint are admin only. Non-admin document owners can still export, but their export does not request AI scoring. For admins, the report labels changed groups with a configured AI model, caps each request at 24 model calls, and stores the AI labels against the exact first/final snapshot pair in the final snapshot metadata. Reopening a completed report reuses those labels. Scores remain marked provisional pending human calibration; missing lineage, model failures, long changes, or a call-cap cutoff leave affected episode scores pending. The offline CLI remains available for detailed review and fixed-fixture trend analysis.
 
 ## Unit of comparison and score
 

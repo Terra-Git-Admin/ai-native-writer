@@ -123,6 +123,7 @@ export default function DocumentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
   const editorRef = useRef<EditorHandle>(null);
   const [doc, setDoc] = useState<DocumentData | null>(null);
   const [tabs, setTabs] = useState<TabRow[]>([]);
@@ -759,6 +760,7 @@ export default function DocumentPage() {
   );
 
   const loadFirstPassReport = useCallback(async (exportId?: string) => {
+    if (!isAdmin) return;
     setFirstPassReportLoading(true);
     setFirstPassReportError(null);
     try {
@@ -772,7 +774,7 @@ export default function DocumentPage() {
     } finally {
       setFirstPassReportLoading(false);
     }
-  }, [params.id]);
+  }, [isAdmin, params.id]);
 
   const handleCreateHandoffExport = useCallback(async () => {
     const from = Number(exportFromEpisode);
@@ -831,7 +833,7 @@ export default function DocumentPage() {
       }
       setHandoffExport(data as HandoffExportResult);
       setFirstPassReport(null);
-      void loadFirstPassReport(data.exportId);
+      if (isAdmin) void loadFirstPassReport(data.exportId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Export failed";
       clientTrace("export.client.fail", {
@@ -845,7 +847,7 @@ export default function DocumentPage() {
     } finally {
       setExportLoading(false);
     }
-  }, [exportFromEpisode, exportToEpisode, loadFirstPassReport, params.id]);
+  }, [exportFromEpisode, exportToEpisode, isAdmin, loadFirstPassReport, params.id]);
 
   const handleCopyExportUrl = useCallback(async () => {
     if (!handoffExport?.exportUrl) return;
@@ -881,7 +883,6 @@ export default function DocumentPage() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
-  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
   const predefinedLabActive = predefinedLabOpen && predefinedLabMounted;
   const sourcePaneHidden = predefinedLabActive && sourcePaneCollapsed;
   const labPaneWidth = sourcePaneHidden ? "calc(100% - 0px)" : `${Math.round(labPaneRatio * 1000) / 10}%`;
@@ -1590,7 +1591,7 @@ export default function DocumentPage() {
               </div>
             )}
 
-            {!handoffExport && (
+            {isAdmin && !handoffExport && (
               <button
                 type="button"
                 onClick={() => void loadFirstPassReport()}
@@ -1723,13 +1724,13 @@ export default function DocumentPage() {
               </div>
             )}
 
-            {firstPassReportError && (
+            {isAdmin && firstPassReportError && (
               <p className="mt-4 text-sm text-red-600 dark:text-red-400">First-pass report: {firstPassReportError}. The export is still available.</p>
             )}
-            {handoffExport && firstPassReportLoading && (
+            {isAdmin && handoffExport && firstPassReportLoading && (
               <p className="mt-4 text-sm text-muted-foreground">AI is scoring the first draft against this export. The export link is ready to use.</p>
             )}
-            {firstPassReport && (
+            {isAdmin && firstPassReport && (
               <div className="mt-4 max-h-64 overflow-auto rounded-md border border-border p-3 text-sm">
                 <div className="font-semibold">First-pass report</div>
                 <p className="mt-1 text-xs text-muted-foreground">
