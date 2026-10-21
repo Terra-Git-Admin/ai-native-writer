@@ -17,12 +17,10 @@ type StoredLabels = { rubricVersion: string; pairId: string; modelId: string; la
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.user.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const doc = await db.query.documents.findFirst({ where: eq(documents.id, id) });
   if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (doc.ownerId !== session.user.id && session.user.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const requestedExportId = new URL(req.url).searchParams.get("exportId");
   try {
