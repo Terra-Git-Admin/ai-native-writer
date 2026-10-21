@@ -68,6 +68,24 @@ interface HandoffExportResult {
   };
 }
 
+interface FirstPassReport {
+  rubricVersion: string;
+  exportId: string | null;
+  matched: number;
+  excluded: Array<{ episode: number | null; reason: string }>;
+  judgingErrors?: Array<{ episode: number; reason: string }>;
+  aiCalls?: number;
+  episodes: Array<{
+    episode: number;
+    fitScore: number | null;
+    scoreStatus: string;
+    wordEditRate: number | null;
+    changedGroups: number;
+    pendingGroups: number;
+    categoryPointsLost: Record<string, number | null>;
+  }>;
+}
+
 interface ExportEpisodeOption {
   episodeNumber: number;
   label: string;
@@ -163,6 +181,9 @@ export default function DocumentPage() {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [handoffExport, setHandoffExport] = useState<HandoffExportResult | null>(null);
+  const [firstPassReport, setFirstPassReport] = useState<FirstPassReport | null>(null);
+  const [firstPassReportLoading, setFirstPassReportLoading] = useState(false);
+  const [firstPassReportError, setFirstPassReportError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [exportFromEpisode, setExportFromEpisode] = useState("1");
   const [exportToEpisode, setExportToEpisode] = useState("");
@@ -737,6 +758,22 @@ export default function DocumentPage() {
     []
   );
 
+  const loadFirstPassReport = useCallback(async (exportId?: string) => {
+    setFirstPassReportLoading(true);
+    setFirstPassReportError(null);
+    try {
+      const query = exportId ? `?exportId=${encodeURIComponent(exportId)}` : "";
+      const response = await fetch(`/api/documents/${params.id}/first-pass-report${query}`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "Report failed");
+      setFirstPassReport(data as FirstPassReport);
+    } catch (error) {
+      setFirstPassReportError(error instanceof Error ? error.message : "Report failed");
+    } finally {
+      setFirstPassReportLoading(false);
+    }
+  }, [params.id]);
+
   const handleCreateHandoffExport = useCallback(async () => {
     const from = Number(exportFromEpisode);
     const to = Number(exportToEpisode);
@@ -793,6 +830,8 @@ export default function DocumentPage() {
         throw new Error(data?.error || "Export failed");
       }
       setHandoffExport(data as HandoffExportResult);
+      setFirstPassReport(null);
+      void loadFirstPassReport(data.exportId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Export failed";
       clientTrace("export.client.fail", {
@@ -806,7 +845,7 @@ export default function DocumentPage() {
     } finally {
       setExportLoading(false);
     }
-  }, [exportFromEpisode, exportToEpisode, params.id]);
+  }, [exportFromEpisode, exportToEpisode, loadFirstPassReport, params.id]);
 
   const handleCopyExportUrl = useCallback(async () => {
     if (!handoffExport?.exportUrl) return;
@@ -1552,6 +1591,17 @@ export default function DocumentPage() {
             )}
 
             {!handoffExport && (
+              <button
+                type="button"
+                onClick={() => void loadFirstPassReport()}
+                disabled={firstPassReportLoading}
+                className="mb-4 text-sm font-medium text-indigo-600 hover:underline disabled:opacity-60 dark:text-indigo-400"
+              >
+                {firstPassReportLoading ? "Loading report..." : "View latest first-pass report"}
+              </button>
+            )}
+
+            {!handoffExport && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
@@ -1670,6 +1720,41 @@ export default function DocumentPage() {
                 >
                   Choose a different range
                 </button>
+              </div>
+            )}
+
+            {firstPassReportError && (
+              <p className="mt-4 text-sm text-red-600 dark:text-red-400">First-pass report: {firstPassReportError}. The export is still available.</p>
+            )}
+            {handoffExport && firstPassReportLoading && (
+              <p className="mt-4 text-sm text-muted-foreground">AI is scoring the first draft against this export. The export link is ready to use.</p>
+            )}
+            {firstPassReport && (
+              <div className="mt-4 max-h-64 overflow-auto rounded-md border border-border p-3 text-sm">
+                <div className="font-semibold">First-pass report</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {firstPassReport.matched} matched episode(s), {firstPassReport.excluded.length} excluded. AI scores are provisional until calibrated against human review.
+                </p>
+                {firstPassReport.episodes.map((episode) => (
+                  <div key={episode.episode} className="mt-2 border-t border-border pt-2">
+                    Episode {episode.episode}: fit {episode.fitScore === null ? "pending" : `${episode.fitScore}/100 (${episode.scoreStatus})`} · word edits {episode.wordEditRate ?? "—"}% · {episode.pendingGroups} changes awaiting labels
+                    {episode.fitScore !== null && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Points lost: {Object.entries(episode.categoryPointsLost).filter(([, value]) => value && value > 0).map(([name, value]) => `${name.replaceAll("_", " ")} ${value}`).join(", ") || "none"}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {firstPassReport.judgingErrors?.map((item, index) => (
+                  <div key={`${item.episode}-${index}`} className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                    Episode {item.episode}: {item.reason.replaceAll("_", " ")}
+                  </div>
+                ))}
+                {firstPassReport.excluded.map((item, index) => (
+                  <div key={`${item.episode}-${index}`} className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                    Episode {item.episode ?? "?"}: {item.reason.replaceAll("_", " ")}
+                  </div>
+                ))}
               </div>
             )}
           </div>
