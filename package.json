@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "lineage:export-report": "node scripts/lineage-export-report.cjs",
+    "eval:first-pass": "node scripts/first-pass-eval.cjs",
+    "eval:first-pass:calibrate": "node scripts/first-pass-eval-calibrate.cjs",
+    "eval:first-pass:trend": "node scripts/first-pass-eval-trend.cjs",
+    "test:first-pass": "node scripts/first-pass-eval.test.cjs && node scripts/first-pass-eval-db.test.cjs",
     "test:plot-lab": "node --experimental-strip-types scripts/plot-lab-regression.test.mjs",
     "test:pitch-lab": "node --experimental-strip-types scripts/pitch-lab-regression.test.mjs"
   },
