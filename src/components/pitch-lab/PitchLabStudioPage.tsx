@@ -1774,10 +1774,6 @@ export default function PitchLabStudioPage() {
     );
   }
 
-  if (session.user.role !== "admin") {
-    return <main className="mx-auto max-w-5xl px-6 py-12 text-sm text-muted-foreground">Pitch Lab is available to admins.</main>;
-  }
-
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background">
       {renderConfirmDialog()}
