@@ -4,7 +4,7 @@ import fs from "node:fs";
 import {
   assertPitchLabIdeaSeedText,
 } from "../src/lib/ai/pitch-lab-idea-seed-format.ts";
-import { buildMinimalFreshIdeaPrompt, parseMinimalIdeaLines, pickMinimalIdeaHeading } from "../src/lib/ai/pitch-lab-minimal-ideas.ts";
+import { buildMinimalFreshIdeaPrompt, buildMinimalFreshIdeaBatchRegenerationPrompt, parseMinimalIdeaLines, pickMinimalIdeaHeading } from "../src/lib/ai/pitch-lab-minimal-ideas.ts";
 import {
   assertPitchLabPilotOptionText,
   parsePitchLabPilotOptionText,
@@ -108,6 +108,17 @@ function testMinimalIdeaExperiment() {
   assert.match(prompt, /secret identity/);
   assert.match(prompt, /Give me 10 single line ideas for Pilot Episode 1/);
   assert.doesNotMatch(prompt, /premiseText|start with FL|8-28 words|Taste Brief|JSON/);
+  const regenerationPrompt = buildMinimalFreshIdeaBatchRegenerationPrompt(
+    "secret identity",
+    "Make these ideas darker, with no wedding setup.",
+    ["A surgeon hides her identity.", "An heiress takes a clerk job."],
+  );
+  assert.ok(regenerationPrompt.startsWith(prompt.replace("Give me 10 single line ideas for Pilot Episode 1", "Make these ideas darker, with no wedding setup.")));
+  assert.match(regenerationPrompt, /Replace the current set with a new set/);
+  assert.match(regenerationPrompt, /Make these ideas darker, with no wedding setup/);
+  assert.match(regenerationPrompt, /1\. A surgeon hides her identity/);
+  assert.match(regenerationPrompt, /otherwise return 2 ideas/);
+  assert.doesNotMatch(regenerationPrompt, /premiseText|start with FL|8-28 words|Taste Brief/);
   const ideas = parseMinimalIdeaLines("1. A surgeon hides her identity.\n2. The heiress takes a clerk job.\n");
   assert.deepEqual(ideas, ["A surgeon hides her identity.", "The heiress takes a clerk job."]);
   assert.equal(pickMinimalIdeaHeading("To survive a scandal, an exiled heiress disguises herself as a paralegal."), "Heiress");

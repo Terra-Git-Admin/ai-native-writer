@@ -1,8 +1,9 @@
-// Pitch Lab minimal Idea experiment version 1.2, updated 2026-10-16.
+// Pitch Lab minimal Idea experiment version 1.3, updated 2026-10-27.
+// Changelog 2026-10-27 (1.3): regenerate a Fresh Idea batch against its current set while preserving the one-line generation contract.
 // Changelog 2026-10-16 (1.2): make lead genders legible; title cards with a word from the generated idea.
 // Changelog 2026-10-16: name the Episode 1 plot task and one-line output so a short writer seed does not elicit series summaries.
 // Changelog 2026-10-16 (1.0): one-call Fresh Idea prompt with a frozen framework packet and free-form line output.
-export const PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION = "1.2";
+export const PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION = "1.3";
 
 // Frozen from the Pitch Lab Taste Brief for the first Fresh comparison. These are
 // inputs to the experiment, not output-shape rules or an automatic insight picker.
@@ -20,6 +21,18 @@ ${FRESH_IDEA_INSIGHTS.join("\n")}
 
 Writer instruction:
 ${writerInput}`;
+}
+
+export function buildMinimalFreshIdeaBatchRegenerationPrompt(brief: string, instruction: string, currentIdeas: string[]): string {
+  const currentSet = currentIdeas.map((idea, index) => `${index + 1}. ${idea}`).join("\n");
+  return `${buildMinimalFreshIdeaPrompt(brief, instruction)}
+
+This is Regenerate all ideas. Replace the current set with a new set of possible Episode 1 plots. The latest writer instruction describes what should change; apply it across the new set. Use the current ideas to understand references such as "these ideas" and to avoid returning the same set with cosmetic edits. Do not rewrite each old idea one by one. Keep the original writer direction unless the latest instruction changes it.
+
+Current ideas:
+${currentSet || "None."}
+
+Return one new idea per line, with no titles, JSON, explanations, or old-to-new mapping. If the writer specifies a count, follow it; otherwise return ${currentIdeas.length || "a useful number of"} ideas.`;
 }
 
 const HEADING_WORDS = new Set([
