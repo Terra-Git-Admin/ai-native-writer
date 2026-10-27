@@ -587,7 +587,7 @@ export default function PitchLabStudioPage() {
     return <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${toneClass} ${extra}`}>{label}</span>;
   }
 
-  async function generatePremises(instructionOverride = "") {
+  async function generatePremises(instructionOverride = "", regenerateAll = false) {
     const instruction = instructionOverride.trim();
     setConfirmDialog(null);
     setDocDropdownOpen(false);
@@ -605,6 +605,7 @@ export default function PitchLabStudioPage() {
           sourceUrl: generationMode === "adaptation" ? sourceUrl : "",
           adaptationStyle: generationMode === "adaptation" && hasSource ? adaptationStyle : null,
           instruction,
+          regenerateAll,
         }),
       });
       const data = await response.json().catch(() => null);
@@ -854,7 +855,7 @@ export default function PitchLabStudioPage() {
     setRegenerateAllIdeasDialog(null);
     setPilotInstructionId(null);
     setEditingPremiseId(null);
-    void generatePremises(instructionOverride);
+    void generatePremises(instructionOverride, true);
   }
 
   async function saveIdea(instructionOverride = ideaInstructions, ideaTextOverride?: string) {

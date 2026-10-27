@@ -26,7 +26,7 @@ import {
   PITCH_LAB_PREMISE_COUNT,
 } from "@/lib/ai/pitch-lab-prompts";
 import { assertPitchLabIdeaSeedText } from "@/lib/ai/pitch-lab-idea-seed-format";
-import { buildMinimalFreshIdeaPrompt, FRESH_IDEA_INSIGHTS, parseMinimalIdeaLines, pickMinimalIdeaHeading, PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION } from "@/lib/ai/pitch-lab-minimal-ideas";
+import { buildMinimalFreshIdeaPrompt, buildMinimalFreshIdeaBatchRegenerationPrompt, FRESH_IDEA_INSIGHTS, parseMinimalIdeaLines, pickMinimalIdeaHeading, PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION } from "@/lib/ai/pitch-lab-minimal-ideas";
 import { parsePitchLabEpisodePilots } from "@/lib/ai/pitch-lab-episode-pilot";
 import { assertPitchLabPilotOptionText, validatePitchLabPilotOptionBatch } from "@/lib/ai/pitch-lab-pilot-option-format";
 import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
@@ -333,6 +333,7 @@ export async function POST(req: Request) {
   const pastedSource = typeof body?.pastedSource === "string" ? body.pastedSource.trim() : "";
   const sourceUrl = typeof body?.sourceUrl === "string" ? body.sourceUrl.trim() : "";
   const instruction = typeof body?.instruction === "string" ? body.instruction.trim() : "";
+  const regenerateAll = body?.regenerateAll === true;
   const phase: PitchLabPhase = body?.phase === "pilots" ? "pilots" : "premises";
   const selectedPremise = typeof body?.selectedPremise === "string" ? body.selectedPremise.trim() : "";
   const selectedPremiseId = typeof body?.selectedPremiseId === "string" ? body.selectedPremiseId : "";
@@ -370,6 +371,14 @@ export async function POST(req: Request) {
     .from(pitchWorkspaces)
     .where(eq(pitchWorkspaces.ownerId, session.user.id))
     .get();
+  const currentFreshIdeas = minimalFreshIdeas && regenerateAll && workspaceRow?.id
+    ? db.select({ ideaText: pitchIdeas.ideaText }).from(pitchIdeas)
+      .where(and(eq(pitchIdeas.workspaceId, workspaceRow.id), eq(pitchIdeas.status, "premise")))
+      .orderBy(pitchIdeas.position).all()
+      .map((row) => parsePitchIdeaEnvelope(row.ideaText))
+      .filter((idea) => idea.generation?.pipeline === "minimal-insight-one-call" || idea.generation?.pipeline === "minimal-insight-batch-regeneration")
+      .map((idea) => idea.currentText)
+    : [];
   const selectedPremiseEnvelope = phase === "pilots" && selectedPremiseId && workspaceRow?.id
     ? parsePitchIdeaEnvelope(db.select({ ideaText: pitchIdeas.ideaText })
       .from(pitchIdeas)
@@ -495,7 +504,9 @@ export async function POST(req: Request) {
             if (minimalFreshIdeas) {
               const result = await generateText({
                 model: await getPitchLabArgonModel(),
-                prompt: buildMinimalFreshIdeaPrompt(brief, instruction),
+                prompt: regenerateAll
+                  ? buildMinimalFreshIdeaBatchRegenerationPrompt(brief, instruction, currentFreshIdeas)
+                  : buildMinimalFreshIdeaPrompt(brief, instruction),
                 maxOutputTokens: 32768,
                 maxRetries: 0,
                 providerOptions: { google: { thinkingConfig: { thinkingLevel: "medium" } } },
@@ -627,14 +638,14 @@ Keep each option simple: one trigger, one complication, one next action. Do not 
             originalText: premise.premiseText,
             currentText: premise.premiseText,
             contentKind: "idea_seed",
-            generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
+            generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: regenerateAll ? "minimal-insight-batch-regeneration" : "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
             turns: [{
               instruction: instruction ? `Idea batch instruction: ${instruction}` : "Idea",
               ideaText: premise.premiseText,
               createdAt: now.toISOString(),
               kind: "initial",
               contentKind: "idea_seed",
-              generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
+              generation: minimalFreshIdeas ? { provider: "google", model: "gemini-4-argon", pipeline: regenerateAll ? "minimal-insight-batch-regeneration" : "minimal-insight-one-call", promptVersion: PITCH_LAB_MINIMAL_IDEA_PROMPT_VERSION, thinkingLevel: "medium", frameworkInsights: [...FRESH_IDEA_INSIGHTS] } : undefined,
               instructionControls: ideaInstructionControls,
               qaWarnings,
               writerContext,
