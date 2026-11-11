@@ -6,12 +6,15 @@ import { eq } from "drizzle-orm";
 import { seedPromptsFromCode } from "@/lib/ai/seed-prompts";
 import { PITCH_LAB_TASTE_BRIEF_PROMPT_ID } from "@/lib/ai/pitch-lab-framework";
 
+const RETIRED_PROMPT_IDS = new Set(["prepare_character_questionnaire"]);
+
 function visiblePromptsForSession<T extends { id: string }>(
   rows: T[],
   session: { user?: { role?: string } } | null
 ): T[] {
-  if (session?.user?.role === "admin") return rows;
-  return rows.filter((row) => row.id !== PITCH_LAB_TASTE_BRIEF_PROMPT_ID);
+  const activeRows = rows.filter((row) => !RETIRED_PROMPT_IDS.has(row.id));
+  if (session?.user?.role === "admin") return activeRows;
+  return activeRows.filter((row) => row.id !== PITCH_LAB_TASTE_BRIEF_PROMPT_ID);
 }
 
 // GET /api/prompts — list all prompts (readable by everyone)
@@ -46,6 +49,13 @@ export async function PUT(req: Request) {
     return NextResponse.json(
       { error: "id and content are required" },
       { status: 400 }
+    );
+  }
+
+  if (RETIRED_PROMPT_IDS.has(id)) {
+    return NextResponse.json(
+      { error: "Character Questionnaire has been retired.", code: "FEATURE_RETIRED" },
+      { status: 410 }
     );
   }
 
