@@ -10,7 +10,6 @@ import {
   validateJobOutput,
 } from "@/lib/ai/job-output";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
-import { mergeMissingCharacterProfiles } from "@/lib/ai/characters";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 import { contentHash, logEvent } from "@/lib/saveTrace";
 
@@ -146,6 +145,13 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  if (job.promptKind === "prepare_character_questionnaire") {
+    return NextResponse.json(
+      { error: "Character Questionnaire has been retired.", code: "FEATURE_RETIRED" },
+      { status: 410 }
+    );
+  }
+
   const result = parseJobResultJson(job.resultJson);
   if (result.apply) {
     if (result.apply.clientApplyId === clientApplyId) {
@@ -210,8 +216,6 @@ export async function POST(
   const label =
     job.promptKind === "next_reference_episode"
       ? "Create Pre-defined Episode"
-      : job.promptKind === "prepare_character_questionnaire"
-        ? "Prepare Character Questionnaire"
       : job.promptKind;
 
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);
@@ -233,8 +237,6 @@ export async function POST(
       outgoing = existingTagged.trim()
         ? `${existingTagged.trim()}\n\n${result.content.trim()}`
         : result.content.trim();
-    } else if (job.promptKind === "prepare_character_questionnaire") {
-      outgoing = mergeMissingCharacterProfiles(existingTagged, outgoing);
     }
     jsonString = JSON.stringify(taggedTextToTiptapDoc(outgoing));
 

@@ -530,6 +530,26 @@ export default function DocumentPage() {
     return fetchTabs();
   }, [fetchTabs]);
 
+  const handleOpenPredefinedLab = useCallback(async (): Promise<void> => {
+    const refreshedTabs = await handlePredefinedLabRefreshTabs();
+    if (refreshedTabs.length === 0) {
+      throw new Error("Could not refresh tabs before opening Predefined Lab.");
+    }
+
+    setPredefinedLabMounted(true);
+    setPredefinedLabOpen(true);
+    setPlotLabActive(false);
+    setAiSidebarOpen(false);
+    setCommentSidebarOpen(false);
+    setVersionHistoryOpen(false);
+    setPromptsOpen(false);
+    setResearchAgentOpen(false);
+    setOutsidersPanelRequest(null);
+    setQualityPanelRequest(null);
+    setNarrativeScanOpen(false);
+    setPlotScanOpen(false);
+  }, [handlePredefinedLabRefreshTabs]);
+
   const handlePredefinedLabSaveSource = useCallback(async (): Promise<boolean> => {
     try {
       await editorRef.current?.flushPendingSave?.();
@@ -1028,10 +1048,14 @@ export default function DocumentPage() {
                     event.currentTarget.closest("details")?.removeAttribute("open");
                     const nextOpen = !predefinedLabOpen;
                     if (nextOpen) {
-                      setPredefinedLabMounted(true);
-                      await handlePredefinedLabRefreshTabs();
+                      try {
+                        await handleOpenPredefinedLab();
+                      } catch {
+                        // Keep the current workspace visible if the lab cannot initialize.
+                      }
+                      return;
                     }
-                    setPredefinedLabOpen(nextOpen);
+                    setPredefinedLabOpen(false);
                     setPlotLabActive(false);
                     setAiSidebarOpen(false);
                     setCommentSidebarOpen(false);
@@ -1437,6 +1461,7 @@ export default function DocumentPage() {
               canUsePlotLab={plotLabAccess.canUsePlotLab}
               aiJob={aiJob}
               onAIJobApplied={handleAIJobApplied}
+              onOpenPredefinedLab={handleOpenPredefinedLab}
               onFlushPendingSave={async () => {
                 await editorRef.current?.flushPendingSave?.();
               }}

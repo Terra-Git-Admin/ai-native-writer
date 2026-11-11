@@ -5,7 +5,6 @@ import { prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { logTrace } from "@/lib/saveTrace";
-import { getCharacterQuestionnaireStatus } from "@/lib/ai/actions";
 import {
   EDIT_SYSTEM_PROMPT,
   DRAFT_SYSTEM_PROMPT,
@@ -122,12 +121,6 @@ const ADMIN_ONLY_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "pipe_continuation_logic",
   "pipe_continuation_synth",
 ]);
-const PERSONA_DEPENDENT_MODES: ReadonlySet<Mode> = new Set<Mode>([
-  "chat",
-  "draft",
-  "edit",
-  "feedback",
-]);
 const PREDEFINED_LAB_DIALOGUE_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "predef_lab_dialogue_design",
   "predef_lab_dialogue_pass",
@@ -213,19 +206,6 @@ export async function POST(req: Request) {
     const plotLabAccess = await getPlotLabAccess(session, { documentId });
     if (!plotLabAccess.canUsePlotLab) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
-    }
-  }
-
-  if (PERSONA_DEPENDENT_MODES.has(safeMode) && !documentId) {
-    return new Response(JSON.stringify({ error: "documentId is required" }), { status: 400 });
-  }
-  if (PERSONA_DEPENDENT_MODES.has(safeMode) && documentId) {
-    const characterState = await getCharacterQuestionnaireStatus(documentId);
-    if (characterState.needsPreparation || characterState.incompleteCharacters.length > 0) {
-      return new Response(JSON.stringify({
-        error: "Complete the Character Questionnaire for every major character before triggering other AI agents.",
-        code: "CHARACTER_QUESTIONNAIRE_INCOMPLETE",
-      }), { status: 409 });
     }
   }
 

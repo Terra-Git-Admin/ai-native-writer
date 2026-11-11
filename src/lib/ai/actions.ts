@@ -20,13 +20,11 @@ import {
   extractEpisodeNumber,
   type H3Section,
 } from "@/lib/ai/context-engine";
-import { parseCharacterProfiles } from "@/lib/ai/characters";
 import {
   PLOT_CHUNKS_SYSTEM_PROMPT,
   NEXT_EPISODE_PLOT_SYSTEM_PROMPT,
   NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
   EARLY_REFERENCE_EPISODE_SYSTEM_PROMPT,
-  CHARACTER_QUESTIONNAIRE_PREP_SYSTEM_PROMPT,
   PILOT_EPISODE_SYSTEM_PROMPT,
   FORMAT_SYSTEM_PROMPT,
   SERIES_SKELETON_SYSTEM_PROMPT,
@@ -385,59 +383,6 @@ ${
   return userMessage;
 }
 
-async function loadPrepareCharacterQuestionnaireContext(input: ActionInput): Promise<string> {
-  const docTabs = await loadDocumentTabs(input.documentId);
-  if (!docTabs.characters) throw new Error("Characters tab is missing.");
-
-  const plotSections = splitTabByH3(tiptapJsonToTagged(docTabs.microdramaPlots?.content ?? null));
-  const refSections = splitTabByH3(tiptapJsonToTagged(docTabs.predefinedEpisodes?.content ?? null));
-  const lastRefN = refSections.reduce((max, section) => {
-    const n = extractEpisodeNumber(section.title);
-    return n != null && n > max ? n : max;
-  }, 0) || refSections.filter((section) => section.content.replace(/\s/g, "").length > 100).length;
-  const targetN = lastRefN + 1;
-  const plot = plotSections.find((section) => extractEpisodeNumber(section.title) === targetN)
-    ?? plotSections[targetN - 1]
-    ?? plotSections[plotSections.length - 1];
-  if (!plot || plot.content.replace(/\s/g, "").length < 60) {
-    throw new Error(`Add a complete Microdrama Plot for Episode ${targetN} before preparing character profiles.`);
-  }
-
-  const characters = tiptapJsonToTagged(docTabs.characters.content ?? null);
-  const referencesNewestFirst = refSections.slice().reverse();
-  const sections = [
-    `## Existing Characters tab (preserve every real character name and established fact; ignore generic placeholders such as "Character Name")\n${characters || "[H1] Characters"}`,
-    `## Predefined Episodes (all ${referencesNewestFirst.length}, newest to oldest; source of existing cast names and established behavior)\n${referencesNewestFirst.length ? referencesNewestFirst.map((section) => section.content).join("\n\n") : "(none yet)"}`,
-    `## Microdrama Plot for Episode ${extractEpisodeNumber(plot.title) ?? targetN} (use for tentative starting points; if this is an earlier plot, do not imply it is the next episode)\n${plot.content}`,
-  ];
-  if (input.userGuidance?.trim()) sections.unshift(`## Writer guidance\n${input.userGuidance.trim()}`);
-  sections.push("Task: Identify the major named cast from the existing Characters tab and Predefined Episodes, as in character entity extraction. Use exact spellings; exclude locations and generic labels. Return a complete Characters tab with one [H2] per major character and one brief [P] Story starting point grounded in the plot and existing episodes. Do not add questionnaire questions, answer placeholders, sample dialogue, or speculative personality/voice claims. Do not omit an existing named major character. Do not add minor episode-only extras. Do not write or change any episode.");
-  return sections.join("\n\n");
-}
-
-export async function getCharacterQuestionnaireStatus(documentId: string): Promise<{
-  needsPreparation: boolean;
-  incompleteCharacters: string[];
-}> {
-  const docTabs = await loadDocumentTabs(documentId);
-  const tagged = tiptapJsonToTagged(docTabs.characters?.content ?? null);
-  const characters = parseCharacterProfiles(tagged);
-
-  if (!characters.length) return { needsPreparation: true, incompleteCharacters: [] };
-  const required: string[][] = [["Personality"], ["Voice"], ["Sample Dialogue"], ["Emotional Dialogue", "Relationships"]];
-  const isSkipped = (body: string) =>
-    /^\[P\]\s*(?:Profile\s+)?Status:\s*Skipped\b/im.test(body);
-  const incompleteCharacters = characters.filter(({ body }) => required.some((labels) => {
-    if (isSkipped(body)) return false;
-    const line = labels.map((label) =>
-      body.match(new RegExp(`^\\[P\\]\\s*${label}:\\s*(.*)$`, "im"))?.[1]?.trim() ?? ""
-    ).find(Boolean) ?? "";
-    return !line || /^\[.*\]$/.test(line) || /your answer|write two short lines/i.test(line) || /^(?:what drives them|how do they speak|for each key person|for each major person|write two lines|personality q|voice q|relationship q)/i.test(line);
-  })).map(({ name }) => name);
-
-  return { needsPreparation: false, incompleteCharacters };
-}
-
 // ─── pilot_episode ───
 //
 // Generates THREE full predefined Episode 1 variants from Original Research
@@ -709,12 +654,6 @@ const ACTIONS: Record<PromptKind, Action> = {
     systemPromptId: "next_reference_episode",
     systemPromptFallback: NEXT_REFERENCE_EPISODE_SYSTEM_PROMPT,
     loadContext: loadNextReferenceEpisodeContext,
-  },
-  prepare_character_questionnaire: {
-    kind: "prepare_character_questionnaire",
-    systemPromptId: "prepare_character_questionnaire",
-    systemPromptFallback: CHARACTER_QUESTIONNAIRE_PREP_SYSTEM_PROMPT,
-    loadContext: loadPrepareCharacterQuestionnaireContext,
   },
   pilot_episode: {
     kind: "pilot_episode",

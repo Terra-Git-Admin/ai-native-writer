@@ -10,8 +10,7 @@ export type JobKind =
   | "format_tab"
   | "series_skeleton"
   | "series_skeleton_predefined"
-  | "series_skeleton_auto"
-  | "prepare_character_questionnaire";
+  | "series_skeleton_auto";
 
 export type JobStatus =
   | "idle"

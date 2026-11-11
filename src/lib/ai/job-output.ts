@@ -1,4 +1,3 @@
-import { parseCharacterProfiles } from "@/lib/ai/characters";
 import type { PromptKind } from "@/lib/ai/jobs";
 
 export interface JobResultJson {
@@ -24,7 +23,7 @@ export function parseJobResultJson(raw: string | null): JobResultJson {
 }
 
 export function applyModeForPromptKind(kind: string): "replace" | "append" {
-  return kind === "format_tab" || kind === "prepare_character_questionnaire" ? "replace" : "append";
+  return kind === "format_tab" ? "replace" : "append";
 }
 
 export interface DialogueCapResult {
@@ -119,15 +118,6 @@ export function validateJobOutput(
         ok: false,
         reason: "AI output was incomplete. Nothing was appended.",
       };
-    }
-  }
-
-  if (kind === "prepare_character_questionnaire") {
-    const hasCharactersHeading = /^\[H1\]\s*Characters\s*$/im.test(trimmed);
-    const headings = parseCharacterProfiles(trimmed).map((profile) => profile.name);
-    const hasQuestionnaireText = /Personality Q:|Voice Q:|Personality answer:|Voice answer:|Sample dialogue answer:|Relationship Q|Your answer/i.test(trimmed);
-    if (trimmed.length < 40 || !hasCharactersHeading || headings.length === 0 || hasQuestionnaireText) {
-      return { ok: false, reason: "Character cast preparation was incomplete. Nothing was replaced." };
     }
   }
 

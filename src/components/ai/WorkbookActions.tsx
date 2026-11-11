@@ -89,5 +89,4 @@ export const WORKBOOK_ACTION_LABELS: Record<JobKind, string> = {
   series_skeleton: "Skeleton — From Research",
   series_skeleton_predefined: "Skeleton — From Predefined",
   series_skeleton_auto: "Create / Update Skeleton",
-  prepare_character_questionnaire: "Prepare Character Questionnaire",
 };
