@@ -64,6 +64,9 @@ export const documents = sqliteTable("documents", {
   // content is the source of truth going forward.
   content: text("content"),
   activeTabId: text("active_tab_id"),
+  orientation: text("orientation", { enum: ["portrait", "landscape"] })
+    .notNull()
+    .default("portrait"),
   ownerId: text("owner_id")
     .notNull()
     .references(() => users.id),

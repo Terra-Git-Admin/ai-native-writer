@@ -5,6 +5,7 @@ import { documents, tabs, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
 import { desc, eq, sql } from "drizzle-orm";
 import { buildCanonicalTabRows, CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
+import { isDocumentOrientation } from "@/lib/document-orientation";
 
 // GET /api/documents — list all documents with owner info + recent comment count
 export async function GET() {
@@ -19,6 +20,7 @@ export async function GET() {
     .select({
       id: documents.id,
       title: documents.title,
+      orientation: documents.orientation,
       ownerId: documents.ownerId,
       ownerName: users.name,
       ownerImage: users.image,
@@ -45,6 +47,13 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
+  if (body.orientation !== undefined && !isDocumentOrientation(body.orientation)) {
+    return NextResponse.json(
+      { error: "orientation must be portrait or landscape" },
+      { status: 400 }
+    );
+  }
+  const orientation = body.orientation ?? "portrait";
   const id = nanoid(12);
   const now = new Date();
 
@@ -57,6 +66,7 @@ export async function POST(req: Request) {
   await db.insert(documents).values({
     id,
     title: body.title || "Untitled",
+    orientation,
     content: null,
     ownerId: session.user.id,
     activeTabId: firstTabId,
@@ -67,5 +77,5 @@ export async function POST(req: Request) {
 
   await db.insert(tabs).values(rows);
 
-  return NextResponse.json({ id });
+  return NextResponse.json({ id, orientation });
 }

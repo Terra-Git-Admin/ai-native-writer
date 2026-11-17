@@ -5,6 +5,7 @@ import type { TabRow } from "@/components/editor/TabRail";
 import { splitTabByH3, tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { clientTrace } from "@/lib/clientTrace";
 import { handleTextareaLineMoveKeyDown } from "@/lib/editing/line-move";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 type LabMode =
   | "predef_lab_beats"
@@ -79,6 +80,7 @@ interface ConfirmDialogState {
 interface PredefinedLabStageWorkspaceProps {
   tabs: TabRow[];
   documentId: string;
+  orientation: DocumentOrientation;
   modelId: string;
   thinking: boolean;
   onRefreshTabs?: () => Promise<TabRow[]>;
@@ -222,15 +224,21 @@ function countDialogueLines(text: string): number {
     .length;
 }
 
-const DEFAULT_PROMPT_BOX_INSTRUCTION =
+const PORTRAIT_PROMPT_BOX_INSTRUCTION =
   "Write Episode in the same microdrama format (about 1 min long episode). Follow the given outline for the plot above. Have approx 12 lines of dialogue (or internal monologues) in the episode. Dialogues and internal monologues should escalate.";
 
-function buildPromptBoxValue(selectedPlot: SectionOption): string {
-  return `Target Episode:
+const LANDSCAPE_PROMPT_BOX_INSTRUCTION =
+  "Write this approximately 2-minute story milestone in the established landscape format. Follow the selected plot faithfully and move the chapter forward through cinematic action, spatially clear staging, environment, dialogue, and internal voice where useful. Escalate toward the chapter's eventual monetization cliffhanger without forcing this milestone to end on its own cliffhanger.";
+
+function buildPromptBoxValue(selectedPlot: SectionOption, orientation: DocumentOrientation): string {
+  const unitLabel = orientation === "landscape" ? "Target Milestone" : "Target Episode";
+  const instruction =
+    orientation === "landscape" ? LANDSCAPE_PROMPT_BOX_INSTRUCTION : PORTRAIT_PROMPT_BOX_INSTRUCTION;
+  return `${unitLabel}:
 ${selectedPlot.content.trim()}
 
 Instruction:
-${DEFAULT_PROMPT_BOX_INSTRUCTION}`;
+${instruction}`;
 }
 
 function contentFingerprint(value: string | null | undefined): string {
@@ -356,6 +364,7 @@ The Characters tab is intentionally excluded. Use selected previous predefined e
 export default function PredefinedLabStageWorkspace({
   tabs,
   documentId,
+  orientation,
   modelId,
   thinking,
   onRefreshTabs,
@@ -482,9 +491,9 @@ export default function PredefinedLabStageWorkspace({
       return;
     }
     if (!selectedPlot || promptLoadedPlotIdRef.current === selectedPlotId) return;
-    setInstruction(buildPromptBoxValue(selectedPlot));
+    setInstruction(buildPromptBoxValue(selectedPlot, orientation));
     promptLoadedPlotIdRef.current = selectedPlotId;
-  }, [selectedPlot, selectedPlotId]);
+  }, [orientation, selectedPlot, selectedPlotId]);
 
   useEffect(() => {
     if (!selectedPlotId) {

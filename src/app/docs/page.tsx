@@ -7,10 +7,13 @@ import Link from "next/link";
 import PromptEditor from "@/components/settings/PromptEditor";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
+import { OrientationBadge } from "@/components/documents/OrientationControl";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 interface Document {
   id: string;
   title: string;
+  orientation: DocumentOrientation;
   ownerId: string;
   ownerName: string | null;
   ownerImage: string | null;
@@ -37,6 +40,7 @@ export default function Home() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -82,14 +86,14 @@ export default function Home() {
   // got navigated to /doc/undefined which then redirected back to /. That
   // looked like "the new-document button doesn't work" and was invisible
   // for hours. Surface the real error.
-  const createDocument = async () => {
+  const createDocument = async (orientation: DocumentOrientation) => {
     setCreateError(null);
     setCreating(true);
     try {
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ orientation }),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
@@ -245,14 +249,17 @@ export default function Home() {
 
             {/* Your Documents */}
             <section className="mb-10">
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold">Your Documents</h2>
                 <button
-                  onClick={createDocument}
+                  onClick={() => {
+                    setCreateError(null);
+                    setCreateDialogOpen(true);
+                  }}
                   disabled={creating}
-                  className="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:bg-foreground/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="min-h-11 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {creating ? "Creating..." : "+ New Document"}
+                  + New Document
                 </button>
               </div>
 
@@ -275,11 +282,14 @@ export default function Home() {
                 <div className="rounded-lg border border-dashed border-border py-10 text-center">
                   <p className="text-muted-foreground">No documents yet</p>
                   <button
-                    onClick={createDocument}
+                    onClick={() => {
+                      setCreateError(null);
+                      setCreateDialogOpen(true);
+                    }}
                     disabled={creating}
                     className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-60"
                   >
-                    {creating ? "Creating..." : "Create your first document"}
+                    Create your first document
                   </button>
                 </div>
               ) : (
@@ -296,6 +306,69 @@ export default function Home() {
                 </div>
               )}
             </section>
+
+            {createDialogOpen && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="create-document-title"
+              >
+                <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+                  <h2 id="create-document-title" className="text-lg font-semibold text-foreground">
+                    What are you writing?
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Choose the format for this document. You can change it later from Admin; existing writing will not be rewritten.
+                  </p>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => void createDocument("portrait")}
+                      disabled={creating}
+                      className="min-h-28 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-indigo-400 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-indigo-950/30"
+                    >
+                      <span className="block font-semibold text-foreground">Portrait</span>
+                      <span className="mt-1 block text-sm leading-5 text-muted-foreground">
+                        Vertical microdrama with short, cliffhanger-driven episodes.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void createDocument("landscape")}
+                      disabled={creating}
+                      className="min-h-28 rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-indigo-400 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-indigo-950/30"
+                    >
+                      <span className="block font-semibold text-foreground">Landscape</span>
+                      <span className="mt-1 block text-sm leading-5 text-muted-foreground">
+                        Cinematic milestones that build into 8–10 minute chapters.
+                      </span>
+                    </button>
+                  </div>
+
+                  {createError && (
+                    <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                      {createError}
+                    </p>
+                  )}
+
+                  <div className="mt-5 flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">
+                      {creating ? "Creating document…" : "No format is selected by default."}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setCreateDialogOpen(false)}
+                      disabled={creating}
+                      className="min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Other Documents */}
             <section>
@@ -348,6 +421,7 @@ function DocRow({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="font-medium truncate">{doc.title || "Untitled"}</p>
+              <OrientationBadge orientation={doc.orientation} />
               {doc.recentCommentCount > 0 && (
                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-xs font-bold text-white">
                   {doc.recentCommentCount}

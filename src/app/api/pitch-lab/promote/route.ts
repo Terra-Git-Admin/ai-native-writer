@@ -10,6 +10,7 @@ import { getPitchLabContentState } from "@/lib/ai/pitch-lab-content-contract";
 import { requirePitchLabAccess } from "@/lib/pitch-lab-access";
 import { ensurePitchLabOwner } from "@/lib/pitch-lab-owner";
 import { cleanPitchLabTitle, isValidPitchLabTitle } from "@/lib/ai/pitch-lab-prompts";
+import { isDocumentOrientation } from "@/lib/document-orientation";
 
 function paragraphDoc(title: string, ideaText: string) {
   return JSON.stringify({
@@ -51,6 +52,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const ideaId = typeof body?.ideaId === "string" ? body.ideaId : "";
   const title = typeof body?.title === "string" ? cleanPitchLabTitle(body.title) : "";
+  if (body?.orientation !== undefined && !isDocumentOrientation(body.orientation)) {
+    return NextResponse.json({ error: "orientation must be portrait or landscape" }, { status: 400 });
+  }
+  const orientation = body?.orientation ?? "portrait";
   if (!ideaId || !title) return NextResponse.json({ error: "Idea title is required." }, { status: 400 });
   if (!isValidPitchLabTitle(title)) return NextResponse.json({ error: "Use a title of one or two words." }, { status: 400 });
   const workspace = await db.query.pitchWorkspaces.findFirst({ where: eq(pitchWorkspaces.ownerId, session.user.id) });
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
           finalText: envelope.currentText.trim(),
           refinementCount: envelope.turns.length,
           alreadyPromoted: true,
+          orientation: tx.select({ orientation: documents.orientation }).from(documents).where(eq(documents.id, idea.promotedDocumentId)).get()?.orientation ?? "portrait",
         };
       }
       if (idea.status !== "shortlisted") throw new Error("Move this Pilot Option to Shortlist before finalizing it.");
@@ -85,7 +91,7 @@ export async function POST(req: Request) {
       if (!plotTab) throw new Error("The canonical Microdrama Plots tab was not created.");
       plotTab.content = paragraphDoc(title, currentText);
       tx.insert(documents).values({
-        id, title, content: null, ownerId: session.user.id, activeTabId: firstTabId,
+        id, title, orientation, content: null, ownerId: session.user.id, activeTabId: firstTabId,
         createdAt: now, updatedAt: now, canonicalTabsVersion: CURRENT_CANONICAL_TABS_VERSION,
       }).run();
       tx.insert(tabs).values(rows).run();
@@ -100,6 +106,7 @@ export async function POST(req: Request) {
         finalText: currentText,
         refinementCount: envelope.turns.length,
         alreadyPromoted: false,
+        orientation,
       };
     });
     if (!promoted.alreadyPromoted) {
@@ -113,7 +120,7 @@ export async function POST(req: Request) {
         refinementCount: promoted.refinementCount,
       });
     }
-    return NextResponse.json({ id: promoted.documentId });
+    return NextResponse.json({ id: promoted.documentId, orientation: promoted.orientation });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not promote this idea.";
     const status = message === "Idea not found." ? 404 : 400;

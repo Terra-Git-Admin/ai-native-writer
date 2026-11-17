@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { OrientationBadge, OrientationSelect } from "@/components/documents/OrientationControl";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 interface User {
   id: string;
@@ -19,6 +21,7 @@ interface User {
 interface Doc {
   id: string;
   title: string;
+  orientation: DocumentOrientation;
   ownerId: string;
   updatedAt: string;
 }
@@ -126,6 +129,18 @@ export default function AdminPage() {
     setTransferDocId(null);
     setTransferUserId("");
     fetchData();
+  };
+
+  const changeOrientation = async (doc: Doc, orientation: DocumentOrientation) => {
+    if (orientation === doc.orientation) return;
+    const confirmed = window.confirm(`Change ${doc.title || "Untitled"} to ${orientation}? Existing content is unchanged; future AI generations use the new format.`);
+    if (!confirmed) return;
+    const response = await fetch(`/api/admin/documents/${doc.id}/orientation`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orientation }),
+    });
+    if (response.ok) await fetchData();
   };
 
   const saveAIKey = async (provider: string, apiKey: string) => {
@@ -322,12 +337,13 @@ export default function AdminPage() {
                 className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
               >
                 <div>
-                  <p className="font-medium">{doc.title || "Untitled"}</p>
+                  <div className="flex items-center gap-2"><p className="font-medium">{doc.title || "Untitled"}</p><OrientationBadge orientation={doc.orientation} /></div>
                   <p className="text-sm text-muted-foreground">
                     Owner: {ownerName(doc.ownerId)}
                   </p>
                 </div>
-                <div>
+                <div className="flex items-center gap-3">
+                  <OrientationSelect value={doc.orientation} onChange={(orientation) => void changeOrientation(doc, orientation)} ariaLabel={`Format for ${doc.title || "Untitled"}`} />
                   {transferDocId === doc.id ? (
                     <div className="flex items-center gap-2">
                       <select

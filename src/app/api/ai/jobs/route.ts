@@ -117,6 +117,7 @@ export async function POST(req: Request): Promise<Response> {
       thinking: Boolean(thinking),
       userId: session.user.id,
       userGuidance: typeof userGuidance === "string" ? userGuidance : undefined,
+      orientation: doc.orientation,
     });
     return new Response(JSON.stringify({ id, kind: effectiveKind, tabId: effectiveTabId }), {
       status: 202,

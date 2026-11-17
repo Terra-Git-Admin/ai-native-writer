@@ -8,6 +8,8 @@ import { AlertTriangle, CheckCircle, ChevronDown, Download, Loader2, Pencil, Ref
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { cleanPitchIdeaText, parsePitchIdeaEnvelope } from "@/lib/pitch-lab-idea-envelope";
 import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
+import { OrientationSelect } from "@/components/documents/OrientationControl";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 const SAMPLE_TITLE_PREFIX = "[Sample] ";
 
@@ -180,6 +182,7 @@ export default function PitchLabStudioPage() {
   const [pastedSource, setPastedSource] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [adaptationStyle, setAdaptationStyle] = useState<"close" | "loose">("loose");
+  const [promoteOrientation, setPromoteOrientation] = useState<DocumentOrientation>("portrait");
   const [docs, setDocs] = useState<WriterDoc[]>([]);
   const [docSearch, setDocSearch] = useState("");
   const [docDropdownOpen, setDocDropdownOpen] = useState(false);
@@ -973,6 +976,9 @@ export default function PitchLabStudioPage() {
       setError("Save or cancel edits before creating the Writer doc.");
       return;
     }
+    if (promoteOrientation === "landscape" && !window.confirm("Pitch Lab developed this source with the portrait pilot workflow. Create a Landscape Writer document anyway? The saved plot will be preserved and future Writer generations will use the landscape profile.")) {
+      return;
+    }
     startOperation("finalize");
     try {
       let titleForDoc = ideaTitle;
@@ -1004,7 +1010,7 @@ export default function PitchLabStudioPage() {
       const response = await fetch("/api/pitch-lab/promote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ideaId: selectedIdea.id, title: titleForDoc }),
+        body: JSON.stringify({ ideaId: selectedIdea.id, title: titleForDoc, orientation: promoteOrientation }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Could not create Writer document.");
@@ -1693,7 +1699,7 @@ export default function PitchLabStudioPage() {
                       <button type="button" disabled={isBusy || !hasUnsavedEdits} onClick={() => saveIdea("")} className={compactPrimaryButtonClass}>{ctaLabel(operation?.kind === "save" ? "Saving" : "Save", operation?.kind === "save")}</button>
                     </>
                   ) : (
-                    <button type="button" onClick={() => promoteIdea()} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "finalize" ? "Creating" : "Promote to Doc", operation?.kind === "finalize")}</button>
+                    <div className="flex items-center gap-2"><OrientationSelect value={promoteOrientation} onChange={setPromoteOrientation} disabled={isBusy} ariaLabel="Promoted document format" /><button type="button" onClick={() => promoteIdea()} disabled={isBusy || hasUnsavedEdits} className={compactButtonClass}>{ctaLabel(operation?.kind === "finalize" ? "Creating" : "Promote to Doc", operation?.kind === "finalize")}</button></div>
                   )}
                 </div>
               </article>
@@ -1741,7 +1747,7 @@ export default function PitchLabStudioPage() {
                     )}
                     {!isRunning && !isFailed && (
                       <div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
-                        <button type="button" onClick={() => promoteIdea(optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "finalize" ? "Creating" : "Promote to Doc", operation?.kind === "finalize")}</button>
+                        <div className="flex items-center gap-2"><OrientationSelect value={promoteOrientation} onChange={setPromoteOrientation} disabled={isBusy} ariaLabel="Promoted document format" /><button type="button" onClick={() => promoteIdea(optionText)} disabled={isBusy || hasUnsavedEdits || !optionText} className={compactButtonClass}>{ctaLabel(operation?.kind === "finalize" ? "Creating" : "Promote to Doc", operation?.kind === "finalize")}</button></div>
                       </div>
                     )}
                   </article>

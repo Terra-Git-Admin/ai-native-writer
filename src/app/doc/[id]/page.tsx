@@ -27,6 +27,8 @@ import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 import { clientTrace } from "@/lib/clientTrace";
+import { OrientationBadge } from "@/components/documents/OrientationControl";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 export type ApplyToTabResult = {
   ok: boolean;
@@ -41,9 +43,22 @@ const LAB_PANE_DEFAULT = 0.5;
 const LAB_PANE_MIN = 0.32;
 const LAB_PANE_MAX = 0.62;
 
+function confirmLandscapeCompatibility(
+  orientation: DocumentOrientation,
+  toolName: string
+): boolean {
+  return (
+    orientation !== "landscape" ||
+    window.confirm(
+      `${toolName} was developed for portrait microdrama workflows and has not been fully adapted for landscape chapters yet. Its results may still reflect portrait assumptions. Continue?`
+    )
+  );
+}
+
 interface DocumentData {
   id: string;
   title: string;
+  orientation: DocumentOrientation;
   content: string | null;
   activeTabId: string | null;
   ownerId: string;
@@ -210,6 +225,7 @@ export default function DocumentPage() {
   const aiJob = useJob({
     documentId: params.id,
     tabId: activeTabId ?? "",
+    orientation: doc?.orientation ?? "portrait",
     modelId: selectedModelId,
     thinking: thinkingEnabled,
   });
@@ -943,17 +959,25 @@ export default function DocumentPage() {
           >
             &larr; Back
           </button>
-          {doc.isOwner ? (
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="border-0 bg-transparent text-lg font-semibold focus:outline-none focus:ring-0"
-              placeholder="Untitled"
-            />
-          ) : (
-            <h1 className="text-lg font-semibold">{title}</h1>
-          )}
+          <div className="flex min-w-0 items-center gap-2">
+            {doc.isOwner ? (
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                aria-label="Document title"
+                style={{
+                  width: `${Math.min(Math.max(title.length + 1, 8), 48)}ch`,
+                  maxWidth: "40vw",
+                }}
+                className="min-w-0 border-0 bg-transparent text-lg font-semibold focus:outline-none focus:ring-0"
+                placeholder="Untitled"
+              />
+            ) : (
+              <h1 className="truncate text-lg font-semibold">{title}</h1>
+            )}
+            <OrientationBadge orientation={doc.orientation} />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {doc.isOwner && aiModels.length > 0 && (
@@ -1179,6 +1203,7 @@ export default function DocumentPage() {
                 <button
                   type="button"
                   onClick={(event) => {
+                    if (!confirmLandscapeCompatibility(doc.orientation, "Outsiders View")) return;
                     event.currentTarget.closest("details")?.removeAttribute("open");
                     setOutsidersModalOpen(true);
                   }}
@@ -1192,6 +1217,7 @@ export default function DocumentPage() {
                   <button
                     type="button"
                     onClick={(event) => {
+                      if (!confirmLandscapeCompatibility(doc.orientation, "Quality Agent")) return;
                       event.currentTarget.closest("details")?.removeAttribute("open");
                       setQualityModalOpen(true);
                     }}
@@ -1202,6 +1228,10 @@ export default function DocumentPage() {
                   <button
                     type="button"
                     onClick={(event) => {
+                      if (
+                        !narrativeScanOpen &&
+                        !confirmLandscapeCompatibility(doc.orientation, "Story Scan")
+                      ) return;
                       event.currentTarget.closest("details")?.removeAttribute("open");
                       setNarrativeScanOpen((open) => !open);
                     }}
@@ -1219,6 +1249,10 @@ export default function DocumentPage() {
                 <button
                   type="button"
                   onClick={(event) => {
+                    if (
+                      !plotScanOpen &&
+                      !confirmLandscapeCompatibility(doc.orientation, "Plot Scan")
+                    ) return;
                     event.currentTarget.closest("details")?.removeAttribute("open");
                     setPlotScanOpen((open) => !open);
                   }}
@@ -1374,6 +1408,7 @@ export default function DocumentPage() {
             )}
             <PredefinedLabStageWorkspace
               documentId={doc.id}
+              orientation={doc.orientation}
               tabs={tabs}
               modelId={selectedModelId}
               thinking={thinkingEnabled}

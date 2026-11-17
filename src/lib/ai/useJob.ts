@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 export type JobKind =
   | "plot_chunks"
@@ -45,9 +46,17 @@ const IDLE: JobState = {
 interface UseJobArgs {
   documentId: string;
   tabId: string;
+  orientation: DocumentOrientation;
   modelId: string;
   thinking: boolean;
 }
+
+const LANDSCAPE_WARNING_JOB_KINDS = new Set<JobKind>([
+  "pilot_episode",
+  "series_skeleton",
+  "series_skeleton_predefined",
+  "series_skeleton_auto",
+]);
 
 // Manages a single in-flight AI job for a (documentId, tabId) scope. UI
 // is "block & toast" — only one job at a time per tab. The hook holds an
@@ -167,6 +176,16 @@ export function useJob(args: UseJobArgs) {
         };
       }
 
+      if (
+        args.orientation === "landscape" &&
+        LANDSCAPE_WARNING_JOB_KINDS.has(kind) &&
+        !window.confirm(
+          "This tool was developed for portrait microdrama workflows. It will use the landscape content profile where supported, but its workflow and review assumptions have not been fully adapted yet. Continue?"
+        )
+      ) {
+        return { ok: false, error: "Generation cancelled." };
+      }
+
       // Snapshot origin tab at start time. The hook's args.tabId is reactive
       // (re-renders when the user switches tabs), but a job's origin must
       // not change after it's been created.
@@ -208,6 +227,7 @@ export function useJob(args: UseJobArgs) {
     [
       args.documentId,
       args.tabId,
+      args.orientation,
       args.modelId,
       args.thinking,
       state.status,
