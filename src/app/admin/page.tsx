@@ -65,7 +65,7 @@ export default function AdminPage() {
   const fetchData = useCallback(async () => {
     const [usersRes, docsRes, aiRes, tasteRes] = await Promise.all([
       fetch("/api/admin/users"),
-      fetch("/api/documents"),
+      fetch("/api/documents?includeArchived=all"),
       fetch("/api/admin/ai-settings"),
       fetch("/api/admin/pitch-lab/taste-brief"),
     ]);

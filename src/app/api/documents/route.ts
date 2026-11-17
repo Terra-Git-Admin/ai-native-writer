@@ -1,20 +1,24 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, tabs, users } from "@/lib/db/schema";
+import { documents, folders, tabs, users } from "@/lib/db/schema";
 import { nanoid } from "nanoid";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { buildCanonicalTabRows, CURRENT_CANONICAL_TABS_VERSION } from "@/lib/canonical-tabs";
 import { isDocumentOrientation } from "@/lib/document-orientation";
 
 // GET /api/documents — list all documents with owner info + recent comment count
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const includeArchived =
+    new URL(req.url).searchParams.get("includeArchived") === "all" &&
+    session.user.role === "admin";
 
   const allDocs = await db
     .select({
@@ -24,6 +28,10 @@ export async function GET() {
       ownerId: documents.ownerId,
       ownerName: users.name,
       ownerImage: users.image,
+      folderId: documents.folderId,
+      folderName: folders.name,
+      orientation: documents.orientation,
+      archivedAt: documents.archivedAt,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,
       recentCommentCount: sql<number>`(
@@ -34,9 +42,27 @@ export async function GET() {
     })
     .from(documents)
     .leftJoin(users, eq(documents.ownerId, users.id))
+    .leftJoin(folders, eq(documents.folderId, folders.id))
+    .where(
+      includeArchived
+        ? undefined
+        : or(
+            eq(documents.ownerId, session.user.id),
+            and(
+              sql`${documents.ownerId} != ${session.user.id}`,
+              sql`${documents.archivedAt} IS NULL`
+            )
+          )
+    )
     .orderBy(desc(documents.updatedAt));
 
-  return NextResponse.json(allDocs);
+  return NextResponse.json(
+    allDocs.map((doc) => ({
+      ...doc,
+      folderId: doc.ownerId === session.user.id ? doc.folderId : null,
+      folderName: doc.ownerId === session.user.id ? doc.folderName : null,
+    }))
+  );
 }
 
 // POST /api/documents — create new document

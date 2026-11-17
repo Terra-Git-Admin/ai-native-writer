@@ -57,6 +57,31 @@ export const verificationTokens = sqliteTable(
   (table) => [primaryKey({ columns: [table.identifier, table.token] })]
 );
 
+export const folders = sqliteTable(
+  "folders",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("idx_folders_owner_normalized_name").on(
+      table.ownerId,
+      table.normalizedName
+    ),
+    index("idx_folders_owner").on(table.ownerId),
+  ]
+);
+
 export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
   title: text("title").notNull().default("Untitled"),
@@ -70,6 +95,15 @@ export const documents = sqliteTable("documents", {
   ownerId: text("owner_id")
     .notNull()
     .references(() => users.id),
+  folderId: text("folder_id").references(() => folders.id, {
+    onDelete: "set null",
+  }),
+  // Owned by the parallel document-orientation feature. The organization
+  // migration deliberately does not add this column a second time.
+  orientation: text("orientation", { enum: ["portrait", "landscape"] })
+    .notNull()
+    .default("portrait"),
+  archivedAt: integer("archived_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -573,7 +607,13 @@ export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
   sessions: many(sessions),
   documents: many(documents),
+  folders: many(folders),
   comments: many(comments),
+}));
+
+export const foldersRelations = relations(folders, ({ one, many }) => ({
+  owner: one(users, { fields: [folders.ownerId], references: [users.id] }),
+  documents: many(documents),
 }));
 
 export const accountsRelations = relations(accounts, ({ one }) => ({
@@ -586,6 +626,7 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
 
 export const documentsRelations = relations(documents, ({ one, many }) => ({
   owner: one(users, { fields: [documents.ownerId], references: [users.id] }),
+  folder: one(folders, { fields: [documents.folderId], references: [folders.id] }),
   comments: many(comments),
   versions: many(documentVersions),
   tabs: many(tabs),

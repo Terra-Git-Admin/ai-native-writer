@@ -15,7 +15,8 @@
     "test:plot-lab": "node --experimental-strip-types scripts/plot-lab-regression.test.mjs",
     "test:pitch-lab": "node --experimental-strip-types scripts/pitch-lab-regression.test.mjs",
     "test:ai-assistant": "node scripts/ai-assistant-regression.test.mjs",
-    "test:content-profile": "node --experimental-strip-types scripts/content-profile-regression.test.mjs"
+    "test:content-profile": "node --experimental-strip-types scripts/content-profile-regression.test.mjs",
+    "test:document-organization": "node --experimental-strip-types scripts/document-organization.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.66",
