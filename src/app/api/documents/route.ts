@@ -30,7 +30,6 @@ export async function GET(req: Request) {
       ownerImage: users.image,
       folderId: documents.folderId,
       folderName: folders.name,
-      orientation: documents.orientation,
       archivedAt: documents.archivedAt,
       createdAt: documents.createdAt,
       updatedAt: documents.updatedAt,

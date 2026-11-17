@@ -98,11 +98,6 @@ export const documents = sqliteTable("documents", {
   folderId: text("folder_id").references(() => folders.id, {
     onDelete: "set null",
   }),
-  // Owned by the parallel document-orientation feature. The organization
-  // migration deliberately does not add this column a second time.
-  orientation: text("orientation", { enum: ["portrait", "landscape"] })
-    .notNull()
-    .default("portrait"),
   archivedAt: integer("archived_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

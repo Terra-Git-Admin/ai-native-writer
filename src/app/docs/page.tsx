@@ -205,7 +205,7 @@ export default function DocumentsPage() {
       }
       const data = (await response.json().catch(() => ({}))) as { id?: string };
       if (!data.id) {
-        setCreateError("Could not create document â€” the server returned no document id.");
+        setCreateError("Could not create document - the server returned no document id.");
         return;
       }
       setCreateDialogOpen(false);
@@ -414,7 +414,7 @@ export default function DocumentsPage() {
               disabled={creating}
               className="min-h-10 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {creating ? "Creatingâ€¦" : "+ New Document"}
+              {creating ? "Creating..." : "+ New Document"}
             </button>
           </div>
 
@@ -454,7 +454,7 @@ export default function DocumentsPage() {
           )}
 
           {loading ? (
-            <p className="py-8 text-sm text-muted-foreground">Loadingâ€¦</p>
+            <p className="py-8 text-sm text-muted-foreground">Loading...</p>
           ) : visibleDocs.length === 0 ? (
             <LibraryEmptyState
               view={view}
@@ -1422,7 +1422,7 @@ function FolderNameDialog({
             disabled={saving || !name.trim()}
             className="min-h-10 rounded-md bg-indigo-600 px-4 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
           >
-            {saving ? "Savingâ€¦" : submitLabel}
+            {saving ? "Saving..." : submitLabel}
           </button>
         </div>
       </form>
@@ -1453,7 +1453,7 @@ function DeleteFolderDialog({
     >
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl">
         <h3 id="delete-folder-title" className="text-lg font-semibold">
-          Delete â€œ{folder.name}â€?
+          Delete "{folder.name}"?
         </h3>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {documentCount} document{documentCount === 1 ? "" : "s"} will remain in All
