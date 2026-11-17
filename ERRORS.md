@@ -25,3 +25,10 @@ Failed approaches and what worked instead. Check before trying similar approache
 - **What worked:** Reframed the fix as an interaction/state architecture issue instead of a local prompt patch. The next plan requires option-only reroll, app-owned `Type my own answer`, mandatory app-owned lock-review controls, question-vector planning, source-grounding audit, and a hard post-monetization one-way gate.
 - **Note for next time:** Do not test another real run until these v4.1 controller/UI fixes are implemented and `Plot Lab Decisions` is cleared again.
 
+## 2026-11-17 - Parallel document feature integration gotchas
+
+- **What failed:** Automatic integration of the orientation and document-library commits duplicated `documents.orientation` in both the Drizzle schema and the document list query. A whole-file conflict replacement also risked double-encoding existing Unicode punctuation when text was round-tripped through PowerShell output.
+- **Root cause:** Both branches intentionally touched the same schema, API, page, migration journal, and orientation helper. Git resolved some semantic overlaps as syntactically valid duplicate object keys, while shell text round-tripping was not byte-preserving.
+- **What worked:** Integrated orientation first, organization second; audited merged schema/API fields before release; kept one canonical orientation implementation; resolved migration order explicitly as `0013` then `0014`; replaced affected UI punctuation with ASCII; and reran build plus both feature regression suites.
+- **Note for next time:** Treat auto-merged schema/query objects as unresolved until duplicate semantic keys are checked. Use `apply_patch` directly for source edits and avoid whole-file PowerShell text round-trips when files may contain Unicode.
+
