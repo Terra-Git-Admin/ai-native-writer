@@ -1,7 +1,7 @@
 import { streamText } from "ai";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { prompts } from "@/lib/db/schema";
+import { documents, prompts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { logTrace } from "@/lib/saveTrace";
@@ -44,6 +44,11 @@ import {
   isPlotLabStage2Enabled,
   isPlotLabStage2Mode,
 } from "@/lib/plot-lab/access";
+import {
+  composePromptForOrientation,
+  CONTENT_PROFILE_CONTRACT_VERSION,
+} from "@/lib/ai/content-profile";
+import { parseDocumentOrientation } from "@/lib/document-orientation";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
@@ -209,7 +214,14 @@ export async function POST(req: Request) {
     }
   }
 
-  const baseSystemPrompt = await getSystemPrompt(safeMode);
+  const orientation = documentId
+    ? parseDocumentOrientation((await db.query.documents.findFirst({ where: eq(documents.id, documentId) }))?.orientation)
+    : "portrait";
+  const baseSystemPrompt = composePromptForOrientation(
+    await getSystemPrompt(safeMode),
+    safeMode,
+    orientation
+  );
   const dialogueGuide =
     PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode)
       ? await getActivePredefinedLabDialogueGuide()
@@ -252,6 +264,9 @@ export async function POST(req: Request) {
     );
     logTrace("ai.edit.model_resolved", {
       mode: safeMode,
+      orientation,
+      contentProfileContractVersion:
+        orientation === "landscape" ? CONTENT_PROFILE_CONTRACT_VERSION : null,
       requestedModelId: modelId || null,
       modelId: requestedModelId,
       forcedProvider: PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode) ? "google" : null,

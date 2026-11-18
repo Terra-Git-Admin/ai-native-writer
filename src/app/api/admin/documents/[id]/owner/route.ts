@@ -42,7 +42,9 @@ export async function PUT(
 
   await db
     .update(documents)
-    .set({ ownerId: newOwnerId, updatedAt: new Date() })
+    // Folders are private to their creator. Organization metadata otherwise
+    // survives an ownership transfer, and content freshness is unchanged.
+    .set({ ownerId: newOwnerId, folderId: null })
     .where(eq(documents.id, id));
 
   return NextResponse.json({ ok: true });

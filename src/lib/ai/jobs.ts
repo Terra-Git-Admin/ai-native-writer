@@ -29,6 +29,8 @@ import { db, getDb } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { getAIModel } from "@/lib/ai/providers";
 import { getAction, resolveSystemPrompt } from "@/lib/ai/actions";
+import { CONTENT_PROFILE_CONTRACT_VERSION } from "@/lib/ai/content-profile";
+import { parseDocumentOrientation, type DocumentOrientation } from "@/lib/document-orientation";
 import {
   countSpokenDialogueLines,
   dialogueCapForReferenceEpisode,
@@ -157,6 +159,7 @@ export interface CreateJobOpts {
   thinking: boolean;
   userId: string;
   userGuidance?: string;
+  orientation: DocumentOrientation;
 }
 
 // Insert the row, register the runner in the in-memory map SYNCHRONOUSLY,
@@ -197,6 +200,10 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
     modelId: opts.modelId,
     thinking: opts.thinking,
     userGuidance: opts.userGuidance ?? null,
+    contextSnapshot: JSON.stringify({
+      orientation: opts.orientation,
+      contentProfileContractVersion: CONTENT_PROFILE_CONTRACT_VERSION,
+    }),
     createdBy: opts.userId,
     createdAt: now,
   });
@@ -298,6 +305,15 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
   }
 
   runner.status = "running";
+  const initialSnapshot = (() => {
+    try {
+      const value = JSON.parse(job.contextSnapshot ?? "{}");
+      return value && typeof value === "object" ? value as Record<string, unknown> : {};
+    } catch {
+      return {};
+    }
+  })();
+  const orientation = parseDocumentOrientation(initialSnapshot.orientation);
 
   const startedAt = new Date();
   await db
@@ -320,7 +336,8 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       : loadedContext.userMessage;
     const systemPrompt = await resolveSystemPrompt(
       action,
-      typeof loadedContext === "string" ? undefined : loadedContext
+      typeof loadedContext === "string" ? undefined : loadedContext,
+      orientation
     );
 
     runner.emitter.emit("started", { startedAt: startedAt.toISOString() });
@@ -331,6 +348,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       thinking: job.thinking,
       userMessageChars: userMessage.length,
       systemPromptChars: systemPrompt.length,
+      orientation,
     });
 
     const model = await getAIModel(job.modelId, true);
@@ -378,7 +396,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       usage,
     });
 
-    if (job.promptKind === "next_reference_episode") {
+    if (job.promptKind === "next_reference_episode" && orientation === "portrait") {
       const cap = dialogueCapForReferenceEpisode(runner.buffer);
       const generatedDialogueCount = countSpokenDialogueLines(runner.buffer);
       if (generatedDialogueCount > cap) {
@@ -439,7 +457,7 @@ async function runJob(id: string, runner: JobRunner): Promise<void> {
       .set({
         status: "completed",
         resultJson: JSON.stringify({ content: runner.buffer, finishReason, usage }),
-        contextSnapshot: JSON.stringify({ userMessage }),
+        contextSnapshot: JSON.stringify({ ...initialSnapshot, userMessage }),
         completedAt,
       })
       .where(eq(aiJobs.id, id));

@@ -31,6 +31,8 @@ import {
   SERIES_SKELETON_PREDEFINED_SYSTEM_PROMPT,
 } from "@/lib/ai/prompts";
 import type { PromptKind } from "@/lib/ai/jobs";
+import { composePromptForOrientation } from "@/lib/ai/content-profile";
+import type { DocumentOrientation } from "@/lib/document-orientation";
 
 export interface ActionInput {
   documentId: string;
@@ -703,12 +705,13 @@ export function getAction(kind: PromptKind): Action {
 // (admin-editable), falls back to the constant.
 export async function resolveSystemPrompt(
   action: Action,
-  context?: LoadedActionContext
+  context?: LoadedActionContext,
+  orientation: DocumentOrientation = "portrait"
 ): Promise<string> {
   const promptId = context?.systemPromptId ?? action.systemPromptId;
   const promptFallback = context?.systemPromptFallback ?? action.systemPromptFallback;
   const row = await db.query.prompts.findFirst({
     where: eq(promptsTable.id, promptId),
   });
-  return row?.content || promptFallback;
+  return composePromptForOrientation(row?.content || promptFallback, action.kind, orientation);
 }

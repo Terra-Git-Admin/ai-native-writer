@@ -201,6 +201,12 @@ export function getDb(): DB {
       );
       logEvent("db.migration.defensive.canonical_tabs_version_added", {});
     }
+    if (!docCols.some((c) => c.name === "orientation")) {
+      sqlite.exec(
+        "ALTER TABLE `documents` ADD `orientation` text NOT NULL DEFAULT 'portrait'"
+      );
+      logEvent("db.migration.defensive.document_orientation_added", {});
+    }
 
     const userCols = sqlite.pragma("table_info(users)") as Array<{ name: string }>;
     if (!userCols.some((c) => c.name === "plot_lab_access")) {

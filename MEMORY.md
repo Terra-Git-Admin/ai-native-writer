@@ -551,3 +551,16 @@ Decision log and session summaries. Read at every session start.
 - Tomorrow's implementation priorities: option-only reroll with frozen question state; `Type my own answer` button; mandatory app-owned lock/review controls; question-vector planning to stop repeated same-vector prompts; post-monetization one-way state gate; source-grounding audit; hide internal A/B/C option keys.
 - The separate post-EP1 "universe mode" idea was captured for later and should not be mixed into the current fix.
 - Verification not rerun after the docs-only closeout edits. Last code verification before this closeout remained `npm run lint`, `npm run build`, and `git diff --check` passing with pre-existing warnings/CRLF notices.
+
+## Session - 2026-11-17 (Document library + orientation release integration)
+
+- Worked on document organization and document format as one release: user folders, All/Archived defaults, folder filtering, two-row folder chips with `+ More` overflow, move/archive/change-format actions, and Portrait/Landscape document behavior.
+- Final local integration worktree: `D:/codex-global/anw-document-library-release`; branch: `codex/document-library-orientation-release`; code integration head before closeout docs: `3ba068f`.
+- Combined commits in dependency order: orientation workflows `376349d`, organized library `e015cd8`, reconciliation `2b7ae99`, and source normalization `3ba068f`.
+- Product decisions: no production/live/pilot stages; All and Archived are fixed system views; other folders are user-created; document rows show folder and format as text without decorative icons; the three-dot action menu retains action icons.
+- Migration order is locked as `0013_document_orientation.sql` followed by `0014_document_organization.sql`. Neither migration was applied in this session.
+- Integration corrections: preserved the orientation branch as the canonical format model, retained the library page as the final `/docs` UI, restored orientation selection during document creation, and removed duplicate schema/API orientation fields introduced by automatic merge.
+- Verification passed on the combined branch: lint (existing warnings only), production build, content-profile, document-organization, AI Assistant, Pitch Lab, Plot Lab, clean diff check, and visual HTML preview inspection.
+- Release state: LOCAL / READY FOR TEST / NOT PUSHED. No PR, deploy, production write, migration, or authenticated product smoke was performed.
+- Dependency note: `npm ci` reported 45 existing audit findings (8 low, 18 moderate, 15 high, 4 critical); no automatic dependency mutation was attempted.
+- Tomorrow's priority: open this worktree, prepare a trusted local auth/database state, obtain confirmation before applying `0013` and `0014` locally, test `/docs` plus document creation/orientation end to end, then request current-message approval to push and create the single release PR.

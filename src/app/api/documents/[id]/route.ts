@@ -51,9 +51,11 @@ export async function GET(
     ...trace,
   });
 
+  const isOwner = doc.ownerId === session.user.id;
   return NextResponse.json({
     ...doc,
-    isOwner: doc.ownerId === session.user.id,
+    folderId: isOwner ? doc.folderId : null,
+    isOwner,
   });
 }
 
