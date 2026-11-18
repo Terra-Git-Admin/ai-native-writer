@@ -1453,7 +1453,7 @@ function DeleteFolderDialog({
     >
       <div className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl">
         <h3 id="delete-folder-title" className="text-lg font-semibold">
-          Delete "{folder.name}"?
+          Delete &quot;{folder.name}&quot;?
         </h3>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
           {documentCount} document{documentCount === 1 ? "" : "s"} will remain in All
