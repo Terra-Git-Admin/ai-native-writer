@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/internal/pitches?limit=100&sort=created|updated
- * READ-ONLY. Writer stories (documents), newest first, archived ones excluded.
+ * READ-ONLY. All writer stories (documents), newest first. Archived stories are INCLUDED and
+ * flagged with `archived: true` so callers can label them.
  * Default order is by creation time (`sort=created`); `sort=updated` orders by last edit.
  * Auth: Authorization: Bearer $PITCH_READ_TOKEN. Never writes to writer.db.
  */
@@ -25,10 +26,9 @@ export async function GET(req: Request) {
     const rows = getReadOnlyDb()
       .prepare(
         `SELECT d.id AS id, d.title AS title, d.orientation AS orientation,
-                d.updated_at AS updatedAt, d.created_at AS createdAt, u.name AS ownerName
+                d.updated_at AS updatedAt, d.created_at AS createdAt, d.archived_at AS archivedAt, u.name AS ownerName
            FROM documents d
            LEFT JOIN users u ON u.id = d.owner_id
-          WHERE d.archived_at IS NULL
           ORDER BY ${orderColumn} DESC
           LIMIT ?`
       )
@@ -38,6 +38,7 @@ export async function GET(req: Request) {
       orientation: string;
       updatedAt: number;
       createdAt: number;
+      archivedAt: number | null;
       ownerName: string | null;
     }[];
 
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
         title: r.title,
         orientation: r.orientation,
         ownerName: r.ownerName,
+        archived: r.archivedAt != null,
         // Drizzle "timestamp" mode stores unix seconds.
         updatedAt: new Date(r.updatedAt * 1000).toISOString(),
         createdAt: new Date(r.createdAt * 1000).toISOString(),

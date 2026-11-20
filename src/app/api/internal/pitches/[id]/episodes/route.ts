@@ -24,8 +24,8 @@ export async function GET(
   try {
     const db = getReadOnlyDb();
     const doc = db
-      .prepare("SELECT id, title FROM documents WHERE id = ? AND archived_at IS NULL")
-      .get(id) as { id: string; title: string } | undefined;
+      .prepare("SELECT id, title, archived_at AS archivedAt FROM documents WHERE id = ?")
+      .get(id) as { id: string; title: string; archivedAt: number | null } | undefined;
     if (!doc) {
       return NextResponse.json({ error: "Pitch not found" }, { status: 404 });
     }
@@ -40,7 +40,12 @@ export async function GET(
       title: e.title,
       beatCount: e.beats.length,
     }));
-    return NextResponse.json({ id: doc.id, title: doc.title, episodes });
+    return NextResponse.json({
+      id: doc.id,
+      title: doc.title,
+      archived: doc.archivedAt != null,
+      episodes,
+    });
   } catch (err) {
     console.error("[internal/pitches] episodes failed", err);
     return NextResponse.json({ error: "Failed to read episodes" }, { status: 500 });
