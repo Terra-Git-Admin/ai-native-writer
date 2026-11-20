@@ -5,8 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/internal/pitches?limit=100
- * READ-ONLY. Writer stories (documents), newest-updated first, archived ones excluded.
+ * GET /api/internal/pitches?limit=100&sort=created|updated
+ * READ-ONLY. Writer stories (documents), newest first, archived ones excluded.
+ * Default order is by creation time (`sort=created`); `sort=updated` orders by last edit.
  * Auth: Authorization: Bearer $PITCH_READ_TOKEN. Never writes to writer.db.
  */
 export async function GET(req: Request) {
@@ -15,6 +16,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: gate.error }, { status: gate.status });
   }
   const url = new URL(req.url);
+  // Whitelisted column names only — never interpolate user input into SQL.
+  const orderColumn =
+    url.searchParams.get("sort") === "updated" ? "d.updated_at" : "d.created_at";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 100, 1), 500);
 
   try {
@@ -25,7 +29,7 @@ export async function GET(req: Request) {
            FROM documents d
            LEFT JOIN users u ON u.id = d.owner_id
           WHERE d.archived_at IS NULL
-          ORDER BY d.updated_at DESC
+          ORDER BY ${orderColumn} DESC
           LIMIT ?`
       )
       .all(limit) as {
