@@ -47,9 +47,29 @@ assert.match(
   "Creative generation must explicitly plan relationship, antagonist, and Episode 1 fidelity state."
 );
 assert.match(
+  creativeSchemaSource,
+  /required:\s*\[[\s\S]*?"destinationClock"[\s\S]*?"relationshipDestination"[\s\S]*?"requiredSkeletonElements"/,
+  "Creative generation must plan the destination clock and deliberately incomplete relationship destination."
+);
+assert.match(
+  creativeSchemaSource,
+  /required:\s*\[[\s\S]*?"episodeFunction"[\s\S]*?"timePhase"[\s\S]*?"locationFunction"[\s\S]*?"dramaticMove"/,
+  "Creative generation must plan episode function plus temporal and spatial rhythm."
+);
+assert.match(
   connectedSchemaSource,
   /required:\s*\[[\s\S]*?"relationshipChange"[\s\S]*?"antagonistPressure"[\s\S]*?"fidelityProof"/,
   "Connector generation must preserve the three hidden character-pressure ledgers."
+);
+assert.match(
+  connectedSchemaSource,
+  /required:\s*\[[\s\S]*?"episodeFunction"[\s\S]*?"timePhase"[\s\S]*?"locationFunction"[\s\S]*?"characterChoice"/,
+  "Connector generation must preserve episode function plus temporal and spatial rhythm."
+);
+assert.match(
+  connectedSchemaSource,
+  /required:\s*\[[\s\S]*?"endingTurn"[\s\S]*?"cliffhangerType"[\s\S]*?"relationshipChange"/,
+  "Connector generation must preserve the intended cliffhanger shape."
 );
 assert.match(
   source,

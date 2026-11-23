@@ -147,11 +147,15 @@ export interface PlotLabConnectedUnit {
   title?: string;
   cause: string;
   soulConnection: string;
+  episodeFunction: string;
+  timePhase: string;
+  locationFunction: string;
   characterChoice: string;
   consequence: string;
   nextPressure: string;
   emotionalChange: string;
   endingTurn: string;
+  cliffhangerType: string;
   relationshipChange: string;
   antagonistPressure: string;
   fidelityProof: string;

@@ -39,6 +39,8 @@ interface InterviewOutput {
 export interface CreativeRoute {
   storySoul: PlotLabStorySoul;
   monetizationPoint: string;
+  destinationClock: string;
+  relationshipDestination: string;
   requiredSkeletonElements: string[];
   units: CreativeUnit[];
 }
@@ -113,7 +115,14 @@ const creativeOutput = Output.object({
   schema: jsonSchema<CreativeRoute>({
     type: "object",
     additionalProperties: false,
-    required: ["storySoul", "monetizationPoint", "requiredSkeletonElements", "units"],
+    required: [
+      "storySoul",
+      "monetizationPoint",
+      "destinationClock",
+      "relationshipDestination",
+      "requiredSkeletonElements",
+      "units",
+    ],
     properties: {
       storySoul: {
         type: "object",
@@ -136,6 +145,8 @@ const creativeOutput = Output.object({
         },
       },
       monetizationPoint: { type: "string" },
+      destinationClock: { type: "string" },
+      relationshipDestination: { type: "string" },
       requiredSkeletonElements: {
         type: "array",
         minItems: 1,
@@ -153,10 +164,14 @@ const creativeOutput = Output.object({
             "title",
             "cause",
             "soulConnection",
+            "episodeFunction",
+            "timePhase",
+            "locationFunction",
             "dramaticMove",
             "characterChoice",
             "consequence",
             "endingPressure",
+            "cliffhangerType",
             "relationshipChange",
             "antagonistPressure",
             "fidelityProof",
@@ -168,10 +183,14 @@ const creativeOutput = Output.object({
             title: { type: "string" },
             cause: { type: "string" },
             soulConnection: { type: "string" },
+            episodeFunction: { type: "string" },
+            timePhase: { type: "string" },
+            locationFunction: { type: "string" },
             dramaticMove: { type: "string" },
             characterChoice: { type: "string" },
             consequence: { type: "string" },
             endingPressure: { type: "string" },
+            cliffhangerType: { type: "string" },
             relationshipChange: { type: "string" },
             antagonistPressure: { type: "string" },
             fidelityProof: { type: "string" },
@@ -204,11 +223,15 @@ const connectedOutput = Output.object({
             "title",
             "cause",
             "soulConnection",
+            "episodeFunction",
+            "timePhase",
+            "locationFunction",
             "characterChoice",
             "consequence",
             "nextPressure",
             "emotionalChange",
             "endingTurn",
+            "cliffhangerType",
             "relationshipChange",
             "antagonistPressure",
             "fidelityProof",
@@ -221,11 +244,15 @@ const connectedOutput = Output.object({
             title: { type: "string" },
             cause: { type: "string" },
             soulConnection: { type: "string" },
+            episodeFunction: { type: "string" },
+            timePhase: { type: "string" },
+            locationFunction: { type: "string" },
             characterChoice: { type: "string" },
             consequence: { type: "string" },
             nextPressure: { type: "string" },
             emotionalChange: { type: "string" },
             endingTurn: { type: "string" },
+            cliffhangerType: { type: "string" },
             relationshipChange: { type: "string" },
             antagonistPressure: { type: "string" },
             fidelityProof: { type: "string" },
@@ -396,10 +423,14 @@ export interface CreativeUnit {
   title?: string;
   cause: string;
   soulConnection: string;
+  episodeFunction: string;
+  timePhase: string;
+  locationFunction: string;
   dramaticMove: string;
   characterChoice: string;
   consequence: string;
   endingPressure: string;
+  cliffhangerType: string;
   relationshipChange: string;
   antagonistPressure: string;
   fidelityProof: string;
@@ -441,6 +472,8 @@ export function parsePlotLabCreativeResponse(
     unresolvedPressure: stringValue(rawSoul.unresolvedPressure),
   };
   const monetizationPoint = stringValue(parsed.monetizationPoint);
+  const destinationClock = stringValue(parsed.destinationClock) || monetizationPoint;
+  const relationshipDestination = stringValue(parsed.relationshipDestination) || "The primary relationship becomes costly and consequential but remains unresolved.";
   const requiredSkeletonElements = stringArray(parsed.requiredSkeletonElements);
   const units = parsed.units.map((raw) => {
     const row = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -453,10 +486,14 @@ export function parsePlotLabCreativeResponse(
       title: stringValue(row.title, 120) || undefined,
       cause: stringValue(row.cause) || dramaticMove,
       soulConnection: stringValue(row.soulConnection) || "Continues the established Episode 1 story engine.",
+      episodeFunction: stringValue(row.episodeFunction) || "Advance the dominant story pressure through a distinct dramatic job.",
+      timePhase: stringValue(row.timePhase) || "Continue from the incoming event, then advance only when the changed state permits it.",
+      locationFunction: stringValue(row.locationFunction) || "Use the established location to change pressure, privacy, authority, or available choices.",
       dramaticMove,
       characterChoice,
       consequence,
       endingPressure,
+      cliffhangerType: stringValue(row.cliffhangerType) || "immediate irreversible turn",
       relationshipChange: stringValue(row.relationshipChange) || "The central relationship changes through the episode's consequential behavior.",
       antagonistPressure: stringValue(row.antagonistPressure) || "Deliberate breathing space; existing opposition remains active without a new attack.",
       fidelityProof: stringValue(row.fidelityProof) || "The characters pursue the episode through behavior established in Episode 1.",
@@ -474,7 +511,14 @@ export function parsePlotLabCreativeResponse(
   ) {
     throw new Error("Creative route did not match the required story range.");
   }
-  return { storySoul, monetizationPoint, requiredSkeletonElements, units };
+  return {
+    storySoul,
+    monetizationPoint,
+    destinationClock,
+    relationshipDestination,
+    requiredSkeletonElements,
+    units,
+  };
 }
 
 export function parsePlotLabConnectedResponse(
@@ -495,11 +539,15 @@ export function parsePlotLabConnectedResponse(
       title: stringValue(row.title, 120) || undefined,
       cause: stringValue(row.cause) || characterChoice,
       soulConnection: stringValue(row.soulConnection) || "Continues the established Episode 1 story engine.",
+      episodeFunction: stringValue(row.episodeFunction) || "Advance the episode through a distinct dramatic job.",
+      timePhase: stringValue(row.timePhase) || "Resolve the incoming event before any justified time advance.",
+      locationFunction: stringValue(row.locationFunction) || "Use place to change pressure, privacy, authority, or available choices.",
       characterChoice,
       consequence,
       nextPressure: stringValue(row.nextPressure) || endingTurn,
       emotionalChange: stringValue(row.emotionalChange) || "The changed pressure alters what the character can risk next.",
       endingTurn,
+      cliffhangerType: stringValue(row.cliffhangerType) || "immediate irreversible turn",
       relationshipChange: stringValue(row.relationshipChange) || "The central relationship changes through consequential behavior.",
       antagonistPressure: stringValue(row.antagonistPressure) || "Deliberate breathing space; existing opposition remains active without a new attack.",
       fidelityProof: stringValue(row.fidelityProof) || "The characters act through traits and power styles established in Episode 1.",
@@ -587,7 +635,7 @@ export async function connectCreativeRoute(input: {
         "Repair only the transport structure of the supplied Plot Lab connector JSON while preserving its story, EP1 Soul Spine, and monetization point.",
         expectedRange,
         `Keep the supplied skeleton coverage intact: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
-        "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, relationshipChange, antagonistPressure, fidelityProof, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
+        "Every unit must include number, cause, soulConnection, episodeFunction, timePhase, locationFunction, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, cliffhangerType, relationshipChange, antagonistPressure, fidelityProof, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
         input.session.orientation === "portrait"
           ? "Preserve each existing visiblePlot. If one is missing, reconstruct it as two short sentences: Because states the causal episode purpose; Then shows the immediate on-screen cliffhanger already in motion."
           : "Every visiblePlot must be one or two concise sentences.",

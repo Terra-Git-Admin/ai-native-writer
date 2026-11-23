@@ -29,6 +29,12 @@ assert.match(prompts, /continuity ledger/i, "The connector must audit the comple
 assert.match(prompts, /quality pass over all seven visible plots/i, "The connector must repair prose quality before returning the batch.");
 assert.match(prompts, /three interlocking chains/i, "Generation must interlock plot, relationship, and antagonist progression.");
 assert.match(prompts, /deliberate breathing-space/i, "Relationship pacing must allow episodes without a forced romance beat.");
+assert.match(prompts, /PRIMARY RELATIONSHIP SPINE/, "Generation must prioritize one relationship instead of overdeveloping every pairing.");
+assert.match(prompts, /three or four episodes carry a material relationship turn/i, "Romance progression must be selective rather than constant.");
+assert.match(prompts, /DESTINATION CLOCK/, "Generation must organize the middle episodes around an approaching event.");
+assert.match(prompts, /TEMPORAL PHASES/, "Generation must plan justified time advances after causal payoff.");
+assert.match(prompts, /DRAMATIC LOCATION FUNCTIONS/, "Generation must change the dramatic use of place rather than merely renaming rooms.");
+assert.match(prompts, /Vary CLIFFHANGER SHAPE/, "Generation must diversify immediate irreversible cliffhangers.");
 assert.match(prompts, /speech density/i, "Character continuation must preserve the Episode 1 behavioral fingerprint.");
 assert.match(prompts, /Never relabel an explicit writer seed as pending approval/i, "Writer-supplied seeds must be treated as approved story material.");
 assert.doesNotMatch(realAI, /countSentences\(unit\.visiblePlot\)/, "A prose miss in one episode must not abort the complete batch.");
@@ -45,6 +51,10 @@ assert.match(contracts, /skeletonElementsUsed/, "Connected units must preserve h
 assert.match(contracts, /relationshipChange/, "Connected units must preserve hidden relationship progression.");
 assert.match(contracts, /antagonistPressure/, "Connected units must preserve hidden antagonist progression.");
 assert.match(contracts, /fidelityProof/, "Connected units must preserve Episode 1 character behavior.");
+assert.match(contracts, /episodeFunction/, "Connected units must preserve each episode's dominant dramatic job.");
+assert.match(contracts, /timePhase/, "Connected units must preserve temporal rhythm.");
+assert.match(contracts, /locationFunction/, "Connected units must preserve the dramatic use of place.");
+assert.match(contracts, /cliffhangerType/, "Connected units must preserve cliffhanger-shape variety.");
 
 assert.equal(countSentences("Mira chooses the dangerous route."), 1);
 assert.equal(countSentences("Mira chooses the dangerous route. Ilan realizes she lied."), 2);
