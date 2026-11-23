@@ -329,7 +329,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
 
   const startSession = useCallback(async () => {
     if (!seed.trim()) {
-      setError("Add a seed before starting with Levi.");
+      setError("Add story skeleton notes before starting with Levi.");
       return;
     }
     const validated = validateReferences(references);
@@ -352,9 +352,11 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
   const submitComposer = useCallback(async () => {
     const value = composer.trim();
     if (!value || mutating || archivedThread) return;
-    const action: PlotLabAction = question
-      ? { kind: "answer", questionMessageId: question.id, text: value, selectedStarterId }
-      : { kind: "add_context", text: value };
+    const action: PlotLabAction = thread.session?.phase === "complete"
+      ? { kind: "chat", text: value }
+      : question
+        ? { kind: "answer", questionMessageId: question.id, text: value, selectedStarterId }
+        : { kind: "add_context", text: value };
     const sent = await sendAction(action);
     if (sent) {
       setComposer("");
@@ -365,7 +367,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
         // Ignore draft cleanup failures.
       }
     }
-  }, [archivedThread, composer, draftKey, mutating, question, selectedStarterId, sendAction]);
+  }, [archivedThread, composer, draftKey, mutating, question, selectedStarterId, sendAction, thread.session?.phase]);
 
   const submitEdit = useCallback(async () => {
     if (!editingAnswerId || !editingAnswer.trim()) return;
@@ -632,17 +634,17 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
             </div>
             <h3 className="text-base font-semibold text-foreground">What should Levi help you build?</h3>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              Add a blurb, rough sketches, or the continuation you want to explore.
+              Add the required story skeleton, rough episode notes, and monetization destination.
             </p>
             <label htmlFor="plot-lab-seed" className="mt-4 block text-xs font-medium text-foreground">
-              Story seed <span className="text-red-600">*</span>
+              Story skeleton / notes <span className="text-red-600">*</span>
             </label>
             <textarea
               id="plot-lab-seed"
               value={seed}
               onChange={(event) => setSeed(event.target.value)}
               rows={6}
-              placeholder="Paste your blurb or describe where the story should go…"
+              placeholder="Paste the required story beats and where the Episode 8 or chapter-ending monetization turn should land…"
               className="mt-1.5 w-full resize-y rounded-lg border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900"
             />
             <button
@@ -805,8 +807,16 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                         </div>
                       </div>
                     ) : (
-                      <div className={`group rounded-lg px-3.5 py-3 text-sm leading-6 ${isWriter ? "bg-indigo-600 text-white" : message.role === "system" ? "border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100" : "border border-border bg-card text-foreground shadow-sm"}`}>
+                      <div className={`group rounded-lg px-3.5 py-3 text-sm leading-6 ${isWriter ? "bg-indigo-600 text-white" : message.kind === "mutation_proposal" ? "border border-violet-300 bg-violet-50 text-violet-950 shadow-sm dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100" : message.role === "system" ? "border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100" : "border border-border bg-card text-foreground shadow-sm"}`}>
                         <p className="whitespace-pre-wrap">{message.content}</p>
+                        {message.kind === "mutation_proposal" ? (
+                          <div className="mt-3 rounded-md border border-violet-300/80 bg-background/70 px-3 py-2 text-xs leading-5 dark:border-violet-800">
+                            <p className="font-semibold">Proposal only — your current batch has not changed.</p>
+                            {typeof message.payload?.explanation === "string" ? (
+                              <p className="mt-1 opacity-80">{message.payload.explanation}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
                         <div className={`mt-1 flex items-center gap-1 ${isWriter ? "justify-end" : "justify-start"}`}>
                           {isEditableAnswer ? (
                             <button
@@ -945,14 +955,14 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                   rows={3}
                   placeholder={
                     thread.session?.phase === "complete"
-                      ? "Follow-up chat arrives in the next slice."
+                      ? "Ask Levi about the batch or describe a change to propose…"
                       : thread.session?.activeJobId
                         ? "Levi is creating the batch…"
                         : question
                           ? "Answer Levi or add your own direction…"
                           : "Add more context for Levi…"
                   }
-                  disabled={mutating || thread.session?.phase !== "interview"}
+                  disabled={mutating || !["interview", "complete"].includes(thread.session?.phase ?? "")}
                   className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-border px-2 py-2">
@@ -960,7 +970,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                   <button
                     type="button"
                     onClick={() => void submitComposer()}
-                    disabled={mutating || thread.session?.phase !== "interview" || !composer.trim()}
+                    disabled={mutating || !["interview", "complete"].includes(thread.session?.phase ?? "") || !composer.trim()}
                     className="inline-flex min-h-10 items-center gap-2 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" aria-hidden="true" /> Send

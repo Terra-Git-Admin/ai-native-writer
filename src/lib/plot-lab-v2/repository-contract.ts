@@ -3,6 +3,7 @@ import type {
   PlotLabConnectedBatch,
   PlotLabGenerationStage,
   PlotLabMessage,
+  PlotLabMutationProposal,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
 
@@ -110,6 +111,7 @@ export interface PlotLabRepository {
     sessionPatch: Partial<PlotLabSessionState>;
     response: Record<string, unknown>;
     supersedeFromMessageId?: string;
+    proposal?: PlotLabMutationProposal;
   }): Promise<PlotLabSessionState>;
 
   failSynchronousAction(input: {

@@ -2,6 +2,7 @@ import type {
   PlotLabAction,
   PlotLabInterviewCheckpoint,
   PlotLabMessage,
+  PlotLabMutationProposal,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
 
@@ -38,6 +39,7 @@ function questionMessage(
     content: QUESTIONS[index],
     payload: {
       questionNumber,
+      questionKind: questionNumber === 4 ? "monetization" : "story",
       starters: STARTERS[index].map((text, starterIndex) => ({
         id: `${actionId}:starter:${questionNumber}:${starterIndex + 1}`,
         text,
@@ -53,6 +55,7 @@ export interface MockPlotLabTurn {
   leviMessages: NewMessage[];
   checkpoint: PlotLabInterviewCheckpoint;
   response: Record<string, unknown>;
+  proposal?: PlotLabMutationProposal;
 }
 
 export function createMockPlotLabTurn(input: {
@@ -147,6 +150,62 @@ export function createMockPlotLabTurn(input: {
       leviMessages: [message],
       checkpoint: session.interviewCheckpoint,
       response: { kind: "mock_generation_ready" },
+    };
+  }
+
+  if (action.kind === "chat") {
+    const asksForChange = /\b(change|rewrite|replace|revise|regenerate|make)\b/i.test(action.text);
+    const messageId = `${actionId}:conversation`;
+    const proposalId = `${actionId}:proposal`;
+    if (asksForChange) {
+      const message: NewMessage = {
+        id: messageId,
+        sessionId: session.sessionId,
+        role: "levi",
+        kind: "mutation_proposal",
+        content: "I can propose that change for Episode 2 and review its downstream effect. Your current batch has not changed.",
+        payload: {
+          proposalId,
+          instruction: action.text,
+          targetUnitNumbers: [2],
+          downstreamUnitNumbers: [3],
+          explanation: "Episode 3 may need a new incoming pressure if Episode 2 changes.",
+          applied: false,
+        },
+        actionId,
+        dependencyIds,
+        replayScope: "session",
+      };
+      return {
+        leviMessages: [message],
+        checkpoint: session.interviewCheckpoint,
+        response: { kind: "mutation_proposal", proposalId },
+        proposal: {
+          id: proposalId,
+          sessionId: session.sessionId,
+          sourceMessageId: messageId,
+          baseOutputVersion: session.latestOutputVersion ?? 1,
+          instruction: action.text,
+          targetUnitNumbers: [2],
+          downstreamUnitNumbers: [3],
+          explanation: "Episode 3 may need a new incoming pressure if Episode 2 changes.",
+          status: "pending",
+        },
+      };
+    }
+    return {
+      leviMessages: [{
+        id: messageId,
+        sessionId: session.sessionId,
+        role: "levi",
+        kind: "discussion",
+        content: "The current batch carries the Episode 1 pressure forward through each character choice.",
+        actionId,
+        dependencyIds,
+        replayScope: "session",
+      }],
+      checkpoint: session.interviewCheckpoint,
+      response: { kind: "discussion" },
     };
   }
 

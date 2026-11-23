@@ -38,11 +38,26 @@ export interface PlotLabReferenceSnapshot {
   capturedAt: string;
 }
 
+export interface PlotLabStorySoul {
+  premise: string;
+  characterEngine: string;
+  centralRelationship: string;
+  emotionalPromise: string;
+  tone: string;
+  unresolvedPressure: string;
+}
+
+export interface PlotLabStoryBrief {
+  storySoul: PlotLabStorySoul;
+  monetizationPoint: string;
+  requiredSkeletonElements: string[];
+}
+
 export interface PlotLabInterviewCheckpoint {
   creativeQuestionCount: number;
   readyForCreative: boolean;
   latestQuestionMessageId?: string;
-  characterBrief?: Record<string, unknown>;
+  characterBrief?: PlotLabStoryBrief;
 }
 
 export interface PlotLabModelAssignment {
@@ -131,11 +146,14 @@ export interface PlotLabConnectedUnit {
   number: number;
   title?: string;
   cause: string;
+  soulConnection: string;
   characterChoice: string;
   consequence: string;
   nextPressure: string;
   emotionalChange: string;
   endingTurn: string;
+  skeletonElementsUsed: string[];
+  revelationPurpose: string;
   visiblePlot: string;
 }
 

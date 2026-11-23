@@ -33,13 +33,13 @@ assert.match(
 );
 assert.match(
   creativeSchemaSource,
-  /required:\s*\[[\s\S]*?"number"[\s\S]*?"title"[\s\S]*?"dramaticMove"[\s\S]*?"characterChoice"[\s\S]*?"consequence"[\s\S]*?"endingPressure"/,
-  "The OpenAI creative schema must require every declared unit property, including title."
+  /required:\s*\[[\s\S]*?"number"[\s\S]*?"title"[\s\S]*?"cause"[\s\S]*?"soulConnection"[\s\S]*?"dramaticMove"[\s\S]*?"characterChoice"[\s\S]*?"consequence"[\s\S]*?"endingPressure"[\s\S]*?"skeletonElementsUsed"[\s\S]*?"revelationPurpose"/,
+  "The OpenAI creative schema must require the complete Soul Spine and skeleton-unit lineage."
 );
 assert.match(
   connectedSchemaSource,
-  /required:\s*\[[\s\S]*?"number"[\s\S]*?"title"[\s\S]*?"cause"[\s\S]*?"characterChoice"/,
-  "The OpenAI connector schema must require every declared unit property, including title."
+  /required:\s*\[[\s\S]*?"number"[\s\S]*?"title"[\s\S]*?"cause"[\s\S]*?"soulConnection"[\s\S]*?"characterChoice"/,
+  "The OpenAI connector schema must require every declared unit property, including Soul Spine continuity."
 );
 assert.match(
   source,
@@ -51,6 +51,8 @@ assert.match(
   /Repair the supplied Plot Lab connector JSON/,
   "Connector validation must attempt one structure repair before failing the job."
 );
+assert.match(source, /requiredSkeletonElements/, "Connector validation must receive the full required skeleton map.");
+assert.match(source, /countSentences\(unit\.visiblePlot\) > 2/, "Connector validation must reject more than two visible sentences.");
 assert.match(
   source,
   /Return exactly seven units numbered 2,3,4,5,6,7,8/,

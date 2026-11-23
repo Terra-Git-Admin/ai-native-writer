@@ -5,8 +5,10 @@ import * as schema from "@/lib/db/schema";
 import type {
   PlotLabAction,
   PlotLabActionEnvelope,
+  PlotLabConnectedBatch,
   PlotLabInterviewCheckpoint,
   PlotLabMessage,
+  PlotLabMutationProposal,
   PlotLabReferenceInput,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
@@ -20,6 +22,7 @@ import { capturePlotLabStartSnapshot } from "@/lib/plot-lab-v2/source-snapshot";
 import { startPlotLabGenerationJob } from "@/lib/plot-lab-v2/generation-runner";
 import {
   generateRealInterviewTurn,
+  generateRealConversationTurn,
   isPlotLabRealAIEnabled,
   PLOT_LAB_PROMPT_VERSIONS,
   resolvePlotLabModel,
@@ -130,6 +133,12 @@ export function parsePlotLabActionEnvelope(value: unknown): PlotLabActionEnvelop
     case "request_generation":
       action = { kind: "request_generation" };
       break;
+    case "chat":
+      if (!nonEmptyString(raw.text, 4_000)) {
+        throw new PlotLabActionServiceError("INVALID_ACTION", "Follow-up chat text is required.");
+      }
+      action = { kind: "chat", text: raw.text };
+      break;
     case "retry_failed_stage":
       if (!nonEmptyString(raw.jobId, 200)) {
         throw new PlotLabActionServiceError("INVALID_ACTION", "Retry requires the failed job ID.");
@@ -162,7 +171,7 @@ function writerMessage(input: {
   const content =
     action.kind === "start"
       ? action.seed
-      : action.kind === "answer" || action.kind === "edit_answer" || action.kind === "add_context"
+      : action.kind === "answer" || action.kind === "edit_answer" || action.kind === "add_context" || action.kind === "chat"
         ? action.text
         : undefined;
   if (!content) return undefined;
@@ -176,7 +185,7 @@ function writerMessage(input: {
     actionId: input.envelope.actionId,
     parentMessageId: input.parentMessageId,
     dependencyIds: input.parentMessageId ? [input.parentMessageId] : [],
-    replayScope: action.kind === "add_context" ? "session" : "derived",
+    replayScope: action.kind === "add_context" || action.kind === "chat" ? "session" : "derived",
   };
 }
 
@@ -205,6 +214,7 @@ async function createRealInterviewMessages(input: {
   leviMessages: Array<Omit<PlotLabMessage, "sequence" | "createdAt">>;
   checkpoint: PlotLabInterviewCheckpoint;
   response: Record<string, unknown>;
+  proposal?: PlotLabMutationProposal;
 }> {
   const thread = await input.repository.getSessionThread({
     documentId: input.documentId,
@@ -235,7 +245,11 @@ async function createRealInterviewMessages(input: {
     };
     return {
       leviMessages: [readyMessage],
-      checkpoint: { creativeQuestionCount: 4, readyForCreative: true },
+      checkpoint: {
+        creativeQuestionCount: 4,
+        readyForCreative: true,
+        characterBrief: input.session.interviewCheckpoint.characterBrief,
+      },
       response: { kind: "ready" },
     };
   }
@@ -262,6 +276,7 @@ async function createRealInterviewMessages(input: {
       checkpoint: {
         creativeQuestionCount: previousCount,
         readyForCreative: true,
+        characterBrief: turn.storyBrief,
       },
       response: { kind: "ready" },
     };
@@ -282,6 +297,7 @@ async function createRealInterviewMessages(input: {
     content: [turn.message, turn.question].filter(Boolean).join("\n\n"),
     payload: {
       questionNumber,
+      questionKind: turn.questionKind,
       starters: turn.starters.map((text, index) => ({
         id: input.actionId + ":starter:" + questionNumber + ":" + (index + 1),
         text,
@@ -297,11 +313,102 @@ async function createRealInterviewMessages(input: {
       creativeQuestionCount: questionNumber,
       readyForCreative: false,
       latestQuestionMessageId: questionId,
+      characterBrief: turn.storyBrief,
     },
     response: {
       kind: input.action.kind === "request_generation" ? "blocking_question" : "question",
       questionMessageId: questionId,
     },
+  };
+}
+
+function latestBatch(messages: PlotLabMessage[]): PlotLabConnectedBatch | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const payload = messages[index]?.payload?.batch;
+    if (!payload || typeof payload !== "object") continue;
+    const batch = payload as PlotLabConnectedBatch;
+    if (Array.isArray(batch.units) && (batch.format === "portrait" || batch.format === "landscape")) {
+      return batch;
+    }
+  }
+  return null;
+}
+
+async function createRealConversationMessages(input: {
+  repository: PlotLabRepository;
+  documentId: string;
+  userId: string;
+  isAdmin: boolean;
+  session: PlotLabSessionState;
+  actionId: string;
+  writerMessageId?: string;
+  model: PlotLabModelChoice;
+}): Promise<{
+  leviMessages: Array<Omit<PlotLabMessage, "sequence" | "createdAt">>;
+  checkpoint: PlotLabInterviewCheckpoint;
+  response: Record<string, unknown>;
+  proposal?: PlotLabMutationProposal;
+}> {
+  const thread = await input.repository.getSessionThread({
+    documentId: input.documentId,
+    userId: input.userId,
+    isAdmin: input.isAdmin,
+    includeSuperseded: false,
+    limit: 100,
+  });
+  const batch = latestBatch(thread.messages);
+  if (!batch || !input.session.latestOutputVersion) {
+    throw new Error("The current Plot Lab batch is unavailable for follow-up chat.");
+  }
+  const turn = await generateRealConversationTurn({
+    session: input.session,
+    messages: thread.messages,
+    currentBatch: batch,
+    model: input.model,
+  });
+  const messageId = `${input.actionId}:conversation`;
+  const proposalId = turn.kind === "mutation_proposal" ? `${input.actionId}:proposal` : undefined;
+  const message = {
+    id: messageId,
+    sessionId: input.session.sessionId,
+    role: "levi" as const,
+    kind: turn.kind === "mutation_proposal" ? "mutation_proposal" : "discussion",
+    content: turn.message,
+    payload: turn.kind === "mutation_proposal"
+      ? {
+          proposalId,
+          instruction: turn.instruction,
+          targetUnitNumbers: turn.targetUnitNumbers,
+          downstreamUnitNumbers: turn.downstreamUnitNumbers,
+          explanation: turn.explanation,
+          applied: false,
+        }
+      : undefined,
+    actionId: input.actionId,
+    dependencyIds: input.writerMessageId ? [input.writerMessageId] : [],
+    replayScope: "session" as const,
+  };
+  const proposal = proposalId
+    ? {
+        id: proposalId,
+        sessionId: input.session.sessionId,
+        sourceMessageId: messageId,
+        baseOutputVersion: input.session.latestOutputVersion,
+        instruction: turn.instruction,
+        targetUnitNumbers: turn.targetUnitNumbers,
+        downstreamUnitNumbers: turn.downstreamUnitNumbers,
+        explanation: turn.explanation,
+        status: "pending" as const,
+      }
+    : undefined;
+  return {
+    leviMessages: [message],
+    checkpoint: input.session.interviewCheckpoint,
+    response: {
+      kind: turn.kind,
+      ...(proposalId ? { proposalId } : {}),
+    },
+    proposal,
   };
 }
 
@@ -485,7 +592,11 @@ export async function executeMockPlotLabAction(input: {
     }
 
     const resumeConnecting = session.failedStage === "connecting";
-    if (resumeConnecting && !Array.isArray(checkpoint.creativeUnits)) {
+    if (
+      resumeConnecting &&
+      (!checkpoint.creativeRoute || typeof checkpoint.creativeRoute !== "object") &&
+      !Array.isArray(checkpoint.creativeUnits)
+    ) {
       throw new PlotLabActionServiceError(
         "INVALID_ACTION",
         "The saved creative checkpoint is unavailable. Restart with Levi to try again.",
@@ -510,7 +621,14 @@ export async function executeMockPlotLabAction(input: {
         session,
         model: { modelId: failedJob.modelId, thinking: failedJob.thinking },
         resumeStage: resumeConnecting ? "connecting" : "creative",
-        ...(resumeConnecting ? { creativeUnits: checkpoint.creativeUnits } : {}),
+        ...(resumeConnecting
+          ? {
+              ...(checkpoint.creativeRoute ? { creativeRoute: checkpoint.creativeRoute } : {}),
+              ...(Array.isArray(checkpoint.creativeUnits)
+                ? { creativeUnits: checkpoint.creativeUnits }
+                : {}),
+            }
+          : {}),
       },
     });
     startPlotLabGenerationJob(jobId);
@@ -645,18 +763,29 @@ export async function executeMockPlotLabAction(input: {
   let turn;
   try {
     turn = realAI
-      ? await createRealInterviewMessages({
-          repository,
-          documentId,
-          userId,
-          isAdmin,
-          session: reserved.session,
-          actionId: envelope.actionId,
-          action: envelope.action,
-          writerMessageId: message?.id,
-          editedQuestionNumber,
-          model: resolvedModel!,
-        })
+      ? envelope.action.kind === "chat"
+        ? await createRealConversationMessages({
+            repository,
+            documentId,
+            userId,
+            isAdmin,
+            session: reserved.session,
+            actionId: envelope.actionId,
+            writerMessageId: message?.id,
+            model: resolvedModel!,
+          })
+        : await createRealInterviewMessages({
+            repository,
+            documentId,
+            userId,
+            isAdmin,
+            session: reserved.session,
+            actionId: envelope.actionId,
+            action: envelope.action,
+            writerMessageId: message?.id,
+            editedQuestionNumber,
+            model: resolvedModel!,
+          })
       : createMockPlotLabTurn({
           session: reserved.session,
           actionId: envelope.actionId,
@@ -694,12 +823,13 @@ export async function executeMockPlotLabAction(input: {
               creative: resolvedModel,
               connector: resolvedModel,
             },
-            trainingPackVersion: "v2-initial",
+            trainingPackVersion: "unseeded",
           }
         : {}),
     },
     response,
     supersedeFromMessageId,
+    proposal: turn.proposal,
   });
   const thread = await repository.getSessionThread({ documentId, userId, isAdmin });
   return { replayed: false, ...response, ...thread };

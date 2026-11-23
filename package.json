@@ -16,6 +16,7 @@
     "test:plot-lab-v2": "node --experimental-strip-types scripts/plot-lab-v2-state-machine.test.mjs",
     "test:plot-lab-v2:api": "node scripts/plot-lab-v2-api.test.mjs",
     "test:plot-lab-v2:real-ai": "node scripts/plot-lab-v2-real-ai.test.mjs",
+    "test:plot-lab-v2:corrective": "node --experimental-strip-types scripts/plot-lab-v2-corrective.regression-1.test.mjs",
     "test:plot-lab-v2:migration": "node scripts/plot-lab-v2-migration.test.mjs",
     "test:pitch-lab": "node --experimental-strip-types scripts/pitch-lab-regression.test.mjs",
     "test:ai-assistant": "node scripts/ai-assistant-regression.test.mjs",

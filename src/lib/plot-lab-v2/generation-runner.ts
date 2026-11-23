@@ -7,6 +7,7 @@ import { DrizzlePlotLabRepository } from "@/lib/plot-lab-v2/repository";
 import {
   connectCreativeRoute,
   generateCreativeRoute,
+  type CreativeRoute,
   type CreativeUnit,
   type PlotLabModelChoice,
 } from "@/lib/plot-lab-v2/real-ai";
@@ -16,6 +17,7 @@ interface PlotLabGenerationInput {
   messages: PlotLabMessage[];
   model: PlotLabModelChoice;
   resumeStage?: "creative" | "connecting";
+  creativeRoute?: CreativeRoute;
   creativeUnits?: CreativeUnit[];
 }
 
@@ -47,17 +49,41 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
       throw new Error("Plot Lab generation input is incomplete.");
     }
 
-    let creativeUnits = input.creativeUnits;
+    let creativeRoute = input.creativeRoute;
     if (input.resumeStage !== "connecting") {
       await repository.startGenerationStage({ jobId, stage: "creative" });
       logEvent("plot_lab_v2.generation.stage", { jobId, stage: "creative" });
-      creativeUnits = await generateCreativeRoute(input);
+      creativeRoute = await generateCreativeRoute(input);
       await repository.saveGenerationCheckpoint({
         jobId,
-        checkpoint: { creativeUnits },
+        checkpoint: { creativeRoute, creativeUnits: creativeRoute.units },
       });
-    } else if (!Array.isArray(creativeUnits) || creativeUnits.length === 0) {
-      throw new Error("Plot Lab retry is missing its creative checkpoint.");
+    } else if (!creativeRoute) {
+      if (!Array.isArray(input.creativeUnits) || input.creativeUnits.length === 0) {
+        throw new Error("Plot Lab retry is missing its creative checkpoint.");
+      }
+      const skeleton = input.session.seed?.trim() || "Writer-provided story skeleton";
+      creativeRoute = {
+        storySoul: {
+          premise: "Continue the Episode 1 premise without changing canon.",
+          characterEngine: "Preserve the established character engine.",
+          centralRelationship: "Preserve the established central relationship or conflict.",
+          emotionalPromise: "Carry the Episode 1 emotional promise forward.",
+          tone: "Match the source tone.",
+          unresolvedPressure: "Resolve the pressure left by Episode 1.",
+        },
+        monetizationPoint: "Reach the writer's stated cliffhanger without replacing it.",
+        requiredSkeletonElements: [skeleton],
+        units: input.creativeUnits.map((unit) => ({
+          ...unit,
+          cause: unit.cause || unit.dramaticMove,
+          soulConnection: unit.soulConnection || "Continues the established Episode 1 story thread.",
+          skeletonElementsUsed: unit.skeletonElementsUsed?.length
+            ? unit.skeletonElementsUsed
+            : [skeleton],
+          revelationPurpose: unit.revelationPurpose || "",
+        })),
+      };
     }
 
     stage = "connecting";
@@ -65,7 +91,7 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
     logEvent("plot_lab_v2.generation.stage", { jobId, stage: "connecting" });
     const batch = await connectCreativeRoute({
       ...input,
-      creativeUnits,
+      creativeRoute,
       version: (input.session.latestOutputVersion ?? 0) + 1,
     });
     await repository.completeGeneration({ jobId, batch });

@@ -7,6 +7,7 @@ import {
   plotLabActions,
   plotLabMessages,
   plotLabOutputs,
+  plotLabProposals,
   plotLabSessions,
 } from "../db/schema";
 import type {
@@ -14,6 +15,7 @@ import type {
   PlotLabConnectedBatch,
   PlotLabGenerationStage,
   PlotLabMessage,
+  PlotLabMutationProposal,
   PlotLabSessionState,
 } from "./contracts";
 import type {
@@ -553,6 +555,7 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
     sessionPatch: Partial<PlotLabSessionState>;
     response: Record<string, unknown>;
     supersedeFromMessageId?: string;
+    proposal?: PlotLabMutationProposal;
   }): Promise<PlotLabSessionState> {
     return this.database.transaction((tx) => {
       const action = requireReservedAction(tx, input.actionId);
@@ -578,6 +581,22 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
         supersedeDerivedMessageGraph(tx, state.sessionId, input.supersedeFromMessageId, now);
       }
       insertMessages(tx, state.sessionId, input.leviMessages, now);
+      if (input.proposal) {
+        tx.insert(plotLabProposals).values({
+          id: input.proposal.id,
+          sessionId: input.proposal.sessionId,
+          sourceMessageId: input.proposal.sourceMessageId,
+          baseOutputVersion: input.proposal.baseOutputVersion,
+          instruction: input.proposal.instruction,
+          targetUnitsJson: JSON.stringify(input.proposal.targetUnitNumbers),
+          downstreamUnitsJson: JSON.stringify(input.proposal.downstreamUnitNumbers),
+          explanation: input.proposal.explanation,
+          status: input.proposal.status,
+          confirmedChoice: input.proposal.confirmedChoice ?? null,
+          createdAt: now,
+          resolvedAt: null,
+        }).run();
+      }
       const update = tx
         .update(plotLabSessions)
         .set(mutableSessionValues(finalized, now))

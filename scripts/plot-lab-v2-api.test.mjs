@@ -77,6 +77,28 @@ try {
       "INSERT INTO documents (id, title, orientation, owner_id, created_at, updated_at, canonical_tabs_version) VALUES (?, ?, 'landscape', ?, ?, ?, 0)"
     )
     .run("doc-concurrent", "Concurrent Start fixture", "owner-user", now, now);
+  sqlite
+    .prepare(
+      "INSERT INTO documents (id, title, orientation, owner_id, created_at, updated_at, canonical_tabs_version) VALUES (?, ?, 'portrait', ?, ?, ?, 0)"
+    )
+    .run("doc-chat", "Completed chat fixture", "owner-user", now, now);
+  sqlite.prepare(`
+    INSERT INTO plot_lab_sessions (
+      id, document_id, created_by, status, phase, revision, orientation, seed,
+      source_snapshot_json, references_json, interview_checkpoint_json, retcons_json,
+      latest_output_version, prompt_versions_json, model_assignments_json,
+      training_pack_version, created_at, updated_at
+    ) VALUES (?, ?, ?, 'active', 'complete', 1, 'portrait', ?, ?, '[]', ?, '[]', 1, '{}', '{}', 'unseeded', ?, ?)
+  `).run(
+    "session-chat",
+    "doc-chat",
+    "dev-bypass-user",
+    "Mira follows the memory trail to the identity reveal at Episode 8.",
+    JSON.stringify({ episode1Plot: "Mira delivers a memory to the wrong buyer." }),
+    JSON.stringify({ creativeQuestionCount: 2, readyForCreative: true }),
+    now,
+    now
+  );
   const insertTab = sqlite.prepare(
     "INSERT INTO tabs (id, document_id, title, type, content, position, is_protected, created_at, updated_at) VALUES (?, 'doc-admin-target', ?, ?, ?, ?, 1, ?, ?)"
   );
@@ -125,6 +147,34 @@ try {
   server.stdout.on("data", (chunk) => { serverOutput += String(chunk); });
   server.stderr.on("data", (chunk) => { serverOutput += String(chunk); });
   await waitForServer();
+
+  const discussionId = uuid(90);
+  const discussion = await postAction(discussionId, 1, {
+    kind: "chat",
+    text: "Why does Episode 2 follow from Episode 1?",
+  }, "doc-chat");
+  assert.equal(discussion.status, 200);
+  const discussionBody = await discussion.json();
+  assert.equal(discussionBody.kind, "discussion");
+  assert.equal(discussionBody.session.phase, "complete");
+  assert.equal(discussionBody.messages.at(-1).kind, "discussion");
+
+  const discussionReplay = await postAction(discussionId, 1, {
+    kind: "chat",
+    text: "Why does Episode 2 follow from Episode 1?",
+  }, "doc-chat");
+  assert.equal(discussionReplay.status, 200);
+  assert.equal((await discussionReplay.json()).replayed, true);
+
+  const proposal = await postAction(uuid(91), discussionBody.session.revision, {
+    kind: "chat",
+    text: "Change Episode 2 so Mira deliberately takes the memory.",
+  }, "doc-chat");
+  assert.equal(proposal.status, 200);
+  const proposalBody = await proposal.json();
+  assert.equal(proposalBody.kind, "mutation_proposal");
+  assert.equal(proposalBody.messages.at(-1).kind, "mutation_proposal");
+  assert.equal(proposalBody.messages.at(-1).payload.applied, false);
 
   const empty = await fetch(`${baseUrl}/api/documents/doc-admin-target/plot-lab/session`);
   assert.equal(empty.status, 200, "an admin should access a document they do not own");
@@ -311,6 +361,14 @@ try {
   );
 
   const database = new Database(databasePath, { readonly: true });
+  const proposalCount = database
+    .prepare("SELECT COUNT(*) AS count FROM plot_lab_proposals WHERE session_id = 'session-chat' AND status = 'pending'")
+    .get().count;
+  assert.equal(proposalCount, 1, "a change request must persist one pending non-applying proposal");
+  const chatOutputVersion = database
+    .prepare("SELECT latest_output_version AS version FROM plot_lab_sessions WHERE id = 'session-chat'")
+    .get().version;
+  assert.equal(chatOutputVersion, 1, "discussion and proposals must not mutate the current batch");
   const supersededCount = database
     .prepare("SELECT COUNT(*) AS count FROM plot_lab_messages WHERE superseded_at IS NOT NULL")
     .get().count;
@@ -329,5 +387,5 @@ try {
       resolvedTempRoot.includes("anw-plot-lab-v2-api-"),
     "refusing to clean an unexpected path"
   );
-  rmSync(resolvedTempRoot, { recursive: true, force: true });
+  rmSync(resolvedTempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
