@@ -583,3 +583,12 @@ Decision log and session summaries. Read at every session start.
 - Decision: hard failure is reserved for unusable structure (wrong episode range/numbering or missing visible episode text). Prose quality and skeleton fidelity are generation responsibilities, not batch-rejection criteria.
 - Creative and Connector prompts are v1.3. They now build a silent continuity ledger, audit durable state escalation across the whole chain, verify each Then event becomes the next Because cause, and make Episode 8 physically trigger the monetization event before returning JSON.
 - Local verification passed: TypeScript, state-machine, corrective, real-AI contract, mocked API, disposable migration, focused lint, production build, diff check, and localhost HTTP 200. No paid AI generation, push, deploy, or shared migration was performed.
+
+## Decision - 2026-11-23 (Relationship, antagonist, and character-fidelity chains)
+
+- Review source: all seven fleshed-out microdrama plot samples in `D:/plotpix/Levi/Plots` (Farm Girl, Florist, I Object, Lift, Nurse, Prince, Ring).
+- Plot Lab must build three interlocking hidden chains: external causality, FL-ML relationship evolution, and antagonist pressure. Romance advances through behavior (competence witnessed, care, restraint, vulnerability, moral friction, chosen loyalty, separation, sacrifice), with deliberate breathing-space episodes instead of a forced romantic beat every episode.
+- Episode 1 defines a behavioral fingerprint for each lead and antagonist: speech density, humor/restraint, power style, care style, moral boundary, vulnerability, and pressure behavior. Growth reveals a compatible exception or new layer; it must not replace the personality established in Episode 1.
+- Explicit writer seeds are approved story material. The interviewer must not relabel them as pending approval. This fixes the observed omission of the supplied secret-princess, Ilan-abandonment, and Ilan's-son relationship promises.
+- Interviewer prompt is v1.2; Creative and Connector prompts are v1.4. Hidden unit lineage now persists `relationshipChange`, `antagonistPressure`, and `fidelityProof`; visible output remains the concise Because/Then plot.
+- Local verification passed: TypeScript, focused lint, corrective and real-AI contracts, state-machine, mocked API, disposable migration, production build, and diff check. No paid AI generation, push, deploy, or shared migration was performed.

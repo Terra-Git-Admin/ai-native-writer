@@ -42,6 +42,16 @@ assert.match(
   "The OpenAI connector schema must require every declared unit property, including Soul Spine continuity."
 );
 assert.match(
+  creativeSchemaSource,
+  /required:\s*\[[\s\S]*?"relationshipChange"[\s\S]*?"antagonistPressure"[\s\S]*?"fidelityProof"/,
+  "Creative generation must explicitly plan relationship, antagonist, and Episode 1 fidelity state."
+);
+assert.match(
+  connectedSchemaSource,
+  /required:\s*\[[\s\S]*?"relationshipChange"[\s\S]*?"antagonistPressure"[\s\S]*?"fidelityProof"/,
+  "Connector generation must preserve the three hidden character-pressure ledgers."
+);
+assert.match(
   source,
   /required:\s*\[[\s\S]*?"number"[\s\S]*?"cause"[\s\S]*?"characterChoice"[\s\S]*?"consequence"[\s\S]*?"nextPressure"[\s\S]*?"emotionalChange"[\s\S]*?"endingTurn"[\s\S]*?"visiblePlot"/,
   "The connector schema must require every internal and writer-visible unit field."

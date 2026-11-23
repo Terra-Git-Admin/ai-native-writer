@@ -157,6 +157,9 @@ const creativeOutput = Output.object({
             "characterChoice",
             "consequence",
             "endingPressure",
+            "relationshipChange",
+            "antagonistPressure",
+            "fidelityProof",
             "skeletonElementsUsed",
             "revelationPurpose",
           ],
@@ -169,6 +172,9 @@ const creativeOutput = Output.object({
             characterChoice: { type: "string" },
             consequence: { type: "string" },
             endingPressure: { type: "string" },
+            relationshipChange: { type: "string" },
+            antagonistPressure: { type: "string" },
+            fidelityProof: { type: "string" },
             skeletonElementsUsed: { type: "array", items: { type: "string" } },
             revelationPurpose: { type: "string" },
           },
@@ -203,6 +209,9 @@ const connectedOutput = Output.object({
             "nextPressure",
             "emotionalChange",
             "endingTurn",
+            "relationshipChange",
+            "antagonistPressure",
+            "fidelityProof",
             "skeletonElementsUsed",
             "revelationPurpose",
             "visiblePlot",
@@ -217,6 +226,9 @@ const connectedOutput = Output.object({
             nextPressure: { type: "string" },
             emotionalChange: { type: "string" },
             endingTurn: { type: "string" },
+            relationshipChange: { type: "string" },
+            antagonistPressure: { type: "string" },
+            fidelityProof: { type: "string" },
             skeletonElementsUsed: { type: "array", items: { type: "string" } },
             revelationPurpose: { type: "string" },
             visiblePlot: { type: "string" },
@@ -388,6 +400,9 @@ export interface CreativeUnit {
   characterChoice: string;
   consequence: string;
   endingPressure: string;
+  relationshipChange: string;
+  antagonistPressure: string;
+  fidelityProof: string;
   skeletonElementsUsed: string[];
   revelationPurpose: string;
 }
@@ -442,6 +457,9 @@ export function parsePlotLabCreativeResponse(
       characterChoice,
       consequence,
       endingPressure,
+      relationshipChange: stringValue(row.relationshipChange) || "The central relationship changes through the episode's consequential behavior.",
+      antagonistPressure: stringValue(row.antagonistPressure) || "Deliberate breathing space; existing opposition remains active without a new attack.",
+      fidelityProof: stringValue(row.fidelityProof) || "The characters pursue the episode through behavior established in Episode 1.",
       skeletonElementsUsed: stringArray(row.skeletonElementsUsed),
       revelationPurpose: stringValue(row.revelationPurpose),
     };
@@ -482,6 +500,9 @@ export function parsePlotLabConnectedResponse(
       nextPressure: stringValue(row.nextPressure) || endingTurn,
       emotionalChange: stringValue(row.emotionalChange) || "The changed pressure alters what the character can risk next.",
       endingTurn,
+      relationshipChange: stringValue(row.relationshipChange) || "The central relationship changes through consequential behavior.",
+      antagonistPressure: stringValue(row.antagonistPressure) || "Deliberate breathing space; existing opposition remains active without a new attack.",
+      fidelityProof: stringValue(row.fidelityProof) || "The characters act through traits and power styles established in Episode 1.",
       skeletonElementsUsed: stringArray(row.skeletonElementsUsed),
       revelationPurpose: stringValue(row.revelationPurpose),
       visiblePlot,
@@ -566,7 +587,7 @@ export async function connectCreativeRoute(input: {
         "Repair only the transport structure of the supplied Plot Lab connector JSON while preserving its story, EP1 Soul Spine, and monetization point.",
         expectedRange,
         `Keep the supplied skeleton coverage intact: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
-        "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
+        "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, relationshipChange, antagonistPressure, fidelityProof, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
         input.session.orientation === "portrait"
           ? "Preserve each existing visiblePlot. If one is missing, reconstruct it as two short sentences: Because states the causal episode purpose; Then shows the immediate on-screen cliffhanger already in motion."
           : "Every visiblePlot must be one or two concise sentences.",

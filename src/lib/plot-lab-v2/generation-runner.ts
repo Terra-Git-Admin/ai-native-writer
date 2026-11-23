@@ -78,6 +78,9 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
           ...unit,
           cause: unit.cause || unit.dramaticMove,
           soulConnection: unit.soulConnection || "Continues the established Episode 1 story thread.",
+          relationshipChange: unit.relationshipChange || "The central relationship changes through consequential behavior.",
+          antagonistPressure: unit.antagonistPressure || "Existing opposition remains active without a new attack.",
+          fidelityProof: unit.fidelityProof || "Characters act through traits established in Episode 1.",
           skeletonElementsUsed: unit.skeletonElementsUsed?.length
             ? unit.skeletonElementsUsed
             : [skeleton],

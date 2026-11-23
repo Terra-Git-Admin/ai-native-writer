@@ -152,6 +152,9 @@ export interface PlotLabConnectedUnit {
   nextPressure: string;
   emotionalChange: string;
   endingTurn: string;
+  relationshipChange: string;
+  antagonistPressure: string;
+  fidelityProof: string;
   skeletonElementsUsed: string[];
   revelationPurpose: string;
   visiblePlot: string;
