@@ -1,5 +1,5 @@
-import { sqliteTable, text, integer, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { relations } from "drizzle-orm";
+import { sqliteTable, text, integer, primaryKey, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
+import { relations, sql } from "drizzle-orm";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -256,6 +256,72 @@ export const aiSettings = sqliteTable("ai_settings", {
     .$defaultFn(() => new Date()),
 });
 
+// Server-authoritative Plot Lab V2 workflow aggregate. Stage 1 does not read
+// these tables, so the V2 migration remains additive and can ship disabled.
+export const plotLabSessions = sqliteTable(
+  "plot_lab_sessions",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    status: text("status", { enum: ["active", "archived"] })
+      .notNull()
+      .default("active"),
+    phase: text("phase", {
+      enum: [
+        "intake",
+        "interview",
+        "queued",
+        "creative",
+        "connecting",
+        "complete",
+        "recoverable_error",
+      ],
+    })
+      .notNull()
+      .default("intake"),
+    revision: integer("revision").notNull().default(0),
+    orientation: text("orientation", { enum: ["portrait", "landscape"] }).notNull(),
+    seed: text("seed"),
+    sourceSnapshotJson: text("source_snapshot_json"),
+    sourceHashesJson: text("source_hashes_json"),
+    referencesJson: text("references_json").notNull().default("[]"),
+    interviewCheckpointJson: text("interview_checkpoint_json").notNull(),
+    retconsJson: text("retcons_json").notNull().default("[]"),
+    latestOutputVersion: integer("latest_output_version"),
+    activeJobId: text("active_job_id"),
+    pendingSyncActionId: text("pending_sync_action_id"),
+    failedStage: text("failed_stage", {
+      enum: ["creative", "connecting", "unit_creative", "continuity"],
+    }),
+    promptVersionsJson: text("prompt_versions_json").notNull().default("{}"),
+    modelAssignmentsJson: text("model_assignments_json").notNull().default("{}"),
+    trainingPackVersion: text("training_pack_version").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    archivedAt: integer("archived_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    check("plot_lab_sessions_revision_nonnegative", sql`${table.revision} >= 0`),
+    uniqueIndex("idx_plot_lab_sessions_active_document")
+      .on(table.documentId)
+      .where(sql`${table.status} = 'active'`),
+    index("idx_plot_lab_sessions_document_status_updated").on(
+      table.documentId,
+      table.status,
+      table.updatedAt
+    ),
+  ]
+);
+
 // Durable AI generation jobs. Each job is one button press of an action like
 // "Create Plot Chunks". Lives server-side so the work survives tab switches
 // and page reloads. On boot, orphan running rows are healed to status='failed'
@@ -264,38 +330,58 @@ export const aiSettings = sqliteTable("ai_settings", {
 // Designed for low write count: 1 INSERT (create) + 1 UPDATE (complete or
 // fail or cancel) per job. Token streaming is in-memory only; the DB never
 // sees per-token writes.
-export const aiJobs = sqliteTable("ai_jobs", {
-  id: text("id").primaryKey(),
-  documentId: text("document_id")
-    .notNull()
-    .references(() => documents.id, { onDelete: "cascade" }),
-  // Originating tab. Used for UI scoping ("which tab's chat surfaces this
-  // result") and debug audit. Nullable for non-tab-bound future jobs.
-  tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
-  // 'plot_chunks' | 'next_episode_plot' | 'next_reference_episode'. Brainstorm
-  // Dialogues lands as a 4th value in v2.
-  promptKind: text("prompt_kind").notNull(),
-  // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'.
-  status: text("status").notNull().default("pending"),
-  modelId: text("model_id").notNull(),
-  thinking: integer("thinking", { mode: "boolean" }).notNull().default(false),
-  // JSON snapshot of the inputs that fed the LLM call (audit + debug).
-  contextSnapshot: text("context_snapshot"),
-  // JSON-encoded result. { content: string } for v1.
-  resultJson: text("result_json"),
-  failureReason: text("failure_reason"),
-  // Optional free-text guidance from the writer (passed via chat on skeleton tab).
-  userGuidance: text("user_guidance"),
-  // User who initiated the job. References users.id; cascade-delete with user.
-  createdBy: text("created_by")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  startedAt: integer("started_at", { mode: "timestamp" }),
-  completedAt: integer("completed_at", { mode: "timestamp" }),
-});
+export const aiJobs = sqliteTable(
+  "ai_jobs",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    // Originating tab. Used for UI scoping ("which tab's chat surfaces this
+    // result") and debug audit. Nullable for non-tab-bound future jobs.
+    tabId: text("tab_id").references(() => tabs.id, { onDelete: "cascade" }),
+    // 'plot_chunks' | 'next_episode_plot' | 'next_reference_episode'. Brainstorm
+    // Dialogues lands as a 4th value in v2.
+    promptKind: text("prompt_kind").notNull(),
+    // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'.
+    status: text("status").notNull().default("pending"),
+    modelId: text("model_id").notNull(),
+    thinking: integer("thinking", { mode: "boolean" }).notNull().default(false),
+    // JSON snapshot of the inputs that fed the LLM call (audit + debug).
+    contextSnapshot: text("context_snapshot"),
+    // JSON-encoded result. { content: string } for v1.
+    resultJson: text("result_json"),
+    failureReason: text("failure_reason"),
+    // Optional free-text guidance from the writer (passed via chat on skeleton tab).
+    userGuidance: text("user_guidance"),
+    // User who initiated the job. References users.id; cascade-delete with user.
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    // Plot Lab V2 fields are nullable so all existing Writer jobs remain valid.
+    plotLabSessionId: text("plot_lab_session_id").references(
+      () => plotLabSessions.id,
+      { onDelete: "set null" }
+    ),
+    concurrencyKey: text("concurrency_key"),
+    sessionRevision: integer("session_revision"),
+    inputSnapshotJson: text("input_snapshot_json"),
+    currentStage: text("current_stage"),
+    stageCheckpointJson: text("stage_checkpoint_json"),
+    stageAttemptsJson: text("stage_attempts_json"),
+  },
+  (table) => [
+    uniqueIndex("idx_ai_jobs_active_concurrency_key")
+      .on(table.concurrencyKey)
+      .where(sql`${table.status} IN ('pending', 'running')`),
+    index("idx_ai_jobs_plot_lab_session").on(table.plotLabSessionId),
+  ]
+);
 
 export const aiJobsRelations = relations(aiJobs, ({ one }) => ({
   document: one(documents, {
@@ -310,7 +396,183 @@ export const aiJobsRelations = relations(aiJobs, ({ one }) => ({
     fields: [aiJobs.createdBy],
     references: [users.id],
   }),
+  plotLabSession: one(plotLabSessions, {
+    fields: [aiJobs.plotLabSessionId],
+    references: [plotLabSessions.id],
+  }),
 }));
+
+export const plotLabActions = sqliteTable(
+  "plot_lab_actions",
+  {
+    id: text("id").primaryKey(),
+    actionId: text("action_id").notNull().unique(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => plotLabSessions.id, { onDelete: "cascade" }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    requestHash: text("request_hash").notNull(),
+    actionKind: text("action_kind").notNull(),
+    baseRevision: integer("base_revision").notNull(),
+    status: text("status", {
+      enum: [
+        "reserved",
+        "awaiting_source_confirmation",
+        "queued",
+        "completed",
+        "failed",
+      ],
+    }).notNull(),
+    requestJson: text("request_json").notNull(),
+    responseJson: text("response_json"),
+    jobId: text("job_id").references(() => aiJobs.id, { onDelete: "set null" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("idx_plot_lab_actions_session_created").on(table.sessionId, table.createdAt),
+    index("idx_plot_lab_actions_document_created").on(table.documentId, table.createdAt),
+  ]
+);
+
+export const plotLabMessages = sqliteTable(
+  "plot_lab_messages",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => plotLabSessions.id, { onDelete: "cascade" }),
+    sequence: integer("sequence").notNull(),
+    role: text("role", { enum: ["writer", "levi", "system"] }).notNull(),
+    kind: text("kind").notNull(),
+    content: text("content").notNull(),
+    payloadJson: text("payload_json"),
+    actionId: text("action_id"),
+    parentMessageId: text("parent_message_id"),
+    dependencyIdsJson: text("dependency_ids_json").notNull().default("[]"),
+    replayScope: text("replay_scope", { enum: ["derived", "session"] }).notNull(),
+    supersededAt: integer("superseded_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("idx_plot_lab_messages_session_sequence").on(
+      table.sessionId,
+      table.sequence
+    ),
+    index("idx_plot_lab_messages_parent").on(table.parentMessageId),
+    index("idx_plot_lab_messages_action").on(table.actionId),
+  ]
+);
+
+export const plotLabProposals = sqliteTable(
+  "plot_lab_proposals",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => plotLabSessions.id, { onDelete: "cascade" }),
+    sourceMessageId: text("source_message_id")
+      .notNull()
+      .references(() => plotLabMessages.id, { onDelete: "cascade" }),
+    baseOutputVersion: integer("base_output_version").notNull(),
+    instruction: text("instruction").notNull(),
+    targetUnitsJson: text("target_units_json").notNull(),
+    downstreamUnitsJson: text("downstream_units_json").notNull().default("[]"),
+    explanation: text("explanation").notNull(),
+    status: text("status", {
+      enum: ["pending", "confirmed", "rejected", "stale"],
+    })
+      .notNull()
+      .default("pending"),
+    confirmedChoice: text("confirmed_choice", { enum: ["update", "keep"] }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("idx_plot_lab_proposals_session_status").on(table.sessionId, table.status),
+    index("idx_plot_lab_proposals_source_message").on(table.sourceMessageId),
+  ]
+);
+
+export const plotLabOutputs = sqliteTable(
+  "plot_lab_outputs",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => plotLabSessions.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    parentVersion: integer("parent_version"),
+    jobId: text("job_id").references(() => aiJobs.id, { onDelete: "set null" }),
+    proposalId: text("proposal_id").references(() => plotLabProposals.id, {
+      onDelete: "set null",
+    }),
+    status: text("status", {
+      enum: ["candidate", "current", "superseded", "discarded"],
+    }).notNull(),
+    mutationKind: text("mutation_kind").notNull(),
+    batchJson: text("batch_json").notNull(),
+    degradedText: text("degraded_text"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    supersededAt: integer("superseded_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("idx_plot_lab_outputs_session_version").on(table.sessionId, table.version),
+    uniqueIndex("idx_plot_lab_outputs_current_session")
+      .on(table.sessionId)
+      .where(sql`${table.status} = 'current'`),
+    index("idx_plot_lab_outputs_job").on(table.jobId),
+  ]
+);
+
+export const plotLabFeedback = sqliteTable(
+  "plot_lab_feedback",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => plotLabSessions.id, { onDelete: "cascade" }),
+    messageId: text("message_id").references(() => plotLabMessages.id, {
+      onDelete: "set null",
+    }),
+    outputVersion: integer("output_version").notNull(),
+    unitNumber: integer("unit_number"),
+    rating: text("rating").notNull(),
+    note: text("note"),
+    promptVersionsJson: text("prompt_versions_json").notNull(),
+    modelAssignmentsJson: text("model_assignments_json").notNull(),
+    trainingPackVersion: text("training_pack_version").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("idx_plot_lab_feedback_session_output").on(
+      table.sessionId,
+      table.outputVersion
+    ),
+    index("idx_plot_lab_feedback_message").on(table.messageId),
+  ]
+);
 
 export const handoffExports = sqliteTable(
   "handoff_exports",

@@ -32,3 +32,11 @@ Failed approaches and what worked instead. Check before trying similar approache
 - **What worked:** Integrated orientation first, organization second; audited merged schema/API fields before release; kept one canonical orientation implementation; resolved migration order explicitly as `0013` then `0014`; replaced affected UI punctuation with ASCII; and reran build plus both feature regression suites.
 - **Note for next time:** Treat auto-merged schema/query objects as unresolved until duplicate semantic keys are checked. Use `apply_patch` directly for source edits and avoid whole-file PowerShell text round-trips when files may contain Unicode.
 
+## 2026-11-20 - Plot Lab V2 connector and recovery path were incomplete
+
+- **What failed:** A real Portrait run reached the Connector after producing all seven creative units, but ended with `Levi returned an incomplete batch`. The UI then showed `Needs attention` with a disabled composer and told the writer to retry even though no Retry control existed.
+- **Root cause:** Connector output used free-form text JSON followed by strict post-validation, so malformed structure was discarded without a repair pass. Separately, `retry_failed_stage` existed in the TypeScript contract and action policy but was not implemented in the request parser, service, job runner, repository action recording, or UI.
+- **What worked:** Enforced AI SDK structured output for role responses, added one connector structure-repair attempt, and wired `retry_failed_stage` end to end. Connector retries create a new durable job and reuse the failed job's saved creative checkpoint; creative-stage failures rerun Creative.
+- **Local configuration lesson:** Plot Lab V2 visibility requires both `PLOT_LAB_PRIVATE_RELEASE_ENABLED=true` and `PLOT_LAB_V2_ENABLED=true`. Setting only the V2 selector makes `/api/plot-lab/access` return `release_disabled`, which hides Plot Lab from the Labs menu.
+- **Note for next time:** Treat recovery actions as vertical product contracts. A declared action and allowed state transition are not complete until the parser, persistence, runner resume semantics, visible control, and regression test all exist. Do not show retry copy without an actionable recovery control.
+

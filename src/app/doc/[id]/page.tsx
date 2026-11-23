@@ -22,6 +22,7 @@ import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
 import PlotLabWorkspace from "@/components/labs/PlotLabWorkspace";
+import PlotLabV2Workspace from "@/components/labs/PlotLabV2Workspace";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -109,6 +110,7 @@ interface ExportEpisodeOption {
 interface PlotLabAccessState {
   canUsePlotLab: boolean;
   canUsePlotLabTesterTools: boolean;
+  usePlotLabV2: boolean;
   reason: string;
 }
 
@@ -154,6 +156,7 @@ export default function DocumentPage() {
   const [plotLabAccess, setPlotLabAccess] = useState<PlotLabAccessState>({
     canUsePlotLab: false,
     canUsePlotLabTesterTools: false,
+    usePlotLabV2: false,
     reason: "loading",
   });
   const [pipelineBranch, setPipelineBranch] = useState<PipelineBranch>("monetization");
@@ -254,6 +257,7 @@ export default function DocumentPage() {
       setPlotLabAccess({
         canUsePlotLab: false,
         canUsePlotLabTesterTools: false,
+        usePlotLabV2: false,
         reason: "unauthenticated",
       });
       setPlotLabActive(false);
@@ -276,6 +280,7 @@ export default function DocumentPage() {
         setPlotLabAccess({
           canUsePlotLab: false,
           canUsePlotLabTesterTools: false,
+          usePlotLabV2: false,
           reason: "error",
         });
         setPlotLabActive(false);
@@ -1420,25 +1425,35 @@ export default function DocumentPage() {
         )}
 
         {!predefinedLabOpen && aiSidebarOpen && plotLabActive && plotLabAccess.canUsePlotLab && activeTab && (
-          <PlotLabWorkspace
-            documentId={doc.id}
-            tabs={tabs}
-            activeTab={activeTab}
-            editorRef={editorRef}
-            modelId={selectedModelId}
-            thinking={thinkingEnabled}
-            isAdmin={isAdmin}
-            canUseTesterTools={plotLabAccess.canUsePlotLabTesterTools}
-            onFlushPendingSave={async () => {
-              await editorRef.current?.flushPendingSave?.();
-            }}
-            onTabsChange={handleTabsChange}
-            onOpenTab={handleTabSwitch}
-            onClose={() => {
-              setAiSidebarOpen(false);
-              setPlotLabActive(false);
-            }}
-          />
+          plotLabAccess.usePlotLabV2 ? (
+            <PlotLabV2Workspace
+              documentId={doc.id}
+              onClose={() => {
+                setAiSidebarOpen(false);
+                setPlotLabActive(false);
+              }}
+            />
+          ) : (
+            <PlotLabWorkspace
+              documentId={doc.id}
+              tabs={tabs}
+              activeTab={activeTab}
+              editorRef={editorRef}
+              modelId={selectedModelId}
+              thinking={thinkingEnabled}
+              isAdmin={isAdmin}
+              canUseTesterTools={plotLabAccess.canUsePlotLabTesterTools}
+              onFlushPendingSave={async () => {
+                await editorRef.current?.flushPendingSave?.();
+              }}
+              onTabsChange={handleTabsChange}
+              onOpenTab={handleTabSwitch}
+              onClose={() => {
+                setAiSidebarOpen(false);
+                setPlotLabActive(false);
+              }}
+            />
+          )
         )}
 
         {commentSidebarOpen && !predefinedLabOpen && !plotLabActive && (
