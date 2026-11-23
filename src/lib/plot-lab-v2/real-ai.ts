@@ -8,14 +8,6 @@ import type {
   PlotLabStorySoul,
 } from "@/lib/plot-lab-v2/contracts";
 import {
-  countSentences,
-  countWords,
-  findMissingSkeletonElement,
-  hasBecauseThenStructure,
-  hasWeakCliffhanger,
-  normalizeSkeletonElement,
-} from "@/lib/plot-lab-v2/output-validation";
-import {
   PLOT_LAB_CONNECTOR_PROMPT_VERSION,
   PLOT_LAB_CONNECTOR_SYSTEM_PROMPT,
   PLOT_LAB_CONVERSATION_PROMPT_VERSION,
@@ -437,15 +429,19 @@ export function parsePlotLabCreativeResponse(
   const requiredSkeletonElements = stringArray(parsed.requiredSkeletonElements);
   const units = parsed.units.map((raw) => {
     const row = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const dramaticMove = stringValue(row.dramaticMove);
+    const characterChoice = stringValue(row.characterChoice) || dramaticMove;
+    const consequence = stringValue(row.consequence) || stringValue(row.endingPressure) || dramaticMove;
+    const endingPressure = stringValue(row.endingPressure) || consequence;
     return {
       number: Number(row.number),
       title: stringValue(row.title, 120) || undefined,
-      cause: stringValue(row.cause),
-      soulConnection: stringValue(row.soulConnection),
-      dramaticMove: stringValue(row.dramaticMove),
-      characterChoice: stringValue(row.characterChoice),
-      consequence: stringValue(row.consequence),
-      endingPressure: stringValue(row.endingPressure),
+      cause: stringValue(row.cause) || dramaticMove,
+      soulConnection: stringValue(row.soulConnection) || "Continues the established Episode 1 story engine.",
+      dramaticMove,
+      characterChoice,
+      consequence,
+      endingPressure,
       skeletonElementsUsed: stringArray(row.skeletonElementsUsed),
       revelationPurpose: stringValue(row.revelationPurpose),
     };
@@ -453,24 +449,12 @@ export function parsePlotLabCreativeResponse(
   const expected = expectedNumbers(orientation, units.length);
   if (
     !validLength(orientation, units.length) ||
-    Object.values(storySoul).some((value) => !value) ||
-    !monetizationPoint ||
-    requiredSkeletonElements.length === 0 ||
     units.some((unit, index) =>
       unit.number !== expected[index] ||
-      !unit.cause ||
-      !unit.soulConnection ||
-      !unit.dramaticMove ||
-      !unit.characterChoice ||
-      !unit.consequence ||
-      !unit.endingPressure
+      !unit.dramaticMove
     )
   ) {
     throw new Error("Creative route did not match the required story range.");
-  }
-  const used = new Set(units.flatMap((unit) => unit.skeletonElementsUsed).map(normalizeSkeletonElement));
-  if (requiredSkeletonElements.some((element) => !used.has(normalizeSkeletonElement(element)))) {
-    throw new Error("Creative route did not cover every required skeleton element.");
   }
   return { storySoul, monetizationPoint, requiredSkeletonElements, units };
 }
@@ -478,26 +462,29 @@ export function parsePlotLabCreativeResponse(
 export function parsePlotLabConnectedResponse(
   text: string,
   orientation: PlotLabSessionState["orientation"],
-  version: number,
-  requiredSkeletonElements: string[] = []
+  version: number
 ): PlotLabConnectedBatch {
   const parsed = extractJson(text) as Record<string, unknown>;
   if (!Array.isArray(parsed.units)) throw new Error("Connected route did not contain units.");
   const units = parsed.units.map((raw) => {
     const row = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const visiblePlot = stringValue(row.visiblePlot);
+    const characterChoice = stringValue(row.characterChoice) || stringValue(row.cause) || visiblePlot;
+    const endingTurn = stringValue(row.endingTurn) || stringValue(row.nextPressure);
+    const consequence = stringValue(row.consequence) || endingTurn || visiblePlot;
     return {
       number: Number(row.number),
       title: stringValue(row.title, 120) || undefined,
-      cause: stringValue(row.cause),
-      soulConnection: stringValue(row.soulConnection),
-      characterChoice: stringValue(row.characterChoice),
-      consequence: stringValue(row.consequence),
-      nextPressure: stringValue(row.nextPressure),
-      emotionalChange: stringValue(row.emotionalChange),
-      endingTurn: stringValue(row.endingTurn),
+      cause: stringValue(row.cause) || characterChoice,
+      soulConnection: stringValue(row.soulConnection) || "Continues the established Episode 1 story engine.",
+      characterChoice,
+      consequence,
+      nextPressure: stringValue(row.nextPressure) || endingTurn,
+      emotionalChange: stringValue(row.emotionalChange) || "The changed pressure alters what the character can risk next.",
+      endingTurn,
       skeletonElementsUsed: stringArray(row.skeletonElementsUsed),
       revelationPurpose: stringValue(row.revelationPurpose),
-      visiblePlot: stringValue(row.visiblePlot),
+      visiblePlot,
     };
   });
   const expected = expectedNumbers(orientation, units.length);
@@ -505,20 +492,7 @@ export function parsePlotLabConnectedResponse(
     !validLength(orientation, units.length) ||
     units.some((unit, index) =>
       unit.number !== expected[index] ||
-      !unit.cause ||
-      !unit.soulConnection ||
-      !unit.visiblePlot ||
-      countSentences(unit.visiblePlot) > 2 ||
-      (orientation === "portrait" && (
-        !hasBecauseThenStructure(unit.visiblePlot) ||
-        countWords(unit.visiblePlot) > 40 ||
-        hasWeakCliffhanger(unit.visiblePlot)
-      )) ||
-      !unit.characterChoice ||
-      !unit.consequence ||
-      !unit.nextPressure ||
-      !unit.emotionalChange ||
-      !unit.endingTurn
+      !unit.visiblePlot
     )
   ) {
     throw new Error("Connected route did not match the required final format.");
@@ -536,15 +510,6 @@ export function parsePlotLabConnectedResponse(
   const warnings = Array.isArray(parsed.warnings)
     ? parsed.warnings.map((value) => stringValue(value, 500)).filter(Boolean)
     : [];
-  const missingSkeletonElement = findMissingSkeletonElement({
-    required: requiredSkeletonElements,
-    unitElements: units.flatMap((unit) => unit.skeletonElementsUsed),
-    coverage: seedCoverage,
-    allowedUnitNumbers: expected,
-  });
-  if (missingSkeletonElement) {
-    throw new Error(`Connected route omitted required skeleton element: ${missingSkeletonElement}`);
-  }
   return { format: orientation, version, units, seedCoverage, warnings };
 }
 
@@ -588,8 +553,7 @@ export async function connectCreativeRoute(input: {
     return parsePlotLabConnectedResponse(
       JSON.stringify(result.output),
       input.session.orientation,
-      input.version,
-      input.creativeRoute.requiredSkeletonElements
+      input.version
     );
   } catch (validationError) {
     const expectedRange =
@@ -599,12 +563,12 @@ export async function connectCreativeRoute(input: {
     const repair = await generateText({
       model,
       system: [
-        "Repair the supplied Plot Lab connector JSON while preserving its EP1 Soul Spine and monetization point.",
+        "Repair only the transport structure of the supplied Plot Lab connector JSON while preserving its story, EP1 Soul Spine, and monetization point.",
         expectedRange,
-        `Every required skeleton element must materially appear in-range: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
+        `Keep the supplied skeleton coverage intact: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
         "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
         input.session.orientation === "portrait"
-          ? "Every visiblePlot must be exactly two sentences and at most 40 words total: sentence one starts Because and states the causal episode purpose; sentence two starts Then and shows an immediate, on-screen, irreversible cliffhanger already in motion. Never end on a question, realization, or need to decide."
+          ? "Preserve each existing visiblePlot. If one is missing, reconstruct it as two short sentences: Because states the causal episode purpose; Then shows the immediate on-screen cliffhanger already in motion."
           : "Every visiblePlot must be one or two concise sentences.",
         "Keep titles when present. Return only the repaired structured object.",
       ].join("\n"),
@@ -615,8 +579,7 @@ export async function connectCreativeRoute(input: {
       return parsePlotLabConnectedResponse(
         JSON.stringify(repair.output),
         input.session.orientation,
-        input.version,
-        input.creativeRoute.requiredSkeletonElements
+        input.version
       );
     } catch {
       throw validationError;

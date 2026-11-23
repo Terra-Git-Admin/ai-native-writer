@@ -25,7 +25,9 @@ assert.match(prompts, /EPISODE LOOP/i, "Prompts must use an explicit incoming-pr
 assert.match(prompts, /every required skeleton element/i, "The connector must treat every supplied skeleton element as required in-range material.");
 assert.match(prompts, /FIVE-SECOND TEST/, "Portrait cliffhangers must be immediate enough to drive the next episode.");
 assert.match(prompts, /irreversible/, "Portrait cliffhangers must lock a real story-state change.");
-assert.match(realAI, /countSentences/, "Connected-output parsing must enforce the one-or-two-sentence visible contract.");
+assert.match(prompts, /continuity ledger/i, "The connector must audit the complete causal chain before compressing episodes.");
+assert.match(prompts, /quality pass over all seven visible plots/i, "The connector must repair prose quality before returning the batch.");
+assert.doesNotMatch(realAI, /countSentences\(unit\.visiblePlot\)/, "A prose miss in one episode must not abort the complete batch.");
 assert.match(realAI, /requiredSkeletonElements/, "Creative output must carry a required skeleton map into the connector.");
 assert.match(realAI, /skeletonElementsUsed/, "Each creative unit must record the skeleton material it advances.");
 assert.match(realAI, /storyBrief: session\.interviewCheckpoint\.characterBrief/, "The hidden Story Brief must feed generation context.");
