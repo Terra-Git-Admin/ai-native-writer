@@ -9,7 +9,10 @@ import type {
 } from "@/lib/plot-lab-v2/contracts";
 import {
   countSentences,
+  countWords,
   findMissingSkeletonElement,
+  hasBecauseThenStructure,
+  hasWeakCliffhanger,
   normalizeSkeletonElement,
 } from "@/lib/plot-lab-v2/output-validation";
 import {
@@ -506,6 +509,11 @@ export function parsePlotLabConnectedResponse(
       !unit.soulConnection ||
       !unit.visiblePlot ||
       countSentences(unit.visiblePlot) > 2 ||
+      (orientation === "portrait" && (
+        !hasBecauseThenStructure(unit.visiblePlot) ||
+        countWords(unit.visiblePlot) > 40 ||
+        hasWeakCliffhanger(unit.visiblePlot)
+      )) ||
       !unit.characterChoice ||
       !unit.consequence ||
       !unit.nextPressure ||
@@ -594,7 +602,10 @@ export async function connectCreativeRoute(input: {
         "Repair the supplied Plot Lab connector JSON while preserving its EP1 Soul Spine and monetization point.",
         expectedRange,
         `Every required skeleton element must materially appear in-range: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
-        "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, skeletonElementsUsed, revelationPurpose, and a visiblePlot of no more than two sentences.",
+        "Every unit must include number, cause, soulConnection, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
+        input.session.orientation === "portrait"
+          ? "Every visiblePlot must be exactly two sentences and at most 40 words total: sentence one starts Because and states the causal episode purpose; sentence two starts Then and shows an immediate, on-screen, irreversible cliffhanger already in motion. Never end on a question, realization, or need to decide."
+          : "Every visiblePlot must be one or two concise sentences.",
         "Keep titles when present. Return only the repaired structured object.",
       ].join("\n"),
       prompt: JSON.stringify(result.output),

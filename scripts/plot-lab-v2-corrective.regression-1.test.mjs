@@ -5,7 +5,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   countSentences,
+  countWords,
   findMissingSkeletonElement,
+  hasBecauseThenStructure,
+  hasWeakCliffhanger,
 } from "../src/lib/plot-lab-v2/output-validation.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
@@ -20,6 +23,8 @@ const [prompts, realAI, actionService, workspace, contracts] = await Promise.all
 assert.match(prompts, /EP1 SOUL SPINE/i, "Prompts must lock the Episode 1 soul before extending the story.");
 assert.match(prompts, /EPISODE LOOP/i, "Prompts must use an explicit incoming-pressure to outgoing-pressure loop.");
 assert.match(prompts, /every required skeleton element/i, "The connector must treat every supplied skeleton element as required in-range material.");
+assert.match(prompts, /FIVE-SECOND TEST/, "Portrait cliffhangers must be immediate enough to drive the next episode.");
+assert.match(prompts, /irreversible/, "Portrait cliffhangers must lock a real story-state change.");
 assert.match(realAI, /countSentences/, "Connected-output parsing must enforce the one-or-two-sentence visible contract.");
 assert.match(realAI, /requiredSkeletonElements/, "Creative output must carry a required skeleton map into the connector.");
 assert.match(realAI, /skeletonElementsUsed/, "Each creative unit must record the skeleton material it advances.");
@@ -35,6 +40,14 @@ assert.match(contracts, /skeletonElementsUsed/, "Connected units must preserve h
 assert.equal(countSentences("Mira chooses the dangerous route."), 1);
 assert.equal(countSentences("Mira chooses the dangerous route. Ilan realizes she lied."), 2);
 assert.equal(countSentences("Mira chooses the route. Ilan follows. The Exchange seals the exit."), 3);
+assert.equal(
+  hasBecauseThenStructure("Because Mira steals the ledger, Ilan loses his last bargaining chip. Then the Exchange brands her location across every city screen."),
+  true
+);
+assert.equal(hasBecauseThenStructure("Mira steals the ledger. The Exchange follows her."), false);
+assert.equal(hasWeakCliffhanger("Because Mira steals the ledger, Ilan loses his leverage. Then she must decide whether to trust him."), true);
+assert.equal(hasWeakCliffhanger("Because Mira steals the ledger, Ilan loses his leverage. Then an Exchange sniper fires at Ilan."), false);
+assert.equal(countWords("Because Mira runs. Then Ilan fires."), 6);
 assert.equal(
   findMissingSkeletonElement({
     required: ["Mira is the secret princess", "Mira falls for Ilan's son"],

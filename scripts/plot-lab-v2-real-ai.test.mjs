@@ -53,6 +53,9 @@ assert.match(
 );
 assert.match(source, /requiredSkeletonElements/, "Connector validation must receive the full required skeleton map.");
 assert.match(source, /countSentences\(unit\.visiblePlot\) > 2/, "Connector validation must reject more than two visible sentences.");
+assert.match(source, /hasBecauseThenStructure\(unit\.visiblePlot\)/, "Portrait connector validation must require literal Because/Then structure.");
+assert.match(source, /countWords\(unit\.visiblePlot\) > 40/, "Portrait connector validation must reject overlong summaries.");
+assert.match(source, /hasWeakCliffhanger\(unit\.visiblePlot\)/, "Portrait connector validation must reject decision-only cliffhangers.");
 assert.match(
   source,
   /Return exactly seven units numbered 2,3,4,5,6,7,8/,
