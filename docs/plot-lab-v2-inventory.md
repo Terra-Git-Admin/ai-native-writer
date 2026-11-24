@@ -1,7 +1,7 @@
 # Plot Lab V2 implementation inventory
 
-Date: 2026-11-20  
-Branch: `feat/plot-lab-levi-v2`  
+Date: 2026-11-20
+Branch: `feat/plot-lab-levi-v2`
 Base: `origin/main` at `13a372b`
 
 This is the Phase 0 cleanup and reuse matrix for the durable Levi rebuild. Nothing in this inventory is approved for deletion. The old Stage 1 implementation remains the rollback path until the V2 admin pilot passes and cleanup is separately approved.
