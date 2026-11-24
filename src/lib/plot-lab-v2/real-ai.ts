@@ -107,27 +107,30 @@ const endpointOutput = Output.object({
   description: "Exactly two final-turn candidates.",
   schema: jsonSchema<{ candidates: PlotLabEndpointCandidate[] }>({
     type: "object", additionalProperties: false, required: ["candidates"],
-    properties: { candidates: { type: "array", minItems: 2, maxItems: 2, items: {
+    properties: { candidates: { type: "array", minItems: 1, maxItems: 2, items: {
       type: "object", additionalProperties: false, required: ["id", "finalTurn", "visual", "emotionalCost", "causalRequirements"],
       properties: { id: { type: "string" }, finalTurn: { type: "string" }, visual: { type: "string" }, emotionalCost: { type: "string" }, causalRequirements: { type: "array", items: { type: "string" } } },
     } } },
   }),
 });
 
-const routeOutput = Output.object({
-  name: "plot_lab_route_candidates",
-  description: "Exactly two compact causal route candidates.",
-  schema: jsonSchema<{ candidates: PlotLabRouteCandidate[] }>({
+function routeOutputForOrientation(_orientation: PlotLabSessionState["orientation"]) {
+  void _orientation;
+  return Output.object({
+    name: "plot_lab_route_candidates",
+    description: "Exactly two compact causal route candidates.",
+    schema: jsonSchema<{ candidates: PlotLabRouteCandidate[] }>({
     type: "object", additionalProperties: false, required: ["candidates"],
-    properties: { candidates: { type: "array", minItems: 2, maxItems: 2, items: {
+    properties: { candidates: { type: "array", minItems: 1, maxItems: 2, items: {
       type: "object", additionalProperties: false, required: ["id", "thesis", "endpointCandidateId", "unitSpine"],
-      properties: { id: { type: "string" }, thesis: { type: "string" }, endpointCandidateId: { type: "string" }, unitSpine: { type: "array", minItems: 4, maxItems: 7, items: {
+      properties: { id: { type: "string" }, thesis: { type: "string" }, endpointCandidateId: { type: "string" }, unitSpine: { type: "array", minItems: 1, maxItems: 8, items: {
         type: "object", additionalProperties: false, required: ["number", "purpose", "cause", "choice", "changedState", "outgoingPressure"],
         properties: { number: { type: "integer" }, purpose: { type: "string" }, cause: { type: "string" }, choice: { type: "string" }, changedState: { type: "string" }, outgoingPressure: { type: "string" } },
       } } },
     } } },
-  }),
-});
+    }),
+  });
+}
 
 const decisionOutput = Output.object({
   name: "plot_lab_orchestrator_decision",
@@ -660,16 +663,16 @@ export function parsePlotLabConnectedResponse(
       visiblePlot,
     };
   });
-  const expected = expectedNumbers(orientation, units.length);
-  if (
-    !validLength(orientation, units.length) ||
-    units.some((unit, index) =>
-      unit.number !== expected[index] ||
-      !unit.visiblePlot
-    )
-  ) {
+  const readableUnits = units.filter((unit) => unit.visiblePlot);
+  if (readableUnits.length === 0) {
     throw new Error("Connected route did not match the required final format.");
   }
+  const normalizedUnits = readableUnits
+    .slice(0, orientation === "portrait" ? 7 : 5)
+    .map((unit, index) => ({
+      ...unit,
+      number: orientation === "portrait" ? index + 2 : index + 1,
+    }));
   const seedCoverage = Array.isArray(parsed.seedCoverage)
     ? parsed.seedCoverage.flatMap((raw) => {
         const row = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
@@ -683,7 +686,7 @@ export function parsePlotLabConnectedResponse(
   const warnings = Array.isArray(parsed.warnings)
     ? parsed.warnings.map((value) => stringValue(value, 500)).filter(Boolean)
     : [];
-  return { format: orientation, version, units, seedCoverage, warnings };
+  return { format: orientation, version, units: normalizedUnits, seedCoverage, warnings };
 }
 
 async function structuredCall<T>(input: {
@@ -713,23 +716,25 @@ export async function exploreEndpoints(input: {
   revisionInstruction?: string;
 }): Promise<PlotLabEndpointCandidate[]> {
   const result = await structuredCall<{ candidates: PlotLabEndpointCandidate[] }>({ model: input.model, system: PLOT_LAB_ENDPOINT_EXPLORER_SYSTEM_PROMPT, prompt: input, output: endpointOutput });
-  if (result.candidates.length !== 2) throw new Error("Endpoint exploration did not return two candidates.");
-  return result.candidates;
+  const candidates = result.candidates.filter((candidate) => candidate?.finalTurn?.trim());
+  if (candidates.length === 0) throw new Error("Endpoint exploration did not return a usable candidate.");
+  return candidates.slice(0, 2);
 }
 
 export async function exploreRoutes(input: {
   sourceTruth: PlotLabSourceTruthBrief; endpointCandidates: PlotLabEndpointCandidate[]; orientation: PlotLabSessionState["orientation"]; model: PlotLabModelChoice;
   revisionInstruction?: string;
 }): Promise<PlotLabRouteCandidate[]> {
-  const result = await structuredCall<{ candidates: PlotLabRouteCandidate[] }>({ model: input.model, system: PLOT_LAB_ROUTE_EXPLORER_SYSTEM_PROMPT, prompt: input, output: routeOutput });
-  if (result.candidates.length !== 2) throw new Error("Route exploration did not return two candidates.");
-  for (const route of result.candidates) {
-    const numbers = expectedNumbers(input.orientation, route.unitSpine.length);
-    if (!validLength(input.orientation, route.unitSpine.length) || route.unitSpine.some((unit, index) => unit.number !== numbers[index])) {
-      throw new Error("Route exploration did not match the required story range.");
-    }
+  const result = await structuredCall<{ candidates: PlotLabRouteCandidate[] }>({ model: input.model, system: PLOT_LAB_ROUTE_EXPLORER_SYSTEM_PROMPT, prompt: input, output: routeOutputForOrientation(input.orientation) });
+  const candidates = result.candidates.filter((route) => Array.isArray(route?.unitSpine) && route.unitSpine.length > 0);
+  if (candidates.length === 0) throw new Error("Route exploration did not return a usable route.");
+  for (const route of candidates) {
+    route.unitSpine = route.unitSpine.map((unit, index) => ({
+      ...unit,
+      number: input.orientation === "portrait" ? index + 2 : index + 1,
+    }));
   }
-  return result.candidates;
+  return candidates.slice(0, 2);
 }
 
 export async function selectRouteAndSpecialists(input: {

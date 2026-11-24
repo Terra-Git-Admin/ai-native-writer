@@ -212,6 +212,7 @@ export interface PlotLabQAResult {
 }
 
 export interface PlotLabOrchestrationArtifacts {
+  degradations?: string[];
   sourceTruth?: PlotLabSourceTruthBrief;
   endpointCandidates?: PlotLabEndpointCandidate[];
   routeCandidates?: PlotLabRouteCandidate[];

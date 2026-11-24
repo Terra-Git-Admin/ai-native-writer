@@ -258,7 +258,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
   useEffect(() => {
     if (
       !thread.session?.activeJobId ||
-      !["queued", "creative", "connecting"].includes(thread.session.phase)
+      !["queued", "orchestrating", "creative", "reviewing", "connecting"].includes(thread.session.phase)
     ) return;
     const timer = window.setInterval(async () => {
       try {
