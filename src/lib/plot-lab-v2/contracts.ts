@@ -245,12 +245,16 @@ export interface PlotLabPurposeUnit {
   scenePhase: string;
   characterFunctions: string[];
   skeletonElementsUsed: string[];
+  completeEvent: string;
+  meaningfulChange: string;
 }
 
 export interface PlotLabPurposeMap {
   format: DocumentOrientation;
   monetizationEpisode: number;
   destination: string;
+  centralTransformation: string;
+  monetizationDelivery: string;
   units: PlotLabPurposeUnit[];
   warnings: string[];
 }

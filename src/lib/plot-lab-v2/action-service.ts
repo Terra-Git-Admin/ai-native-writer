@@ -698,9 +698,13 @@ export async function executeMockPlotLabAction(input: {
       ? await input.database.query.aiJobs.findFirst({ where: eq(schema.aiJobs.id, output.jobId) })
       : null;
     let artifacts: Record<string, unknown> = {};
+    let purposeMap: PlotLabPurposeMap | undefined;
     try {
-      const checkpoint = baseJob?.stageCheckpointJson ? JSON.parse(baseJob.stageCheckpointJson) as { artifacts?: Record<string, unknown> } : {};
+      const checkpoint = baseJob?.stageCheckpointJson
+        ? JSON.parse(baseJob.stageCheckpointJson) as { artifacts?: Record<string, unknown>; purposeMap?: PlotLabPurposeMap }
+        : {};
       artifacts = checkpoint.artifacts ?? {};
+      if (checkpoint.purposeMap?.units?.length) purposeMap = checkpoint.purposeMap;
     } catch {
       throw new PlotLabActionServiceError("INVALID_ACTION", "The accepted planning artifacts could not be read.", 409);
     }
@@ -717,15 +721,27 @@ export async function executeMockPlotLabAction(input: {
       documentId, userId, isAdmin,
       envelope: envelope as PlotLabActionEnvelope & { action: { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" } },
       requestHash, jobId, modelId: resolvedModel!.modelId, thinking: resolvedModel!.thinking,
-      inputSnapshot: {
-        session, messages: thread.messages, model: resolvedModel, promptVersions: PLOT_LAB_PROMPT_VERSIONS,
-        resumeStage, artifacts, mutationKind: `confirmed_${proposal.repairScope}_change`, proposalId: proposal.id,
-        confirmedInstruction: proposal.instruction,
-      },
+      inputSnapshot: purposeMap
+        ? {
+            mode: "purpose_planning",
+            session,
+            messages: thread.messages,
+            model: resolvedModel,
+            promptVersions: PLOT_LAB_PROMPT_VERSIONS,
+            previousPurposeMap: purposeMap,
+            confirmedInstruction: proposal.instruction,
+            mutationKind: "confirmed_construction_change",
+            proposalId: proposal.id,
+          }
+        : {
+            session, messages: thread.messages, model: resolvedModel, promptVersions: PLOT_LAB_PROMPT_VERSIONS,
+            resumeStage, artifacts, mutationKind: `confirmed_${proposal.repairScope}_change`, proposalId: proposal.id,
+            confirmedInstruction: proposal.instruction,
+          },
     });
     startPlotLabGenerationJob(jobId);
     const canonical = await repository.getSessionThread({ documentId, userId, isAdmin });
-    return { replayed: false, kind: "generation_queued", jobId, revision: queued.session.revision, ...canonical };
+    return { replayed: false, kind: purposeMap ? "purpose_revision_queued" : "generation_queued", jobId, revision: queued.session.revision, ...canonical };
   }
 
   if (realAI && envelope.action.kind === "retry_failed_stage") {

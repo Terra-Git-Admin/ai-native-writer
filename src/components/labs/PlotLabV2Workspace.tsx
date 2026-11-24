@@ -772,6 +772,12 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                         {copiedMessageId === message.id + ":purpose" ? "Copied" : "Copy"}
                       </button>
                     </div>
+                    {purposeMap.centralTransformation ? (
+                      <div className="mt-3 rounded-lg border border-violet-200 bg-background px-3 py-2.5 dark:border-violet-900/70">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Story movement</p>
+                        <p className="mt-1 text-sm leading-6 text-foreground">{purposeMap.centralTransformation}</p>
+                      </div>
+                    ) : null}
                     <div className="mt-3 space-y-2">
                       {purposeMap.units.map((unit) => (
                         <article key={unit.id} className="rounded-lg border border-border bg-card p-3">

@@ -84,9 +84,13 @@ interface PurposeWriterOutput {
 }
 
 interface PurposePlannerOutput {
+  centralTransformation: string;
+  monetizationDelivery: string;
   units: Array<{
     title: string;
     purposeLine: string;
+    completeEvent: string;
+    meaningfulChange: string;
   }>;
 }
 
@@ -134,8 +138,10 @@ function purposeMapOutput(unitCount: number) {
     schema: jsonSchema<PurposePlannerOutput>({
     type: "object",
     additionalProperties: false,
-    required: ["units"],
+    required: ["centralTransformation", "monetizationDelivery", "units"],
     properties: {
+      centralTransformation: { type: "string" },
+      monetizationDelivery: { type: "string" },
       units: {
         type: "array",
         minItems: unitCount,
@@ -143,9 +149,11 @@ function purposeMapOutput(unitCount: number) {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["title", "purposeLine"],
+          required: ["title", "completeEvent", "meaningfulChange", "purposeLine"],
           properties: {
             title: { type: "string" },
+            completeEvent: { type: "string" },
+            meaningfulChange: { type: "string" },
             purposeLine: { type: "string" },
           },
         },
@@ -806,7 +814,16 @@ export async function generatePurposeMap(input: {
         : `Milestones 1 through ${input.monetizationEpisode}`,
       monetizationEpisode: input.monetizationEpisode,
       previousPurposeMap: input.previousPurposeMap
-        ? input.previousPurposeMap.units.map((unit) => ({ title: unit.title, purposeLine: unit.purposeLine }))
+        ? {
+            centralTransformation: input.previousPurposeMap.centralTransformation ?? "",
+            monetizationDelivery: input.previousPurposeMap.monetizationDelivery ?? input.previousPurposeMap.destination,
+            units: input.previousPurposeMap.units.map((unit) => ({
+              title: unit.title,
+              completeEvent: unit.completeEvent ?? unit.purposeLine,
+              meaningfulChange: unit.meaningfulChange ?? unit.stateDelta,
+              purposeLine: unit.purposeLine,
+            })),
+          }
         : null,
       revisionInstruction: input.revisionInstruction ?? null,
       pacingPack: {
@@ -839,9 +856,13 @@ export async function writePlotsFromPurposeMap(input: {
       approvedPurposeMap: input.purposeMap.units.map((unit) => ({
         number: unit.number,
         title: unit.title,
+        completeEvent: unit.completeEvent ?? unit.purposeLine,
+        meaningfulChange: unit.meaningfulChange ?? unit.stateDelta,
         purposeLine: unit.purposeLine,
       })),
       destination: input.purposeMap.destination,
+      centralTransformation: input.purposeMap.centralTransformation ?? "",
+      monetizationDelivery: input.purposeMap.monetizationDelivery ?? input.purposeMap.destination,
     },
     output: purposeWriterOutput(input.purposeMap.units.length),
   });

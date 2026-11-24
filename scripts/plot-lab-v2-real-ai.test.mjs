@@ -48,9 +48,13 @@ assert.match(
   "Connector generation must use the AI SDK structured-output contract."
 );
 assert.match(purposeSchemaSource, /minItems:\s*unitCount[\s\S]*?maxItems:\s*unitCount/, "Purpose output must use the exact app-owned unit count.");
-assert.match(purposeSchemaSource, /required:\s*\["title", "purposeLine"\]/, "Purpose planning should require only writer-facing story fields.");
-assert.doesNotMatch(purposeSchemaSource, /incomingPressure|decisiveMove|stateDelta|outgoingHook|purposeUnitId/, "Purpose transport must not ask the model for app-owned metadata.");
+assert.match(purposeSchemaSource, /required:\s*\["centralTransformation", "monetizationDelivery", "units"\]/, "Purpose planning must construct one batch-level transformation and exact monetization delivery.");
+assert.match(purposeSchemaSource, /required:\s*\["title", "completeEvent", "meaningfulChange", "purposeLine"\]/, "Each purpose unit must carry only the minimal construction behind its writer-facing line.");
+assert.doesNotMatch(purposeSchemaSource, /strategyOptions|dominantExperience|timePhase|locationFunction|storyCharacters|informationMove|relationshipMove|monetizationContribution|sourceAnchors/, "Purpose planning must not turn creative reasoning into a field-heavy form.");
+assert.doesNotMatch(purposeSchemaSource, /incomingPressure|decisiveMove|stateDelta|outgoingHook|purposeUnitId/, "Purpose transport must keep app-owned lineage metadata out of model output.");
 assert.doesNotMatch(purposeGenerationSource, /new Map\(result\.units|written\.number|purposeUnitId, unit/, "Approved plots must be matched by app-owned order, not model-generated IDs or numbers.");
+assert.match(purposeGenerationSource, /centralTransformation[\s\S]*?monetizationDelivery/, "The Plot Writer must receive the batch-level construction direction.");
+assert.match(purposeGenerationSource, /completeEvent[\s\S]*?meaningfulChange[\s\S]*?purposeLine/, "The Plot Writer must receive each complete episode event and changed state rather than only a purpose line.");
 assert.match(purposeGenerationSource, /Some expanded plots repeat[\s\S]*?readable batch was preserved/, "Duplicate readable plots must warn instead of failing the entire batch.");
 assert.match(
   creativeSchemaSource,
@@ -134,6 +138,10 @@ assert.match(promptSource, /two or three natural, vivid sentences/i, "The connec
 assert.match(promptSource, /PLOT LAB CREATIVE AUTHOR v2\.1[\s\S]*?flashback or memory fragment[\s\S]*?director's-cut insert[\s\S]*?intercut parallel action/i, "The Creative Author must have an optional cinematic-compression palette.");
 assert.match(promptSource, /optional tools, never checklist requirements/i, "Cinematic devices must remain creative options rather than hard validation rules.");
 assert.match(promptSource, /must not fully deliver or resolve the monetization revelation before the final unit/i, "The Creative Author must protect the final monetization reveal from landing early.");
+assert.match(promptSource, /Do not confuse physical movement with story movement[\s\S]*?genuinely different condition/i, "Purpose construction must progress through dramatic phases instead of treating travel as story movement.");
+assert.match(promptSource, /Construct microdrama, not a calm synopsis[\s\S]*?changed/i, "Purpose construction must create charged pressure, consequential turns, and changed-state endings.");
+assert.match(promptSource, /Escalate by changing the kind of pressure[\s\S]*?faceless pursuers/i, "Purpose construction must vary pressure sources and avoid one long chase phase.");
+assert.match(promptSource, /Write with microdrama impact[\s\S]*?emotional or practical consequence/i, "Plot writing must retain the planned drama in the concise final summary.");
 assert.match(referenceFixtureSource, /const plots = plotDocument\(\[episodes\[0\]\]\)/, "Reference fixtures must expose only Episode 1 in the plot source tab.");
 assert.doesNotMatch(referenceFixtureSource, /false-amnesia|staged assassination|masked attack|Noboru|Toji|King Kai|Queen Yoko|Goro/i, "Episode 1 fixtures must not leak later-series twists or characters.");
 assert.match(source, /candidates: \{ type: "array", minItems: 1, maxItems: 2/, "Hidden exploration must accept one usable candidate instead of failing when a second option is absent.");
@@ -145,7 +153,9 @@ assert.match(runnerSource, /Connector returned incomplete structure; Levi preser
 assert.match(workspaceSource, /\["queued", "orchestrating", "creative", "reviewing", "connecting"\]\.includes\(thread\.session\.phase\)/, "UI polling must continue through every orchestrated generation phase.");
 assert.doesNotMatch(promptSource.slice(promptSource.indexOf("PLOT LAB STORY SPINE CONNECTOR v1.6")), /begins with the literal word Because/, "The active connector must not force literal Because/Then wording.");
 assert.match(actionSource, /case "accept_output"/, "Explicit acceptance must be accepted by the API parser.");
+assert.match(actionSource, /checkpoint\.purposeMap[\s\S]*?mode: "purpose_planning"[\s\S]*?previousPurposeMap: purposeMap/, "Confirmed follow-up changes must return purpose-generated batches to the same construction path.");
 assert.match(workspaceSource, /Accept final/, "The latest batch must expose explicit acceptance.");
+assert.match(workspaceSource, /Story movement[\s\S]*?centralTransformation/, "Purpose review must show the batch-level story movement without exposing the hidden planning form.");
 assert.match(workspaceSource, /Retry generation/, "Recoverable errors must expose a retry control.");
 
 console.log("Plot Lab V2 real-AI contract checks passed");

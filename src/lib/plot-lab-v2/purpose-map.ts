@@ -31,7 +31,14 @@ export function purposeUnitNumbers(
 
 export function normalizePurposeMap(
   candidate: {
-    units: Array<{ title?: string; purposeLine?: string }>;
+    centralTransformation?: string;
+    monetizationDelivery?: string;
+    units: Array<{
+      title?: string;
+      purposeLine?: string;
+      completeEvent?: string;
+      meaningfulChange?: string;
+    }>;
   },
   orientation: PlotLabSessionState["orientation"],
   monetizationEpisode: number,
@@ -62,6 +69,8 @@ export function normalizePurposeMap(
     format: orientation,
     monetizationEpisode,
     destination,
+    centralTransformation: candidate.centralTransformation?.trim() || `The protagonist moves from the Episode 1 aftermath into ${destination}`,
+    monetizationDelivery: candidate.monetizationDelivery?.trim() || destination,
     units: units.map((unit, index): PlotLabPurposeUnit => ({
       id: `${orientation === "portrait" ? "ep" : "milestone"}-${expected[index]}`,
       number: expected[index],
@@ -70,14 +79,16 @@ export function normalizePurposeMap(
       incomingPressure: index === 0
         ? context?.unresolvedPressure?.trim() || "The unresolved opening pressure is still in motion."
         : lines[index - 1],
-      decisiveMove: lines[index],
-      stateDelta: lines[index],
-      outgoingHook: lines[index + 1] || destination,
+      decisiveMove: unit.completeEvent?.trim() || lines[index],
+      stateDelta: unit.meaningfulChange?.trim() || lines[index],
+      outgoingHook: units[index + 1]?.completeEvent?.trim() || lines[index + 1] || destination,
       dominantFunction: index === units.length - 1 ? "monetization_turn" : "story_progression",
       changedDimensions: [],
       scenePhase: "",
       characterFunctions: [],
       skeletonElementsUsed: index === units.length - 1 ? context?.requiredSkeletonElements ?? [] : [],
+      completeEvent: unit.completeEvent?.trim() || lines[index],
+      meaningfulChange: unit.meaningfulChange?.trim() || lines[index],
     })),
     warnings: duplicateWarning,
   };
