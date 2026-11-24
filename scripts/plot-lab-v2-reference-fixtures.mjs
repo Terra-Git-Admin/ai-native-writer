@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 
 const databasePath = resolve(process.argv[2] ?? "");
 const plotDirectory = resolve(process.argv[3] ?? "D:/plotpix/Levi/Plots");
+const refreshExisting = process.argv.includes("--refresh");
 
 assert.ok(process.argv[2], "Usage: node scripts/plot-lab-v2-reference-fixtures.mjs <database-path> [plot-directory]");
 assert.ok(existsSync(databasePath), `Database not found: ${databasePath}`);
@@ -52,15 +53,12 @@ const fixtures = [
     liveTabId: "GMRIuY1qrOdA",
     sourceFile: "Prince till Monetization.txt",
     title: "Plot Lab Reference - Prince",
-    summary: "A blacksmith apprentice saves an apparently amnesiac prince, unaware that his weakness is a performance designed to expose enemies inside the royal court.",
-    logline: "After saving a wounded prince, a courageous blacksmith is drawn into his false-amnesia scheme and a palace assassination conspiracy.",
+    summary: "At a royal hunting camp, blacksmith apprentice Karin discovers that the charming arrow collector Yuji is the youngest prince. That night she finds him unconscious and arrow-riddled in the river as armed riders approach.",
+    logline: "A courageous blacksmith apprentice must protect a wounded young prince when armed riders close in at the river.",
     characters: [
-      { name: "Karin", description: "A skilled, defiant blacksmith apprentice whose courage, practical competence, and class insecurity drive her choices." },
-      { name: "Yuji", description: "The charming youngest prince, secretly staging amnesia and vulnerability to flush out enemies threatening the crown." },
-      { name: "Mio", description: "Karin's loyal friend, whose quick action mobilizes the village and keeps Karin connected to her old life." },
-      { name: "King Kai", description: "Yuji's protective elder brother and king, whose safety and succession create the royal pressure system." },
-      { name: "Queen Yoko", description: "Kai's politically alert queen, whose fear at Yuji's return suggests knowledge or complicity inside the court." },
-      { name: "Goro", description: "Captain of the Royal Guard and Yuji's covert partner in the staged assassination, forced to play both attacker and protector." },
+      { name: "Karin", description: "A skilled, defiant blacksmith apprentice who meets Yuji at the hunting camp and later drags his wounded body from the river." },
+      { name: "Yuji", description: "A charming, unpretentious young man first seen collecting arrows, then revealed to be the kingdom's youngest prince." },
+      { name: "Mio", description: "Karin's friend, present when Yuji's royal identity is revealed at the hunting camp." },
     ],
   },
   {
@@ -69,14 +67,12 @@ const fixtures = [
     liveTabId: "LYm9OD-50GdC",
     sourceFile: "Nurse till Monetization.txt",
     title: "Plot Lab Reference - Damsel in Distress Nurse",
-    summary: "A gifted, financially struggling nurse is compelled to care for a wounded Yakuza boss and discovers danger, status, romance, and an unexpected route toward her dream clinic.",
-    logline: "After saving a flirtatious Yakuza boss, an ambitious nurse is taken into his dangerous household as enemies close in.",
+    summary: "A blood-covered nurse appears at an elite piano concerto before the story flashes back to her saving a critically wounded Yakuza boss in an ambulance. Afterward, his lieutenant offers her an enormous fee to become his private nurse.",
+    logline: "After saving a flirtatious Yakuza boss, a gifted nurse saving for her own clinic receives an offer that is not entirely optional.",
     characters: [
       { name: "Yuki", description: "A highly competent nurse saving for her own clinic; practical, warm, financially pressured, and brave under medical danger." },
-      { name: "Hiro", description: "A charismatic wounded Yakuza boss whose humor and vulnerability create romance while his status attracts lethal opposition." },
-      { name: "Ming", description: "Hiro's elegant, dangerous lieutenant who applies pressure, protects Yuki, and develops charged friction with Kamo." },
-      { name: "Kamo", description: "Yuki's protective doctor brother, suspicious of the Yakuza and capable of complicating her new alliance." },
-      { name: "Toji", description: "A crooked police officer tracking Hiro's survival and driving the incoming institutional threat." },
+      { name: "Hiro", description: "A critically wounded Yakuza boss who stays conscious by joking and flirting while Yuki fights to save him." },
+      { name: "Ming", description: "Hiro's beautiful, dangerous lieutenant, who tells Yuki that becoming his private nurse is not really a request." },
     ],
   },
   {
@@ -85,14 +81,12 @@ const fixtures = [
     liveTabId: "y5YjmlOgGtW6",
     sourceFile: "Ring till Monetization.txt",
     title: "Plot Lab Reference - Ring",
-    summary: "A desperate young woman claims sanctuary from a powerful dynasty using a royal heirloom that may make her the hidden bride required for its succession.",
-    logline: "A commoner carrying a royal ring forces a skeptical heir to shelter her, drawing them into romance, succession intrigue, and a masked attack.",
+    summary: "Desperate Hana demands sanctuary at the Saito estate while heir Ren is pressured to find the unknown girl tied to his grandfather's marriage alliance. Hana produces a sealed letter and a sapphire royal ring that shocks him.",
+    logline: "A desperate stranger carrying a royal heirloom confronts a skeptical dynasty heir and may be the missing bride his succession depends on.",
     characters: [
-      { name: "Hana", description: "A desperate but proud young woman seeking sanctuary, carrying a royal heirloom and hiding the full truth of her identity." },
-      { name: "Ren Saito", description: "A controlled zaibatsu heir caught between succession duty, family manipulation, and his growing promise to protect Hana." },
-      { name: "Oda Saito", description: "Ren's politically calculating father, who sees Hana as both a succession solution and a disposable obstacle." },
-      { name: "Cho", description: "The older estate maid who observes Hana closely, offers care, and helps reveal Ren's private tenderness." },
-      { name: "Noboru", description: "A trusted estate retainer whose incapacitation becomes the first visible proof that the masked threat has breached the house." },
+      { name: "Hana", description: "A desperate but defiant young woman demanding promised sanctuary, carrying a sealed letter and sapphire heirloom ring." },
+      { name: "Ren Saito", description: "A controlled zaibatsu heir who doubts Hana's claim while needing the mysterious alliance bride to secure succession." },
+      { name: "Ren's Father", description: "The dynasty head pressuring Ren to find the girl connected to his late grandfather's secret marriage alliance." },
     ],
   },
 ];
@@ -107,13 +101,20 @@ try {
   const insertTab = db.prepare(
     "INSERT INTO tabs (id, document_id, title, type, content, position, is_protected, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)"
   );
+  const updateDocument = db.prepare(
+    "UPDATE documents SET title = ?, content = ?, active_tab_id = ?, orientation = 'portrait', updated_at = ? WHERE id = ?"
+  );
+  const updateTab = db.prepare(
+    "UPDATE tabs SET content = ?, updated_at = ? WHERE id = ? AND document_id = ?"
+  );
 
   const seed = db.transaction(() => {
     for (const fixture of fixtures) {
       const documentId = `plot-lab-ref-${fixture.slug}`;
       const sourcePath = resolve(plotDirectory, fixture.sourceFile);
       assert.ok(existsSync(sourcePath), `Source plot not found: ${sourcePath}`);
-      assert.equal(db.prepare("SELECT COUNT(*) AS count FROM documents WHERE id = ?").get(documentId).count, 0, `Fixture already exists: ${documentId}`);
+      const exists = db.prepare("SELECT COUNT(*) AS count FROM documents WHERE id = ?").get(documentId).count > 0;
+      assert.ok(!exists || refreshExisting, `Fixture already exists: ${documentId}. Pass --refresh to replace its source tabs.`);
 
       const episodes = extractEpisodes(readFileSync(sourcePath, "utf8"));
       const research = tiptap([
@@ -126,7 +127,7 @@ try {
         paragraph(`Live document ${fixture.liveDocumentId}, selected tab ${fixture.liveTabId}; plot text loaded from the checked-in pre-monetization reference.`),
       ]);
       const characters = characterDocument(fixture.characters);
-      const plots = plotDocument(episodes);
+      const plots = plotDocument([episodes[0]]);
       const episodeOne = tiptap([
         heading("Predefined Episodes", 1),
         heading("Episode 1", 3),
@@ -139,11 +140,19 @@ try {
         episodes: `${fixture.slug}-episodes`,
       };
 
-      insertDocument.run(documentId, fixture.title, research, tabIds.plots, userId, now, now);
-      insertTab.run(tabIds.research, documentId, "Original Research", "series_overview", research, 0, now, now);
-      insertTab.run(tabIds.characters, documentId, "Characters", "characters", characters, 1, now, now);
-      insertTab.run(tabIds.plots, documentId, "Microdrama Plots", "microdrama_plots", plots, 4, now, now);
-      insertTab.run(tabIds.episodes, documentId, "Predefined Episodes", "predefined_episodes", episodeOne, 5, now, now);
+      if (exists) {
+        updateDocument.run(fixture.title, research, tabIds.plots, now, documentId);
+        updateTab.run(research, now, tabIds.research, documentId);
+        updateTab.run(characters, now, tabIds.characters, documentId);
+        updateTab.run(plots, now, tabIds.plots, documentId);
+        updateTab.run(episodeOne, now, tabIds.episodes, documentId);
+      } else {
+        insertDocument.run(documentId, fixture.title, research, tabIds.plots, userId, now, now);
+        insertTab.run(tabIds.research, documentId, "Original Research", "series_overview", research, 0, now, now);
+        insertTab.run(tabIds.characters, documentId, "Characters", "characters", characters, 1, now, now);
+        insertTab.run(tabIds.plots, documentId, "Microdrama Plots", "microdrama_plots", plots, 4, now, now);
+        insertTab.run(tabIds.episodes, documentId, "Predefined Episodes", "predefined_episodes", episodeOne, 5, now, now);
+      }
     }
   });
 

@@ -21,6 +21,10 @@ const promptSource = await readFile(
   new URL("../src/lib/plot-lab-v2/prompts.ts", import.meta.url),
   "utf8"
 );
+const referenceFixtureSource = await readFile(
+  new URL("./plot-lab-v2-reference-fixtures.mjs", import.meta.url),
+  "utf8"
+);
 const creativeSchemaSource = source.slice(
   source.indexOf("const creativeOutput"),
   source.indexOf("const connectedOutput")
@@ -117,6 +121,8 @@ assert.match(promptSource, /two or three natural, vivid sentences/i, "The connec
 assert.match(promptSource, /PLOT LAB CREATIVE AUTHOR v2\.1[\s\S]*?flashback or memory fragment[\s\S]*?director's-cut insert[\s\S]*?intercut parallel action/i, "The Creative Author must have an optional cinematic-compression palette.");
 assert.match(promptSource, /optional tools, never checklist requirements/i, "Cinematic devices must remain creative options rather than hard validation rules.");
 assert.match(promptSource, /must not fully deliver or resolve the monetization revelation before the final unit/i, "The Creative Author must protect the final monetization reveal from landing early.");
+assert.match(referenceFixtureSource, /const plots = plotDocument\(\[episodes\[0\]\]\)/, "Reference fixtures must expose only Episode 1 in the plot source tab.");
+assert.doesNotMatch(referenceFixtureSource, /false-amnesia|staged assassination|masked attack|Noboru|Toji|King Kai|Queen Yoko|Goro/i, "Episode 1 fixtures must not leak later-series twists or characters.");
 assert.match(source, /candidates: \{ type: "array", minItems: 1, maxItems: 2/, "Hidden exploration must accept one usable candidate instead of failing when a second option is absent.");
 assert.match(source, /unitSpine: \{ type: "array", minItems: 1, maxItems: 8/, "Hidden routes must accept an imperfect beat count for downstream normalization.");
 assert.match(source, /number: input\.orientation === "portrait" \? index \+ 2 : index \+ 1/, "Route unit numbering must be normalized as transport metadata instead of hard-failing usable story routes.");
