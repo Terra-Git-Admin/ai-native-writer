@@ -5,7 +5,7 @@ import { logEvent } from "@/lib/saveTrace";
 import type { PlotLabConnectedBatch, PlotLabEndpointCandidate, PlotLabGenerationStage, PlotLabMessage, PlotLabOrchestrationArtifacts, PlotLabOrchestratorDecision, PlotLabPurposeMap, PlotLabRouteCandidate, PlotLabSessionState, PlotLabSourceTruthBrief, PlotLabSpecialistBrief } from "@/lib/plot-lab-v2/contracts";
 import { DrizzlePlotLabRepository } from "@/lib/plot-lab-v2/repository";
 import { connectCreativeRoute, exploreEndpoints, exploreRoutes, generateCreativeRoute, generatePurposeMap, generateSourceTruth, generateSpecialistBrief, repairCreativeRoute, runHolisticQA, selectRouteAndSpecialists, writePlotsFromPurposeMap, type CreativeRoute, type PlotLabModelChoice } from "@/lib/plot-lab-v2/real-ai";
-import { fallbackBatchFromPurposeMap, fallbackPurposeMap, inferPurposeDestination } from "@/lib/plot-lab-v2/purpose-map";
+import { fallbackBatchFromPurposeMap, inferPurposeDestination } from "@/lib/plot-lab-v2/purpose-map";
 
 interface PlotLabGenerationInput {
   mode?: "purpose_planning" | "plot_writing" | "legacy";
@@ -27,7 +27,7 @@ const STAGES: PlotLabGenerationStage[] = ["source_truth", "endpoint_exploration"
 function publicGenerationError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/No decryptable API key|Configure one AI provider/i.test(message)) return message;
-  if (/required story range|final format|did not contain|two candidates|unknown route/i.test(message)) return "Levi returned incomplete structured output. Retry the failed stage; completed planning artifacts are safe.";
+  if (/required story range|planning instructions|final format|did not contain|two candidates|unknown route/i.test(message)) return "Levi returned incomplete structured output. Retry the failed stage; completed planning artifacts are safe.";
   return "Levi could not complete this batch. Your source, interview, and completed planning artifacts are safe; try again.";
 }
 
@@ -214,21 +214,14 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
     if (input.mode === "purpose_planning") {
       await begin("purpose_planning");
       const monetizationEpisode = inferPurposeDestination(input.session);
-      let purposeMap: PlotLabPurposeMap;
-      try {
-        purposeMap = await generatePurposeMap({
-          session: input.session,
-          messages: input.messages,
-          model: input.model,
-          monetizationEpisode,
-          revisionInstruction: input.confirmedInstruction,
-          previousPurposeMap: input.previousPurposeMap,
-        });
-      } catch (purposeError) {
-        if (isFatalProviderError(purposeError)) throw purposeError;
-        purposeMap = fallbackPurposeMap(input.session);
-        logEvent("plot_lab_v2.purpose.degraded", { jobId, reason: purposeError instanceof Error ? purposeError.message : String(purposeError) });
-      }
+      const purposeMap = await generatePurposeMap({
+        session: input.session,
+        messages: input.messages,
+        model: input.model,
+        monetizationEpisode,
+        revisionInstruction: input.confirmedInstruction,
+        previousPurposeMap: input.previousPurposeMap,
+      });
       await repository.saveGenerationCheckpoint({ jobId, checkpoint: { purposeMap } });
       await repository.completePurposeMap({
         jobId,

@@ -42,6 +42,14 @@ export function normalizePurposeMap(
   if (lines.some((line) => !line) || new Set(lines).size !== lines.length) {
     throw new Error("Purpose Planner returned missing or duplicate episode purposes.");
   }
+  const instructionShaped = units.find((unit) => {
+    const line = unit.purposeLine.trim();
+    return /\bleaving a concrete changed state that forces\b/i.test(line)
+      || /\b(?:episode 1 consequence becomes a contract|the lead proves a defining quality|the central relationship changes|a hidden pressure becomes legible|the outside world collides with the leads|the lead crosses a threshold|the monetization turn lands)\b/i.test(line);
+  });
+  if (instructionShaped) {
+    throw new Error(`Purpose Planner returned planning instructions instead of an Episode ${instructionShaped.number} story event.`);
+  }
   return {
     format: orientation,
     monetizationEpisode,
@@ -52,50 +60,6 @@ export function normalizePurposeMap(
       purposeLine: unit.purposeLine.trim(),
     })),
     warnings: [...new Set(candidate.warnings ?? [])],
-  };
-}
-
-export function fallbackPurposeMap(session: PlotLabSessionState): PlotLabPurposeMap {
-  const monetizationEpisode = inferPurposeDestination(session);
-  const numbers = purposeUnitNumbers(session.orientation, monetizationEpisode);
-  const brief = session.interviewCheckpoint.characterBrief;
-  const destination = brief?.monetizationPoint?.trim() || session.seed?.trim() || "Deliver the writer's selected monetization turn.";
-  const unresolved = brief?.storySoul.unresolvedPressure?.trim() || "the unresolved Episode 1 pressure";
-  const functions = [
-    ["Episode 1 consequence becomes a contract", "cash the immediate Episode 1 pressure and lock the lead into the continuing story"],
-    ["The lead proves a defining quality", "make a consequential attempt that changes what the other characters expect"],
-    ["The central relationship changes", "force behavior that creates trust, suspicion, obligation, attraction, or strain"],
-    ["A hidden pressure becomes legible", "reframe what the audience or lead understands about the danger"],
-    ["The outside world collides with the leads", "bring story-bearing opposition or social pressure into the central engine"],
-    ["The lead crosses a threshold", "make a costly commitment that moves the story into the monetization arena"],
-    ["The monetization turn lands", `deliver ${destination}`],
-  ] as const;
-  const selected = functions.slice(functions.length - numbers.length);
-  return {
-    format: session.orientation,
-    monetizationEpisode,
-    destination,
-    units: numbers.map((number, index) => {
-      const [title, move] = selected[index];
-      const final = index === numbers.length - 1;
-      const next = final ? destination : selected[index + 1][0];
-      return {
-        id: `${session.orientation === "portrait" ? "ep" : "milestone"}-${number}`,
-        number,
-        title,
-        purposeLine: `${title}: The protagonist must ${move}, leaving a concrete changed state that forces ${next.toLowerCase()}.`,
-        incomingPressure: index === 0 ? unresolved : `The prior unit's changed state forces ${title.toLowerCase()}.`,
-        decisiveMove: move,
-        stateDelta: final ? destination : `The story can no longer return to its state before ${title.toLowerCase()}.`,
-        outgoingHook: next,
-        dominantFunction: final ? "paywall_turn" : "causal_progression",
-        changedDimensions: final ? ["plot_objective", "power_opposition"] : ["plot_objective"],
-        scenePhase: "Resolve the inherited pressure before advancing the dramatic situation.",
-        characterFunctions: ["protagonist: makes the consequential move"],
-        skeletonElementsUsed: final ? brief?.requiredSkeletonElements ?? [] : [],
-      };
-    }),
-    warnings: ["Purpose Planner returned incomplete structure; Levi preserved a distinct reviewable purpose for every unit."],
   };
 }
 

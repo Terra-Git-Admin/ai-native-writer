@@ -16,6 +16,7 @@ import {
   PLOT_LAB_PACING_REFERENCES,
   PLOT_LAB_PACING_TRAINING_PACK_VERSION,
 } from "../src/lib/plot-lab-v2/pacing-training-pack.ts";
+import { normalizePurposeMap } from "../src/lib/plot-lab-v2/purpose-map.ts";
 
 function intake(overrides = {}) {
   return {
@@ -33,6 +34,24 @@ function expectCode(code, fn) {
   assert.throws(fn, (error) => error instanceof Error && error.code === code);
 }
 
+function purposeUnit(number, purposeLine) {
+  return {
+    id: `ep-${number}`,
+    number,
+    title: `Episode ${number}`,
+    purposeLine,
+    incomingPressure: "The previous episode's danger is still in motion.",
+    decisiveMove: "Karin hides Yuji before the riders reach the riverbank.",
+    stateDelta: "Karin is now complicit in Yuji's escape.",
+    outgoingHook: "The captain orders the reeds searched.",
+    dominantFunction: "commit",
+    changedDimensions: ["obligation"],
+    scenePhase: "Minutes later at the riverbank.",
+    characterFunctions: ["Karin chooses treason to keep Yuji alive."],
+    skeletonElementsUsed: [],
+  };
+}
+
 {
   assert.match(PLOT_LAB_PACING_TRAINING_PACK_VERSION, /^purpose-pacing-v1-/);
   assert.deepEqual(PLOT_LAB_PACING_REFERENCES.map((reference) => reference.story), [
@@ -42,6 +61,25 @@ function expectCode(code, fn) {
   assert.deepEqual(
     PLOT_LAB_PACING_REFERENCES.filter((reference) => reference.monetizationEpisode === 7).map((reference) => reference.story),
     ["Farm Girl", "Nurse"]
+  );
+}
+
+{
+  const units = Array.from({ length: 7 }, (_, index) => purposeUnit(
+    index + 2,
+    index === 0
+      ? "Episode 1 consequence becomes a contract: The protagonist must cash the immediate Episode 1 pressure, leaving a concrete changed state that forces the lead proves a defining quality."
+      : `Karin moves Yuji to refuge ${index + 2}, but the riders close another escape route and force her to risk a new ally.`
+  ));
+  assert.throws(
+    () => normalizePurposeMap({
+      format: "portrait",
+      monetizationEpisode: 8,
+      destination: "Karin and Yuji return to the besieged kingdom.",
+      units,
+      warnings: [],
+    }, "portrait", 8),
+    /planning instructions instead of an Episode 2 story event/
   );
 }
 
