@@ -28,6 +28,11 @@ const ALLOWED_ACTIONS: Record<PlotLabSessionPhase, ReadonlySet<PlotLabAction["ki
     "continue_generation_with_snapshot",
     "restart",
   ]),
+  purpose_review: new Set([
+    "revise_purpose_map",
+    "approve_purpose_map",
+    "restart",
+  ]),
   queued: new Set(["restart"]),
   orchestrating: new Set(["restart"]),
   creative: new Set(["restart"]),

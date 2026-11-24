@@ -4,6 +4,7 @@ import type {
   PlotLabGenerationStage,
   PlotLabMessage,
   PlotLabMutationProposal,
+  PlotLabPurposeMap,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
 
@@ -125,7 +126,7 @@ export interface PlotLabRepository {
     userId: string;
     isAdmin?: boolean;
     envelope: PlotLabActionEnvelope & {
-      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
+      action: { kind: "request_generation" } | { kind: "revise_purpose_map"; purposeMapMessageId: string; instruction: string } | { kind: "approve_purpose_map"; purposeMapMessageId: string } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
     };
     requestHash: string;
     jobId: string;
@@ -143,6 +144,12 @@ export interface PlotLabRepository {
     jobId: string;
     checkpoint: Record<string, unknown>;
   }): Promise<void>;
+
+  completePurposeMap(input: {
+    jobId: string;
+    purposeMap: PlotLabPurposeMap;
+    revisionInstruction?: string;
+  }): Promise<PlotLabSessionState>;
 
   completeGeneration(input: {
     jobId: string;

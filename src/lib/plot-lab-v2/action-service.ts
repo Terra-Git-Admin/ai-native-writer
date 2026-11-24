@@ -9,6 +9,7 @@ import type {
   PlotLabInterviewCheckpoint,
   PlotLabMessage,
   PlotLabMutationProposal,
+  PlotLabPurposeMap,
   PlotLabReferenceInput,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
@@ -132,6 +133,18 @@ export function parsePlotLabActionEnvelope(value: unknown): PlotLabActionEnvelop
       break;
     case "request_generation":
       action = { kind: "request_generation" };
+      break;
+    case "revise_purpose_map":
+      if (!nonEmptyString(raw.purposeMapMessageId, 200) || !nonEmptyString(raw.instruction, 4_000)) {
+        throw new PlotLabActionServiceError("INVALID_ACTION", "Purpose-map revision requires the current map and feedback.");
+      }
+      action = { kind: "revise_purpose_map", purposeMapMessageId: raw.purposeMapMessageId, instruction: raw.instruction };
+      break;
+    case "approve_purpose_map":
+      if (!nonEmptyString(raw.purposeMapMessageId, 200)) {
+        throw new PlotLabActionServiceError("INVALID_ACTION", "Purpose-map approval requires the current map.");
+      }
+      action = { kind: "approve_purpose_map", purposeMapMessageId: raw.purposeMapMessageId };
       break;
     case "accept_output":
       if (!Number.isInteger(raw.outputVersion) || Number(raw.outputVersion) < 1) {
@@ -344,6 +357,16 @@ function latestBatch(messages: PlotLabMessage[]): PlotLabConnectedBatch | null {
     }
   }
   return null;
+}
+
+function currentPurposeMap(messages: PlotLabMessage[], messageId: string): PlotLabPurposeMap | null {
+  const maps = messages.filter((message) => message.kind === "purpose_map" && !message.supersededAt);
+  const latest = maps.at(-1);
+  if (!latest || latest.id !== messageId) return null;
+  const payload = latest.payload?.purposeMap;
+  if (!payload || typeof payload !== "object") return null;
+  const purposeMap = payload as PlotLabPurposeMap;
+  return Array.isArray(purposeMap.units) && purposeMap.units.length > 0 ? purposeMap : null;
 }
 
 async function createRealConversationMessages(input: {
@@ -598,7 +621,7 @@ export async function executeMockPlotLabAction(input: {
     resolvedModel =
       sessionModelChoice(
         session,
-        envelope.action.kind === "request_generation" || envelope.action.kind === "retry_failed_stage"
+        envelope.action.kind === "request_generation" || envelope.action.kind === "revise_purpose_map" || envelope.action.kind === "approve_purpose_map" || envelope.action.kind === "retry_failed_stage"
           ? "creative"
           : "interviewer"
       );
@@ -613,6 +636,54 @@ export async function executeMockPlotLabAction(input: {
         );
       }
     }
+  }
+
+  if (realAI && (envelope.action.kind === "revise_purpose_map" || envelope.action.kind === "approve_purpose_map")) {
+    const thread = await repository.getSessionThread({
+      documentId,
+      userId,
+      isAdmin,
+      includeSuperseded: false,
+      limit: 100,
+    });
+    const purposeMap = currentPurposeMap(thread.messages, envelope.action.purposeMapMessageId);
+    if (!purposeMap) {
+      throw new PlotLabActionServiceError("INVALID_ACTION", "That purpose map is stale or unavailable. Review the latest map before continuing.", 409);
+    }
+    const jobId = randomUUID();
+    const mode = envelope.action.kind === "revise_purpose_map" ? "purpose_planning" : "plot_writing";
+    const queued = await repository.queueGeneration({
+      documentId,
+      userId,
+      isAdmin,
+      envelope: envelope as PlotLabActionEnvelope & {
+        action: { kind: "revise_purpose_map"; purposeMapMessageId: string; instruction: string } | { kind: "approve_purpose_map"; purposeMapMessageId: string };
+      },
+      requestHash,
+      jobId,
+      modelId: resolvedModel!.modelId,
+      thinking: resolvedModel!.thinking,
+      inputSnapshot: {
+        mode,
+        session,
+        messages: thread.messages,
+        model: resolvedModel,
+        promptVersions: PLOT_LAB_PROMPT_VERSIONS,
+        purposeMap: mode === "plot_writing" ? purposeMap : undefined,
+        previousPurposeMap: mode === "purpose_planning" ? purposeMap : undefined,
+        confirmedInstruction: envelope.action.kind === "revise_purpose_map" ? envelope.action.instruction : undefined,
+        mutationKind: mode === "plot_writing" ? "approved_purpose_map" : "purpose_map_revision",
+      },
+    });
+    startPlotLabGenerationJob(jobId);
+    const canonical = await repository.getSessionThread({ documentId, userId, isAdmin });
+    return {
+      replayed: false,
+      kind: mode === "plot_writing" ? "plot_writing_queued" : "purpose_revision_queued",
+      jobId,
+      revision: queued.session.revision,
+      ...canonical,
+    };
   }
 
   if (realAI && envelope.action.kind === "confirm_proposal" && envelope.action.downstreamChoice === "update") {
@@ -692,7 +763,7 @@ export async function executeMockPlotLabAction(input: {
     }
 
     const artifacts = checkpoint.artifacts;
-    if (session.failedStage !== "source_truth" && (!artifacts || typeof artifacts !== "object")) {
+    if (!["source_truth", "purpose_planning", "plot_writing"].includes(session.failedStage) && (!artifacts || typeof artifacts !== "object")) {
       throw new PlotLabActionServiceError(
         "INVALID_ACTION",
         "The saved orchestration checkpoint is unavailable. Restart with Levi to try again.",
@@ -754,6 +825,7 @@ export async function executeMockPlotLabAction(input: {
       modelId: resolvedModel!.modelId,
       thinking: resolvedModel!.thinking,
       inputSnapshot: {
+        mode: "purpose_planning",
         session,
         messages: thread.messages,
         model: resolvedModel,
@@ -909,10 +981,12 @@ export async function executeMockPlotLabAction(input: {
             promptVersions: PLOT_LAB_PROMPT_VERSIONS,
             modelAssignments: {
               interviewer: resolvedModel,
+              purposePlanner: resolvedModel,
+              purposeWriter: resolvedModel,
               creative: resolvedModel,
               connector: resolvedModel,
             },
-            trainingPackVersion: "unseeded",
+            trainingPackVersion: String(PLOT_LAB_PROMPT_VERSIONS.trainingPack),
           }
         : {}),
     },

@@ -30,6 +30,7 @@ import type {
   PlotLabAction,
   PlotLabConnectedBatch,
   PlotLabMessage,
+  PlotLabPurposeMap,
   PlotLabReferenceInput,
   PlotLabSessionState,
 } from "@/lib/plot-lab-v2/contracts";
@@ -88,11 +89,24 @@ function phaseLabel(session: PlotLabSessionState | null): string {
       ? "Ready to generate"
       : "Understanding your story";
   }
+  if (session.phase === "purpose_review") return "Review the episode purposes";
   if (["queued", "orchestrating", "creative", "reviewing", "connecting"].includes(session.phase)) {
     return "Creating your first batch";
   }
   if (session.phase === "complete") return "Your latest story route";
   return "Needs attention";
+}
+
+function purposeMapForMessage(message: PlotLabMessage): PlotLabPurposeMap | null {
+  const value = message.payload?.purposeMap;
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as PlotLabPurposeMap;
+  return Array.isArray(candidate.units) && candidate.units.length > 0 ? candidate : null;
+}
+
+function purposeRangeLabel(map: PlotLabPurposeMap): string {
+  if (map.format === "portrait") return `Episodes 2–${map.monetizationEpisode}`;
+  return `Milestones 1–${map.monetizationEpisode}`;
 }
 
 function activeQuestion(messages: PlotLabMessage[], session: PlotLabSessionState | null) {
@@ -348,15 +362,21 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
 
   const question = useMemo(() => activeQuestion(thread.messages, thread.session), [thread]);
   const starters = useMemo(() => startersFor(question), [question]);
+  const latestPurposeMessage = useMemo(
+    () => thread.messages.filter((message) => message.kind === "purpose_map" && !message.supersededAt).at(-1) ?? null,
+    [thread.messages]
+  );
 
   const submitComposer = useCallback(async () => {
     const value = composer.trim();
     if (!value || mutating || archivedThread) return;
     const action: PlotLabAction = thread.session?.phase === "complete"
       ? { kind: "chat", text: value }
-      : question
-        ? { kind: "answer", questionMessageId: question.id, text: value, selectedStarterId }
-        : { kind: "add_context", text: value };
+      : thread.session?.phase === "purpose_review" && latestPurposeMessage
+        ? { kind: "revise_purpose_map", purposeMapMessageId: latestPurposeMessage.id, instruction: value }
+        : question
+          ? { kind: "answer", questionMessageId: question.id, text: value, selectedStarterId }
+          : { kind: "add_context", text: value };
     const sent = await sendAction(action);
     if (sent) {
       setComposer("");
@@ -367,7 +387,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
         // Ignore draft cleanup failures.
       }
     }
-  }, [archivedThread, composer, draftKey, mutating, question, selectedStarterId, sendAction, thread.session?.phase]);
+  }, [archivedThread, composer, draftKey, latestPurposeMessage, mutating, question, selectedStarterId, sendAction, thread.session?.phase]);
 
   const submitEdit = useCallback(async () => {
     if (!editingAnswerId || !editingAnswer.trim()) return;
@@ -728,7 +748,62 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
             {visibleThread.messages.filter((message) => !message.supersededAt).map((message) => {
               const isWriter = message.role === "writer";
               const isEditableAnswer = !archivedThread && message.kind === "answer" && !message.supersededAt;
+              const purposeMap = purposeMapForMessage(message);
               const batch = batchForMessage(message);
+              if (purposeMap) {
+                const isCurrent = !archivedThread && thread.session?.phase === "purpose_review" && latestPurposeMessage?.id === message.id;
+                return (
+                  <div key={message.id} className="rounded-xl border border-violet-200 bg-violet-50/30 p-3 shadow-sm dark:border-violet-900/70 dark:bg-violet-950/20">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{message.content}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{purposeRangeLabel(purposeMap)} · Purpose check before full writing</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(purposeMap.units.map((unit) => `${unit.number}. ${unit.purposeLine}`).join("\n\n"));
+                          setCopiedMessageId(message.id + ":purpose");
+                          window.setTimeout(() => setCopiedMessageId(null), 1500);
+                        }}
+                        className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                      >
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        {copiedMessageId === message.id + ":purpose" ? "Copied" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {purposeMap.units.map((unit) => (
+                        <article key={unit.id} className="rounded-lg border border-border bg-card p-3">
+                          <p className="text-sm leading-6 text-foreground">
+                            <span className="font-semibold">{purposeMap.format === "portrait" ? `EP${unit.number}` : `M${unit.number}`}</span>
+                            {" — "}{unit.purposeLine}
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                    {purposeMap.warnings.length ? (
+                      <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                        {purposeMap.warnings.join(" ")}
+                      </div>
+                    ) : null}
+                    {isCurrent ? (
+                      <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3">
+                        <p className="text-xs leading-5 text-muted-foreground">Send feedback below to rebuild the complete map, or approve it to write the full plots.</p>
+                        <button
+                          type="button"
+                          onClick={() => void sendAction({ kind: "approve_purpose_map", purposeMapMessageId: message.id })}
+                          disabled={mutating}
+                          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-violet-700 px-3 text-xs font-semibold text-white hover:bg-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50"
+                        >
+                          {mutating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+                          Build full plots
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
               if (batch) {
                 return (
                   <div key={message.id} className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-3 shadow-sm dark:border-indigo-900/70 dark:bg-indigo-950/20">
@@ -736,7 +811,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                       <div>
                         <p className="text-sm font-semibold text-foreground">{message.content}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {batch.format === "portrait" ? "Episodes 2–8" : "Chapter 1"} · Version {batch.version}
+                          {batch.format === "portrait" ? `Episodes ${batch.units.at(0)?.number ?? 2}–${batch.units.at(-1)?.number ?? 8}` : "Chapter 1"} · Version {batch.version}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col gap-2">
@@ -929,7 +1004,11 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
             {mutating || ["queued", "orchestrating", "creative", "reviewing", "connecting"].includes(thread.session?.phase ?? "") ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                {thread.session?.activeJobId ? "Levi is creating the connected batch…" : "Levi is updating the session…"}
+                {thread.session?.activeJobId
+                  ? thread.session.phase === "orchestrating"
+                    ? "Levi is creating the purpose map…"
+                    : "Levi is writing the approved plots…"
+                  : "Levi is updating the session…"}
               </div>
             ) : null}
             {error ? (
@@ -966,7 +1045,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                     disabled={mutating}
                     className="min-h-9 rounded-md px-2.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50 dark:text-indigo-300 dark:hover:bg-indigo-950/30"
                   >
-                    Generate now
+                    Build purpose map
                   </button>
                 ) : null}
               </div>
@@ -988,13 +1067,15 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                   placeholder={
                     thread.session?.phase === "complete"
                       ? "Ask Levi about the batch or describe a change to propose…"
+                      : thread.session?.phase === "purpose_review"
+                        ? "Tell Levi what to change in the purpose map…"
                       : thread.session?.activeJobId
                         ? "Levi is creating the batch…"
                         : question
                           ? "Answer Levi or add your own direction…"
                           : "Add more context for Levi…"
                   }
-                  disabled={mutating || !["interview", "complete"].includes(thread.session?.phase ?? "")}
+                  disabled={mutating || !["interview", "purpose_review", "complete"].includes(thread.session?.phase ?? "")}
                   className="w-full resize-none rounded-t-lg bg-transparent px-3 py-2.5 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground disabled:opacity-60"
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-border px-2 py-2">
@@ -1002,7 +1083,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                   <button
                     type="button"
                     onClick={() => void submitComposer()}
-                    disabled={mutating || !["interview", "complete"].includes(thread.session?.phase ?? "") || !composer.trim()}
+                    disabled={mutating || !["interview", "purpose_review", "complete"].includes(thread.session?.phase ?? "") || !composer.trim()}
                     className="inline-flex min-h-10 items-center gap-2 rounded-md bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" aria-hidden="true" /> Send

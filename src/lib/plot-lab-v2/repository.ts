@@ -16,6 +16,7 @@ import type {
   PlotLabGenerationStage,
   PlotLabMessage,
   PlotLabMutationProposal,
+  PlotLabPurposeMap,
   PlotLabSessionState,
 } from "./contracts";
 import type {
@@ -718,7 +719,7 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
     userId: string;
     isAdmin?: boolean;
     envelope: PlotLabActionEnvelope & {
-      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
+      action: { kind: "request_generation" } | { kind: "revise_purpose_map"; purposeMapMessageId: string; instruction: string } | { kind: "approve_purpose_map"; purposeMapMessageId: string } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
     };
     requestHash: string;
     jobId: string;
@@ -754,6 +755,12 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
           .where(eq(plotLabProposals.id, proposal.id)).run();
       }
 
+      const generationMode = typeof input.inputSnapshot.mode === "string" ? input.inputSnapshot.mode : "legacy";
+      const initialStage = generationMode === "purpose_planning"
+        ? "purpose_planning"
+        : generationMode === "plot_writing"
+          ? "plot_writing"
+          : "source_truth";
       tx.insert(aiJobs).values({
         id: input.jobId,
         documentId: input.documentId,
@@ -769,8 +776,8 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
         concurrencyKey: "plot_lab:" + state.sessionId,
         sessionRevision: queued.revision,
         inputSnapshotJson: JSON.stringify(input.inputSnapshot),
-        currentStage: "source_truth",
-        stageAttemptsJson: JSON.stringify({ source_truth: 0, endpoint_exploration: 0, route_exploration: 0, specialist_planning: 0, creative_authoring: 0, holistic_qa: 0, targeted_repair: 0, connecting: 0 }),
+        currentStage: initialStage,
+        stageAttemptsJson: JSON.stringify({ purpose_planning: 0, plot_writing: 0, source_truth: 0, endpoint_exploration: 0, route_exploration: 0, specialist_planning: 0, creative_authoring: 0, holistic_qa: 0, targeted_repair: 0, connecting: 0 }),
       }).run();
       tx.insert(plotLabActions).values({
         id: input.envelope.actionId,
@@ -838,6 +845,79 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
     if (updated.changes !== 1) {
       throw new PlotLabRepositoryError("SESSION_STALE", "The Plot Lab generation job lost its reservation.");
     }
+  }
+
+  async completePurposeMap(input: {
+    jobId: string;
+    purposeMap: PlotLabPurposeMap;
+    revisionInstruction?: string;
+  }): Promise<PlotLabSessionState> {
+    return this.database.transaction((tx) => {
+      const job = tx.select().from(aiJobs).where(eq(aiJobs.id, input.jobId)).get();
+      if (!job?.plotLabSessionId || job.status !== "running") {
+        throw new PlotLabRepositoryError("SESSION_STALE", "The Plot Lab purpose job is no longer running.");
+      }
+      const row = tx.select().from(plotLabSessions).where(eq(plotLabSessions.id, job.plotLabSessionId)).get();
+      if (!row) throw new PlotLabRepositoryError("SESSION_NOT_FOUND", "The Plot Lab session no longer exists.");
+      const state = toSession(row);
+      let snapshot: { promptVersions?: Record<string, string>; model?: { modelId?: string; thinking?: boolean } } = {};
+      try {
+        snapshot = JSON.parse(job.inputSnapshotJson ?? "{}") as typeof snapshot;
+      } catch {
+        snapshot = {};
+      }
+      const calibratedState: PlotLabSessionState = {
+        ...state,
+        promptVersions: snapshot.promptVersions ?? state.promptVersions,
+        modelAssignments: snapshot.model?.modelId
+          ? { ...state.modelAssignments, purposePlanner: { modelId: snapshot.model.modelId, thinking: snapshot.model.thinking === true } }
+          : state.modelAssignments,
+        trainingPackVersion: snapshot.promptVersions?.trainingPack ?? state.trainingPackVersion,
+      };
+      const completed = transitionPlotLabSession(calibratedState, { type: "purpose_map_completed", jobId: input.jobId });
+      const now = new Date();
+      const messages: Array<Omit<PlotLabMessage, "sequence" | "createdAt">> = [];
+      if (input.revisionInstruction?.trim()) {
+        messages.push({
+          id: `${input.jobId}:writer-purpose-revision`,
+          sessionId: state.sessionId,
+          role: "writer",
+          kind: "purpose_map_revision",
+          content: input.revisionInstruction.trim(),
+          actionId: job.id,
+          dependencyIds: [],
+          replayScope: "session",
+        });
+      }
+      messages.push({
+        id: `${input.jobId}:purpose-map`,
+        sessionId: state.sessionId,
+        role: "levi",
+        kind: "purpose_map",
+        content: input.revisionInstruction?.trim()
+          ? "I rebuilt the complete purpose map around your feedback."
+          : "Here is the fast purpose map. Check the progression before Levi writes the full plots.",
+        payload: { purposeMap: input.purposeMap },
+        actionId: job.id,
+        dependencyIds: [],
+        replayScope: "derived",
+      });
+      insertMessages(tx, state.sessionId, messages, now);
+      tx.update(plotLabSessions).set(mutableSessionValues(completed, now))
+        .where(and(eq(plotLabSessions.id, state.sessionId), eq(plotLabSessions.revision, state.revision))).run();
+      tx.update(aiJobs).set({
+        status: "completed",
+        currentStage: "purpose_planning",
+        resultJson: JSON.stringify({ purposeMap: input.purposeMap }),
+        completedAt: now,
+      }).where(eq(aiJobs.id, input.jobId)).run();
+      tx.update(plotLabActions).set({
+        status: "completed",
+        responseJson: JSON.stringify({ kind: "purpose_map_completed", jobId: input.jobId, purposeMapMessageId: `${input.jobId}:purpose-map` }),
+        completedAt: now,
+      }).where(eq(plotLabActions.jobId, input.jobId)).run();
+      return completed;
+    });
   }
 
   async completeGeneration(input: {

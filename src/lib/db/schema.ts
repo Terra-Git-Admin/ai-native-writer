@@ -275,6 +275,7 @@ export const plotLabSessions = sqliteTable(
       enum: [
         "intake",
         "interview",
+        "purpose_review",
         "queued",
         "orchestrating",
         "creative",
@@ -299,7 +300,7 @@ export const plotLabSessions = sqliteTable(
     activeJobId: text("active_job_id"),
     pendingSyncActionId: text("pending_sync_action_id"),
     failedStage: text("failed_stage", {
-      enum: ["source_truth", "endpoint_exploration", "route_exploration", "specialist_planning", "creative_authoring", "holistic_qa", "targeted_repair", "connecting", "creative", "unit_creative", "continuity"],
+      enum: ["purpose_planning", "plot_writing", "source_truth", "endpoint_exploration", "route_exploration", "specialist_planning", "creative_authoring", "holistic_qa", "targeted_repair", "connecting", "creative", "unit_creative", "continuity"],
     }),
     promptVersionsJson: text("prompt_versions_json").notNull().default("{}"),
     modelAssignmentsJson: text("model_assignments_json").notNull().default("{}"),

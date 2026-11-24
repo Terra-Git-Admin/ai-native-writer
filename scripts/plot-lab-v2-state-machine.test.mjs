@@ -12,6 +12,10 @@ import {
   assertPlotLabActionAllowed,
   isPlotLabActionAllowed,
 } from "../src/lib/plot-lab-v2/action-policy.ts";
+import {
+  PLOT_LAB_PACING_REFERENCES,
+  PLOT_LAB_PACING_TRAINING_PACK_VERSION,
+} from "../src/lib/plot-lab-v2/pacing-training-pack.ts";
 
 function intake(overrides = {}) {
   return {
@@ -30,6 +34,18 @@ function expectCode(code, fn) {
 }
 
 {
+  assert.match(PLOT_LAB_PACING_TRAINING_PACK_VERSION, /^purpose-pacing-v1-/);
+  assert.deepEqual(PLOT_LAB_PACING_REFERENCES.map((reference) => reference.story), [
+    "Farm Girl", "Nurse", "Prince", "Ring", "Florist", "I Object", "Lift",
+  ]);
+  assert.equal(PLOT_LAB_PACING_REFERENCES.flatMap((reference) => reference.rhythm).length, 47);
+  assert.deepEqual(
+    PLOT_LAB_PACING_REFERENCES.filter((reference) => reference.monetizationEpisode === 7).map((reference) => reference.story),
+    ["Farm Girl", "Nurse"]
+  );
+}
+
+{
   const session = intake({ revision: 7 });
   assert.doesNotThrow(() => assertPlotLabRevision(session, 7));
   expectCode("SESSION_STALE", () => assertPlotLabRevision(session, 6));
@@ -38,6 +54,9 @@ function expectCode(code, fn) {
 {
   assert.equal(isPlotLabActionAllowed("intake", "start"), true);
   assert.equal(isPlotLabActionAllowed("interview", "request_generation"), true);
+  assert.equal(isPlotLabActionAllowed("purpose_review", "revise_purpose_map"), true);
+  assert.equal(isPlotLabActionAllowed("purpose_review", "approve_purpose_map"), true);
+  assert.equal(isPlotLabActionAllowed("purpose_review", "request_generation"), false);
   assert.equal(isPlotLabActionAllowed("complete", "chat"), true);
   assert.equal(isPlotLabActionAllowed("complete", "accept_output"), true);
   assert.equal(isPlotLabActionAllowed("complete", "answer"), false);
@@ -62,6 +81,22 @@ function expectCode(code, fn) {
     failed,
     { kind: "continue_generation_with_snapshot" }
   ));
+}
+
+{
+  let state = intake({ phase: "interview", revision: 2 });
+  state = transitionPlotLabSession(state, { type: "generation_queued", jobId: "purpose-job" });
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "purpose-job", stage: "purpose_planning" });
+  assert.equal(state.phase, "orchestrating");
+  state = transitionPlotLabSession(state, { type: "purpose_map_completed", jobId: "purpose-job" });
+  assert.equal(state.phase, "purpose_review");
+  assert.equal(state.activeJobId, undefined);
+  state = transitionPlotLabSession(state, { type: "generation_queued", jobId: "writer-job" });
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "writer-job", stage: "plot_writing" });
+  assert.equal(state.phase, "creative");
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "writer-job", stage: "connecting" });
+  state = transitionPlotLabSession(state, { type: "job_completed", jobId: "writer-job", outputVersion: 1 });
+  assert.equal(state.phase, "complete");
 }
 
 {

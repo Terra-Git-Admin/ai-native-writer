@@ -36,6 +36,7 @@ export type PlotLabStateEvent =
   | { type: "generation_queued"; jobId: string }
   | { type: "job_stage_started"; jobId: string; stage: PlotLabGenerationStage }
   | { type: "job_stage_failed"; jobId: string; stage: PlotLabGenerationStage }
+  | { type: "purpose_map_completed"; jobId: string }
   | { type: "job_completed"; jobId: string; outputVersion: number }
   | { type: "job_cancelled"; jobId: string }
   | { type: "session_archived"; archivedAt: string };
@@ -187,7 +188,7 @@ export function transitionPlotLabSession(
       };
 
     case "generation_queued":
-      assertPhase(state, ["interview", "complete", "recoverable_error"], event.type);
+      assertPhase(state, ["interview", "purpose_review", "complete", "recoverable_error"], event.type);
       const replacesFailedJob =
         state.phase === "recoverable_error" &&
         Boolean(state.activeJobId && state.failedStage);
@@ -204,15 +205,15 @@ export function transitionPlotLabSession(
 
     case "job_stage_started": {
       assertJob(state, event.jobId);
-      const firstStage = event.stage === "source_truth" || event.stage === "creative" || event.stage === "unit_creative";
+      const firstStage = event.stage === "purpose_planning" || event.stage === "plot_writing" || event.stage === "source_truth" || event.stage === "creative" || event.stage === "unit_creative";
       const allowedPhases: PlotLabSessionPhase[] = firstStage
         ? ["queued", "recoverable_error"]
         : ["orchestrating", "creative", "reviewing", "connecting", "recoverable_error"];
       assertPhase(state, allowedPhases, event.type);
       const phase: PlotLabSessionPhase =
-        ["source_truth", "endpoint_exploration", "route_exploration", "specialist_planning"].includes(event.stage)
+        ["purpose_planning", "source_truth", "endpoint_exploration", "route_exploration", "specialist_planning"].includes(event.stage)
           ? "orchestrating"
-          : ["creative", "creative_authoring", "unit_creative"].includes(event.stage)
+          : ["plot_writing", "creative", "creative_authoring", "unit_creative"].includes(event.stage)
             ? "creative"
             : ["holistic_qa", "targeted_repair", "continuity"].includes(event.stage)
               ? "reviewing"
@@ -224,6 +225,17 @@ export function transitionPlotLabSession(
         failedStage: undefined,
       };
     }
+
+    case "purpose_map_completed":
+      assertJob(state, event.jobId);
+      assertPhase(state, ["orchestrating"], event.type);
+      return {
+        ...state,
+        phase: "purpose_review",
+        revision: nextRevision(state),
+        activeJobId: undefined,
+        failedStage: undefined,
+      };
 
     case "job_stage_failed":
       assertJob(state, event.jobId);

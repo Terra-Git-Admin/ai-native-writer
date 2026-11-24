@@ -5,6 +5,7 @@ import type {
   PlotLabEndpointCandidate,
   PlotLabMessage,
   PlotLabOrchestratorDecision,
+  PlotLabPurposeMap,
   PlotLabQAResult,
   PlotLabRouteCandidate,
   PlotLabSessionState,
@@ -22,6 +23,10 @@ import {
   PLOT_LAB_HARNESS_PROMPT_VERSION,
   PLOT_LAB_HOLISTIC_QA_SYSTEM_PROMPT,
   PLOT_LAB_ORCHESTRATOR_SYSTEM_PROMPT,
+  PLOT_LAB_PURPOSE_PLANNER_PROMPT_VERSION,
+  PLOT_LAB_PURPOSE_PLANNER_SYSTEM_PROMPT,
+  PLOT_LAB_PURPOSE_WRITER_PROMPT_VERSION,
+  PLOT_LAB_PURPOSE_WRITER_SYSTEM_PROMPT,
   PLOT_LAB_ROUTE_EXPLORER_SYSTEM_PROMPT,
   PLOT_LAB_SOURCE_TRUTH_SYSTEM_PROMPT,
   PLOT_LAB_SPECIALIST_SYSTEM_PROMPTS,
@@ -31,6 +36,12 @@ import {
   PLOT_LAB_INTERVIEWER_PROMPT_VERSION,
   PLOT_LAB_INTERVIEWER_SYSTEM_PROMPT,
 } from "@/lib/plot-lab-v2/prompts";
+import {
+  PLOT_LAB_PACING_FRAMEWORK,
+  PLOT_LAB_PACING_REFERENCES,
+  PLOT_LAB_PACING_TRAINING_PACK_VERSION,
+} from "@/lib/plot-lab-v2/pacing-training-pack";
+import { normalizePurposeMap } from "@/lib/plot-lab-v2/purpose-map";
 
 export function isPlotLabRealAIEnabled(): boolean {
   return process.env.PLOT_LAB_REAL_AI_ENABLED === "true";
@@ -62,6 +73,16 @@ export interface CreativeRoute {
 interface ConnectedOutput {
   units: PlotLabConnectedBatch["units"];
   seedCoverage: PlotLabConnectedBatch["seedCoverage"];
+  warnings: string[];
+}
+
+interface PurposeWriterOutput {
+  units: Array<{
+    purposeUnitId: string;
+    number: number;
+    title: string;
+    visiblePlot: string;
+  }>;
   warnings: string[];
 }
 
@@ -98,6 +119,76 @@ const sourceTruthOutput = Output.object({
       monetizationPoint: { type: "string" },
       characterFidelity: { type: "array", items: { type: "string" } },
       unresolvedQuestions: { type: "array", items: { type: "string" } },
+    },
+  }),
+});
+
+const purposeMapOutput = Output.object({
+  name: "plot_lab_purpose_map",
+  description: "A complete writer-reviewable purpose map through the monetization destination.",
+  schema: jsonSchema<PlotLabPurposeMap>({
+    type: "object",
+    additionalProperties: false,
+    required: ["format", "monetizationEpisode", "destination", "units", "warnings"],
+    properties: {
+      format: { type: "string", enum: ["portrait", "landscape"] },
+      monetizationEpisode: { type: "integer" },
+      destination: { type: "string" },
+      units: {
+        type: "array",
+        minItems: 4,
+        maxItems: 7,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "number", "title", "purposeLine", "incomingPressure", "decisiveMove", "stateDelta", "outgoingHook", "dominantFunction", "changedDimensions", "scenePhase", "characterFunctions", "skeletonElementsUsed"],
+          properties: {
+            id: { type: "string" },
+            number: { type: "integer" },
+            title: { type: "string" },
+            purposeLine: { type: "string" },
+            incomingPressure: { type: "string" },
+            decisiveMove: { type: "string" },
+            stateDelta: { type: "string" },
+            outgoingHook: { type: "string" },
+            dominantFunction: { type: "string" },
+            changedDimensions: { type: "array", items: { type: "string" } },
+            scenePhase: { type: "string" },
+            characterFunctions: { type: "array", items: { type: "string" } },
+            skeletonElementsUsed: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+      warnings: { type: "array", items: { type: "string" } },
+    },
+  }),
+});
+
+const purposeWriterOutput = Output.object({
+  name: "plot_lab_approved_purpose_batch",
+  description: "Concise plots mapped exactly to the approved purpose units.",
+  schema: jsonSchema<PurposeWriterOutput>({
+    type: "object",
+    additionalProperties: false,
+    required: ["units", "warnings"],
+    properties: {
+      units: {
+        type: "array",
+        minItems: 4,
+        maxItems: 7,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["purposeUnitId", "number", "title", "visiblePlot"],
+          properties: {
+            purposeUnitId: { type: "string" },
+            number: { type: "integer" },
+            title: { type: "string" },
+            visiblePlot: { type: "string" },
+          },
+        },
+      },
+      warnings: { type: "array", items: { type: "string" } },
     },
   }),
 });
@@ -705,6 +796,98 @@ async function structuredCall<T>(input: {
   return result.output as T;
 }
 
+export async function generatePurposeMap(input: {
+  session: PlotLabSessionState;
+  messages: PlotLabMessage[];
+  model: PlotLabModelChoice;
+  monetizationEpisode: number;
+  revisionInstruction?: string;
+  previousPurposeMap?: PlotLabPurposeMap;
+}): Promise<PlotLabPurposeMap> {
+  const result = await structuredCall<PlotLabPurposeMap>({
+    model: input.model,
+    system: PLOT_LAB_PURPOSE_PLANNER_SYSTEM_PROMPT,
+    prompt: {
+      packet: JSON.parse(contextPacket(input.session, input.messages)),
+      requiredRange: input.session.orientation === "portrait"
+        ? `Episodes 2 through ${input.monetizationEpisode}`
+        : `Milestones 1 through ${input.monetizationEpisode}`,
+      monetizationEpisode: input.monetizationEpisode,
+      previousPurposeMap: input.previousPurposeMap ?? null,
+      revisionInstruction: input.revisionInstruction ?? null,
+      pacingPack: {
+        version: PLOT_LAB_PACING_TRAINING_PACK_VERSION,
+        framework: PLOT_LAB_PACING_FRAMEWORK,
+        references: PLOT_LAB_PACING_REFERENCES,
+      },
+    },
+    output: purposeMapOutput,
+  });
+  return normalizePurposeMap(result, input.session.orientation, input.monetizationEpisode);
+}
+
+export async function writePlotsFromPurposeMap(input: {
+  session: PlotLabSessionState;
+  messages: PlotLabMessage[];
+  purposeMap: PlotLabPurposeMap;
+  model: PlotLabModelChoice;
+  version: number;
+}): Promise<PlotLabConnectedBatch> {
+  const result = await structuredCall<PurposeWriterOutput>({
+    model: input.model,
+    system: PLOT_LAB_PURPOSE_WRITER_SYSTEM_PROMPT,
+    prompt: {
+      packet: JSON.parse(contextPacket(input.session, input.messages)),
+      approvedPurposeMap: input.purposeMap,
+    },
+    output: purposeWriterOutput,
+  });
+  const byId = new Map(result.units.map((unit) => [unit.purposeUnitId, unit]));
+  const units = input.purposeMap.units.map((purpose) => {
+    const written = byId.get(purpose.id);
+    if (!written || written.number !== purpose.number || !written.visiblePlot.trim()) {
+      throw new Error(`Plot Writer did not return approved purpose unit ${purpose.id}.`);
+    }
+    return {
+      purposeUnitId: purpose.id,
+      number: purpose.number,
+      title: written.title.trim() || purpose.title,
+      cause: purpose.incomingPressure,
+      soulConnection: purpose.purposeLine,
+      episodeFunction: purpose.dominantFunction,
+      timePhase: purpose.scenePhase,
+      locationFunction: purpose.scenePhase,
+      characterChoice: purpose.decisiveMove,
+      consequence: purpose.stateDelta,
+      nextPressure: purpose.outgoingHook,
+      emotionalChange: purpose.stateDelta,
+      endingTurn: purpose.outgoingHook,
+      cliffhangerType: purpose.dominantFunction,
+      relationshipChange: purpose.stateDelta,
+      antagonistPressure: purpose.outgoingHook,
+      fidelityProof: "Expanded from the writer-approved purpose unit.",
+      skeletonElementsUsed: purpose.skeletonElementsUsed,
+      revelationPurpose: "",
+      visiblePlot: written.visiblePlot.trim(),
+    };
+  });
+  const normalizedPlots = units.map((unit) => unit.visiblePlot.toLocaleLowerCase().replace(/\s+/g, " "));
+  if (new Set(normalizedPlots).size !== normalizedPlots.length) {
+    throw new Error("Plot Writer returned duplicate episode plots.");
+  }
+  const seedElements = [...new Set(input.purposeMap.units.flatMap((unit) => unit.skeletonElementsUsed))];
+  return {
+    format: input.purposeMap.format,
+    version: input.version,
+    units,
+    seedCoverage: seedElements.map((element) => ({
+      element,
+      unitNumbers: input.purposeMap.units.filter((unit) => unit.skeletonElementsUsed.includes(element)).map((unit) => unit.number),
+    })),
+    warnings: [...new Set([...input.purposeMap.warnings, ...result.warnings])],
+  };
+}
+
 export async function generateSourceTruth(input: {
   session: PlotLabSessionState; messages: PlotLabMessage[]; model: PlotLabModelChoice;
 }): Promise<PlotLabSourceTruthBrief> {
@@ -907,8 +1090,11 @@ export async function generateRealConversationTurn(input: {
 
 export const PLOT_LAB_PROMPT_VERSIONS = {
   interviewer: PLOT_LAB_INTERVIEWER_PROMPT_VERSION,
+  purposePlanner: PLOT_LAB_PURPOSE_PLANNER_PROMPT_VERSION,
+  purposeWriter: PLOT_LAB_PURPOSE_WRITER_PROMPT_VERSION,
   creative: PLOT_LAB_CREATIVE_PROMPT_VERSION,
   connector: PLOT_LAB_CONNECTOR_PROMPT_VERSION,
   conversation: PLOT_LAB_CONVERSATION_PROMPT_VERSION,
   harness: PLOT_LAB_HARNESS_PROMPT_VERSION,
+  trainingPack: PLOT_LAB_PACING_TRAINING_PACK_VERSION,
 };

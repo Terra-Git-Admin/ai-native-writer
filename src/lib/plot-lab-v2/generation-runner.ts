@@ -2,11 +2,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { aiJobs } from "@/lib/db/schema";
 import { logEvent } from "@/lib/saveTrace";
-import type { PlotLabConnectedBatch, PlotLabEndpointCandidate, PlotLabGenerationStage, PlotLabMessage, PlotLabOrchestrationArtifacts, PlotLabOrchestratorDecision, PlotLabRouteCandidate, PlotLabSessionState, PlotLabSourceTruthBrief, PlotLabSpecialistBrief } from "@/lib/plot-lab-v2/contracts";
+import type { PlotLabConnectedBatch, PlotLabEndpointCandidate, PlotLabGenerationStage, PlotLabMessage, PlotLabOrchestrationArtifacts, PlotLabOrchestratorDecision, PlotLabPurposeMap, PlotLabRouteCandidate, PlotLabSessionState, PlotLabSourceTruthBrief, PlotLabSpecialistBrief } from "@/lib/plot-lab-v2/contracts";
 import { DrizzlePlotLabRepository } from "@/lib/plot-lab-v2/repository";
-import { connectCreativeRoute, exploreEndpoints, exploreRoutes, generateCreativeRoute, generateSourceTruth, generateSpecialistBrief, repairCreativeRoute, runHolisticQA, selectRouteAndSpecialists, type CreativeRoute, type PlotLabModelChoice } from "@/lib/plot-lab-v2/real-ai";
+import { connectCreativeRoute, exploreEndpoints, exploreRoutes, generateCreativeRoute, generatePurposeMap, generateSourceTruth, generateSpecialistBrief, repairCreativeRoute, runHolisticQA, selectRouteAndSpecialists, writePlotsFromPurposeMap, type CreativeRoute, type PlotLabModelChoice } from "@/lib/plot-lab-v2/real-ai";
+import { fallbackBatchFromPurposeMap, fallbackPurposeMap, inferPurposeDestination } from "@/lib/plot-lab-v2/purpose-map";
 
 interface PlotLabGenerationInput {
+  mode?: "purpose_planning" | "plot_writing" | "legacy";
   session: PlotLabSessionState;
   messages: PlotLabMessage[];
   model: PlotLabModelChoice;
@@ -15,6 +17,8 @@ interface PlotLabGenerationInput {
   mutationKind?: string;
   proposalId?: string;
   confirmedInstruction?: string;
+  purposeMap?: PlotLabPurposeMap;
+  previousPurposeMap?: PlotLabPurposeMap;
 }
 
 const running = new Set<string>();
@@ -196,6 +200,7 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
     if (!job?.inputSnapshotJson || job.status !== "pending") return;
     const input = JSON.parse(job.inputSnapshotJson) as PlotLabGenerationInput;
     if (!input.session || !Array.isArray(input.messages) || !input.model?.modelId) throw new Error("Plot Lab generation input is incomplete.");
+    stage = input.mode === "purpose_planning" ? "purpose_planning" : input.mode === "plot_writing" ? "plot_writing" : "source_truth";
     const artifacts: PlotLabOrchestrationArtifacts = { degradations: [], ...(input.artifacts ?? {}) };
     const startIndex = input.resumeStage ? Math.max(0, STAGES.indexOf(input.resumeStage)) : 0;
     const shouldRun = (candidate: PlotLabGenerationStage) => STAGES.indexOf(candidate) >= startIndex;
@@ -205,6 +210,63 @@ async function runPlotLabGenerationJob(jobId: string): Promise<void> {
       logEvent("plot_lab_v2.generation.stage", { jobId, stage });
     };
     const checkpoint = async () => repository.saveGenerationCheckpoint({ jobId, checkpoint: { artifacts } });
+
+    if (input.mode === "purpose_planning") {
+      await begin("purpose_planning");
+      const monetizationEpisode = inferPurposeDestination(input.session);
+      let purposeMap: PlotLabPurposeMap;
+      try {
+        purposeMap = await generatePurposeMap({
+          session: input.session,
+          messages: input.messages,
+          model: input.model,
+          monetizationEpisode,
+          revisionInstruction: input.confirmedInstruction,
+          previousPurposeMap: input.previousPurposeMap,
+        });
+      } catch (purposeError) {
+        if (isFatalProviderError(purposeError)) throw purposeError;
+        purposeMap = fallbackPurposeMap(input.session);
+        logEvent("plot_lab_v2.purpose.degraded", { jobId, reason: purposeError instanceof Error ? purposeError.message : String(purposeError) });
+      }
+      await repository.saveGenerationCheckpoint({ jobId, checkpoint: { purposeMap } });
+      await repository.completePurposeMap({
+        jobId,
+        purposeMap,
+        revisionInstruction: input.confirmedInstruction,
+      });
+      logEvent("plot_lab_v2.purpose.completed", { jobId, units: purposeMap.units.length, monetizationEpisode: purposeMap.monetizationEpisode });
+      return;
+    }
+
+    if (input.mode === "plot_writing") {
+      if (!input.purposeMap?.units?.length) throw new Error("The approved purpose map is unavailable.");
+      await begin("plot_writing");
+      const version = (input.session.latestOutputVersion ?? 0) + 1;
+      let batch: PlotLabConnectedBatch;
+      try {
+        batch = await writePlotsFromPurposeMap({
+          session: input.session,
+          messages: input.messages,
+          purposeMap: input.purposeMap,
+          model: input.model,
+          version,
+        });
+      } catch (writerError) {
+        if (isFatalProviderError(writerError)) throw writerError;
+        batch = fallbackBatchFromPurposeMap(
+          input.purposeMap,
+          version,
+          "Plot Writer returned incomplete structure; Levi preserved each approved purpose as that unit's distinct readable fallback."
+        );
+        logEvent("plot_lab_v2.plot_writer.degraded", { jobId, reason: writerError instanceof Error ? writerError.message : String(writerError) });
+      }
+      await repository.saveGenerationCheckpoint({ jobId, checkpoint: { purposeMap: input.purposeMap, batch } });
+      await begin("connecting");
+      await repository.completeGeneration({ jobId, batch });
+      logEvent("plot_lab_v2.generation.completed", { jobId, units: batch.units.length, version: batch.version, path: "approved_purpose_map" });
+      return;
+    }
 
     if (shouldRun("source_truth")) {
       await begin("source_truth");

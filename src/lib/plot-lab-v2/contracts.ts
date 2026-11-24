@@ -5,6 +5,7 @@ export type PlotLabSessionStatus = "active" | "archived";
 export type PlotLabSessionPhase =
   | "intake"
   | "interview"
+  | "purpose_review"
   | "queued"
   | "orchestrating"
   | "creative"
@@ -14,6 +15,8 @@ export type PlotLabSessionPhase =
   | "recoverable_error";
 
 export type PlotLabGenerationStage =
+  | "purpose_planning"
+  | "plot_writing"
   | "source_truth"
   | "endpoint_exploration"
   | "route_exploration"
@@ -105,6 +108,8 @@ export type PlotLabAction =
   | { kind: "edit_answer"; answerMessageId: string; text: string }
   | { kind: "add_context"; text: string }
   | { kind: "request_generation" }
+  | { kind: "revise_purpose_map"; purposeMapMessageId: string; instruction: string }
+  | { kind: "approve_purpose_map"; purposeMapMessageId: string }
   | { kind: "accept_output"; outputVersion: number }
   | { kind: "chat"; text: string }
   | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" }
@@ -226,7 +231,32 @@ export interface PlotLabOrchestrationArtifacts {
   finalBatch?: PlotLabConnectedBatch;
 }
 
+export interface PlotLabPurposeUnit {
+  id: string;
+  number: number;
+  title: string;
+  purposeLine: string;
+  incomingPressure: string;
+  decisiveMove: string;
+  stateDelta: string;
+  outgoingHook: string;
+  dominantFunction: string;
+  changedDimensions: string[];
+  scenePhase: string;
+  characterFunctions: string[];
+  skeletonElementsUsed: string[];
+}
+
+export interface PlotLabPurposeMap {
+  format: DocumentOrientation;
+  monetizationEpisode: number;
+  destination: string;
+  units: PlotLabPurposeUnit[];
+  warnings: string[];
+}
+
 export interface PlotLabConnectedUnit {
+  purposeUnitId?: string;
   number: number;
   title?: string;
   cause: string;
