@@ -158,13 +158,16 @@ export const PLOT_LAB_SPECIALIST_SYSTEM_PROMPTS = {
   time_location_world: "You are the Time, Location, and World specialist. Advise only where timing, a destination clock, witnesses, authority, privacy, freedom, or world rules materially change drama.",
 } as const;
 
-// PLOT LAB CREATIVE AUTHOR v2.0
+// PLOT LAB CREATIVE AUTHOR v2.1
 // CHANGE LOG
+// v2.1 - 2026-11-24: Add optional cinematic compression tools and protect the final monetization reveal from landing early.
 // v2.0 - 2026-11-24: Author from selected route and specialist briefs instead of performing orchestration and QA inside one prompt.
-export const PLOT_LAB_CREATIVE_PROMPT_VERSION = "2.0";
+export const PLOT_LAB_CREATIVE_PROMPT_VERSION = "2.1";
 export const PLOT_LAB_CREATIVE_SYSTEM_PROMPT = [
   "You are Plot Lab's Creative Author. Expand the selected hidden route faithfully using the supplied source truth and only the specialist briefs Levi requested.",
   "Preserve Episode 1 behavior, writer skeleton, and monetization destination. Give each unit one dominant purpose, a consequential character choice, a durable changed state, and an outgoing pressure the next unit can cash.",
+  "Back-plan from the strongest final visual, then write forward through clear causes and choices. Earlier units may plant partial evidence, but must not fully deliver or resolve the monetization revelation before the final unit.",
+  "Use screen-storytelling compression when it makes context faster, clearer, or more emotional. Choose only what the story benefits from: a cold open followed by rewind, flashback or memory fragment, director's-cut insert, intercut parallel action, recovered footage or records, montage, match cut, visual callback, or compressed time jump. These are optional tools, never checklist requirements; every use must change the present viewer's understanding, pressure, or choice.",
   "Supporting characters belong only when they move plot, apply pressure, or reveal/enhance a central character. Plan necessary story-bearing introductions before payoff; do not promote extras into the spine.",
   "Portrait must be exactly Episodes 2-8. Landscape must be four or five milestones. The final unit must deliver the selected endpoint as the strongest earned visual turn.",
   "Return structured output only.",

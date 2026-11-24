@@ -114,6 +114,9 @@ assert.match(runnerSource, /catch \(specialistError\)[\s\S]*?specialist_degraded
 assert.match(promptSource, /exactly two distinct[\s\S]*?exactly two compact hidden route candidates/i, "Endpoint and route exploration must each create two candidates.");
 assert.match(promptSource, /Trigger specialists only when their expertise can materially improve/i, "Levi must conditionally trigger specialists.");
 assert.match(promptSource, /two or three natural, vivid sentences/i, "The connector must produce compact natural writer-facing plots.");
+assert.match(promptSource, /PLOT LAB CREATIVE AUTHOR v2\.1[\s\S]*?flashback or memory fragment[\s\S]*?director's-cut insert[\s\S]*?intercut parallel action/i, "The Creative Author must have an optional cinematic-compression palette.");
+assert.match(promptSource, /optional tools, never checklist requirements/i, "Cinematic devices must remain creative options rather than hard validation rules.");
+assert.match(promptSource, /must not fully deliver or resolve the monetization revelation before the final unit/i, "The Creative Author must protect the final monetization reveal from landing early.");
 assert.match(source, /candidates: \{ type: "array", minItems: 1, maxItems: 2/, "Hidden exploration must accept one usable candidate instead of failing when a second option is absent.");
 assert.match(source, /unitSpine: \{ type: "array", minItems: 1, maxItems: 8/, "Hidden routes must accept an imperfect beat count for downstream normalization.");
 assert.match(source, /number: input\.orientation === "portrait" \? index \+ 2 : index \+ 1/, "Route unit numbering must be normalized as transport metadata instead of hard-failing usable story routes.");
