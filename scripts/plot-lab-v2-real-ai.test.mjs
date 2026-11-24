@@ -33,12 +33,25 @@ const connectedSchemaSource = source.slice(
   source.indexOf("const connectedOutput"),
   source.indexOf("function configuredModelIds")
 );
+const purposeSchemaSource = source.slice(
+  source.indexOf("function purposeMapOutput"),
+  source.indexOf("const endpointOutput")
+);
+const purposeGenerationSource = source.slice(
+  source.indexOf("export async function generatePurposeMap"),
+  source.indexOf("export async function generateSourceTruth")
+);
 
 assert.match(
   source,
   /output:\s*connectedOutput/,
   "Connector generation must use the AI SDK structured-output contract."
 );
+assert.match(purposeSchemaSource, /minItems:\s*unitCount[\s\S]*?maxItems:\s*unitCount/, "Purpose output must use the exact app-owned unit count.");
+assert.match(purposeSchemaSource, /required:\s*\["title", "purposeLine"\]/, "Purpose planning should require only writer-facing story fields.");
+assert.doesNotMatch(purposeSchemaSource, /incomingPressure|decisiveMove|stateDelta|outgoingHook|purposeUnitId/, "Purpose transport must not ask the model for app-owned metadata.");
+assert.doesNotMatch(purposeGenerationSource, /new Map\(result\.units|written\.number|purposeUnitId, unit/, "Approved plots must be matched by app-owned order, not model-generated IDs or numbers.");
+assert.match(purposeGenerationSource, /Some expanded plots repeat[\s\S]*?readable batch was preserved/, "Duplicate readable plots must warn instead of failing the entire batch.");
 assert.match(
   creativeSchemaSource,
   /required:\s*\[[\s\S]*?"number"[\s\S]*?"title"[\s\S]*?"cause"[\s\S]*?"soulConnection"[\s\S]*?"dramaticMove"[\s\S]*?"characterChoice"[\s\S]*?"consequence"[\s\S]*?"endingPressure"[\s\S]*?"skeletonElementsUsed"[\s\S]*?"revelationPurpose"/,

@@ -78,12 +78,16 @@ interface ConnectedOutput {
 
 interface PurposeWriterOutput {
   units: Array<{
-    purposeUnitId: string;
-    number: number;
     title: string;
     visiblePlot: string;
   }>;
-  warnings: string[];
+}
+
+interface PurposePlannerOutput {
+  units: Array<{
+    title: string;
+    purposeLine: string;
+  }>;
 }
 
 export interface PlotLabConversationTurn {
@@ -123,75 +127,61 @@ const sourceTruthOutput = Output.object({
   }),
 });
 
-const purposeMapOutput = Output.object({
-  name: "plot_lab_purpose_map",
-  description: "A complete writer-reviewable purpose map through the monetization destination.",
-  schema: jsonSchema<PlotLabPurposeMap>({
+function purposeMapOutput(unitCount: number) {
+  return Output.object({
+    name: "plot_lab_purpose_map",
+    description: "Ordered, writer-reviewable story events through the monetization destination.",
+    schema: jsonSchema<PurposePlannerOutput>({
     type: "object",
     additionalProperties: false,
-    required: ["format", "monetizationEpisode", "destination", "units", "warnings"],
+    required: ["units"],
     properties: {
-      format: { type: "string", enum: ["portrait", "landscape"] },
-      monetizationEpisode: { type: "integer" },
-      destination: { type: "string" },
       units: {
         type: "array",
-        minItems: 4,
-        maxItems: 7,
+        minItems: unitCount,
+        maxItems: unitCount,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["id", "number", "title", "purposeLine", "incomingPressure", "decisiveMove", "stateDelta", "outgoingHook", "dominantFunction", "changedDimensions", "scenePhase", "characterFunctions", "skeletonElementsUsed"],
+          required: ["title", "purposeLine"],
           properties: {
-            id: { type: "string" },
-            number: { type: "integer" },
             title: { type: "string" },
             purposeLine: { type: "string" },
-            incomingPressure: { type: "string" },
-            decisiveMove: { type: "string" },
-            stateDelta: { type: "string" },
-            outgoingHook: { type: "string" },
-            dominantFunction: { type: "string" },
-            changedDimensions: { type: "array", items: { type: "string" } },
-            scenePhase: { type: "string" },
-            characterFunctions: { type: "array", items: { type: "string" } },
-            skeletonElementsUsed: { type: "array", items: { type: "string" } },
           },
         },
       },
-      warnings: { type: "array", items: { type: "string" } },
     },
-  }),
-});
+    }),
+  });
+}
 
-const purposeWriterOutput = Output.object({
-  name: "plot_lab_approved_purpose_batch",
-  description: "Concise plots mapped exactly to the approved purpose units.",
-  schema: jsonSchema<PurposeWriterOutput>({
+function purposeWriterOutput(unitCount: number) {
+  return Output.object({
+    name: "plot_lab_approved_purpose_batch",
+    description: "Concise plots in the same order as the approved purpose units.",
+    schema: jsonSchema<PurposeWriterOutput>({
     type: "object",
     additionalProperties: false,
-    required: ["units", "warnings"],
+    required: ["units"],
     properties: {
       units: {
         type: "array",
-        minItems: 4,
-        maxItems: 7,
+        minItems: unitCount,
+        maxItems: unitCount,
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["purposeUnitId", "number", "title", "visiblePlot"],
+          required: ["title", "visiblePlot"],
           properties: {
-            purposeUnitId: { type: "string" },
-            number: { type: "integer" },
             title: { type: "string" },
             visiblePlot: { type: "string" },
           },
         },
       },
-      warnings: { type: "array", items: { type: "string" } },
     },
-  }),
-});
+    }),
+  });
+}
 
 const endpointOutput = Output.object({
   name: "plot_lab_endpoint_candidates",
@@ -804,7 +794,9 @@ export async function generatePurposeMap(input: {
   revisionInstruction?: string;
   previousPurposeMap?: PlotLabPurposeMap;
 }): Promise<PlotLabPurposeMap> {
-  const result = await structuredCall<PlotLabPurposeMap>({
+  const unitCount = input.session.orientation === "portrait" ? input.monetizationEpisode - 1 : input.monetizationEpisode;
+  const brief = input.session.interviewCheckpoint.characterBrief;
+  const result = await structuredCall<PurposePlannerOutput>({
     model: input.model,
     system: PLOT_LAB_PURPOSE_PLANNER_SYSTEM_PROMPT,
     prompt: {
@@ -813,7 +805,9 @@ export async function generatePurposeMap(input: {
         ? `Episodes 2 through ${input.monetizationEpisode}`
         : `Milestones 1 through ${input.monetizationEpisode}`,
       monetizationEpisode: input.monetizationEpisode,
-      previousPurposeMap: input.previousPurposeMap ?? null,
+      previousPurposeMap: input.previousPurposeMap
+        ? input.previousPurposeMap.units.map((unit) => ({ title: unit.title, purposeLine: unit.purposeLine }))
+        : null,
       revisionInstruction: input.revisionInstruction ?? null,
       pacingPack: {
         version: PLOT_LAB_PACING_TRAINING_PACK_VERSION,
@@ -821,9 +815,13 @@ export async function generatePurposeMap(input: {
         references: PLOT_LAB_PACING_REFERENCES,
       },
     },
-    output: purposeMapOutput,
+    output: purposeMapOutput(unitCount),
   });
-  return normalizePurposeMap(result, input.session.orientation, input.monetizationEpisode);
+  return normalizePurposeMap(result, input.session.orientation, input.monetizationEpisode, {
+    destination: brief?.monetizationPoint || input.session.seed,
+    unresolvedPressure: brief?.storySoul.unresolvedPressure,
+    requiredSkeletonElements: brief?.requiredSkeletonElements,
+  });
 }
 
 export async function writePlotsFromPurposeMap(input: {
@@ -838,14 +836,18 @@ export async function writePlotsFromPurposeMap(input: {
     system: PLOT_LAB_PURPOSE_WRITER_SYSTEM_PROMPT,
     prompt: {
       packet: JSON.parse(contextPacket(input.session, input.messages)),
-      approvedPurposeMap: input.purposeMap,
+      approvedPurposeMap: input.purposeMap.units.map((unit) => ({
+        number: unit.number,
+        title: unit.title,
+        purposeLine: unit.purposeLine,
+      })),
+      destination: input.purposeMap.destination,
     },
-    output: purposeWriterOutput,
+    output: purposeWriterOutput(input.purposeMap.units.length),
   });
-  const byId = new Map(result.units.map((unit) => [unit.purposeUnitId, unit]));
-  const units = input.purposeMap.units.map((purpose) => {
-    const written = byId.get(purpose.id);
-    if (!written || written.number !== purpose.number || !written.visiblePlot.trim()) {
+  const units = input.purposeMap.units.map((purpose, index) => {
+    const written = result.units[index];
+    if (!written?.visiblePlot.trim()) {
       throw new Error(`Plot Writer did not return approved purpose unit ${purpose.id}.`);
     }
     return {
@@ -872,9 +874,9 @@ export async function writePlotsFromPurposeMap(input: {
     };
   });
   const normalizedPlots = units.map((unit) => unit.visiblePlot.toLocaleLowerCase().replace(/\s+/g, " "));
-  if (new Set(normalizedPlots).size !== normalizedPlots.length) {
-    throw new Error("Plot Writer returned duplicate episode plots.");
-  }
+  const duplicateWarning = new Set(normalizedPlots).size !== normalizedPlots.length
+    ? ["Some expanded plots repeat. The readable batch was preserved for writer review."]
+    : [];
   const seedElements = [...new Set(input.purposeMap.units.flatMap((unit) => unit.skeletonElementsUsed))];
   return {
     format: input.purposeMap.format,
@@ -884,7 +886,7 @@ export async function writePlotsFromPurposeMap(input: {
       element,
       unitNumbers: input.purposeMap.units.filter((unit) => unit.skeletonElementsUsed.includes(element)).map((unit) => unit.number),
     })),
-    warnings: [...new Set([...input.purposeMap.warnings, ...result.warnings])],
+    warnings: [...new Set([...input.purposeMap.warnings, ...duplicateWarning])],
   };
 }
 

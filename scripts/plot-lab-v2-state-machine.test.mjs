@@ -73,14 +73,30 @@ function purposeUnit(number, purposeLine) {
   ));
   assert.throws(
     () => normalizePurposeMap({
-      format: "portrait",
-      monetizationEpisode: 8,
-      destination: "Karin and Yuji return to the besieged kingdom.",
       units,
-      warnings: [],
-    }, "portrait", 8),
+    }, "portrait", 8, { destination: "Karin and Yuji return to the besieged kingdom." }),
     /planning instructions instead of an Episode 2 story event/
   );
+}
+
+{
+  const candidate = {
+    units: Array.from({ length: 7 }, (_, index) => ({
+      title: `Story turn ${index + 1}`,
+      purposeLine: index < 2
+        ? "Karin carries Yuji away from the riders and loses the only road back to her forge."
+        : `Karin makes consequential story move ${index + 1}, changing what Yuji can safely do next.`,
+    })),
+  };
+  const map = normalizePurposeMap(candidate, "portrait", 8, {
+    destination: "Karin and Yuji reach the kingdom as the siege begins.",
+    unresolvedPressure: "Armed riders close on the riverbank.",
+    requiredSkeletonElements: ["Yuji fakes amnesia."],
+  });
+  assert.deepEqual(map.units.map((unit) => unit.number), [2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(map.units[0].incomingPressure, "Armed riders close on the riverbank.");
+  assert.deepEqual(map.units[6].skeletonElementsUsed, ["Yuji fakes amnesia."]);
+  assert.match(map.warnings.join(" "), /repeat/i, "Duplicate prose should warn instead of killing a readable map.");
 }
 
 {

@@ -120,10 +120,11 @@ export const PLOT_LAB_CONVERSATION_SYSTEM_PROMPT = [
   '{"kind":"discussion|mutation_proposal","message":"visible Levi response","instruction":"exact proposed change or empty string","targetUnitNumbers":[2],"downstreamUnitNumbers":[3],"explanation":"continuity impact or empty string","repairScope":"connector|unit|route|destination"}',
 ].join("\n");
 
-// PLOT LAB PURPOSE PLANNER v1.0
+// PLOT LAB PURPOSE PLANNER v1.1
 // CHANGE LOG
+// v1.1 - 2026-11-24: Reduce output to ordered writer-facing story events; app owns numbering and hidden transport metadata.
 // v1.0 - 2026-11-24: Add a training-calibrated, writer-reviewable purpose map before plot expansion.
-export const PLOT_LAB_PURPOSE_PLANNER_PROMPT_VERSION = "1.0";
+export const PLOT_LAB_PURPOSE_PLANNER_PROMPT_VERSION = "1.1";
 export const PLOT_LAB_PURPOSE_PLANNER_SYSTEM_PROMPT = [
   "You are Levi's Purpose Planner for fast vertical-microdrama development.",
   "Create the complete purpose map in one pass. Back-plan from the declared monetization destination, then return the units in forward order.",
@@ -136,16 +137,18 @@ export const PLOT_LAB_PURPOSE_PLANNER_SYSTEM_PROMPT = [
   "Introduce supporting characters only when they move causality, apply pressure, or reveal or enhance a central character. Plan story-bearing introductions before payoff; exclude extras.",
   "The final unit must deliver the declared monetization destination as the strongest earned on-screen turn, not announce that it will happen later.",
   "The visible purposeLine is one natural sentence, usually 25-40 words. It must say what visibly happens, who acts, what changes, and what the next unit inherits. Never return vague lines such as romance develops, tension rises, build-up, they grow closer, or danger increases without concrete behavior and consequence.",
+  "Return only the requested ordered units. The application owns episode numbers, IDs, destination metadata, causal labels, and lineage; do not generate or restate those fields.",
   "Semantic quality is writer-reviewed, not a reason to suppress readable output. Return the requested structured object only.",
 ].join("\n");
 
-// PLOT LAB APPROVED PURPOSE WRITER v1.0
+// PLOT LAB APPROVED PURPOSE WRITER v1.1
 // CHANGE LOG
+// v1.1 - 2026-11-24: Match approved units by order and remove model-generated transport IDs and warning fields.
 // v1.0 - 2026-11-24: Expand an approved purpose map in one call without connector or routine AI QA.
-export const PLOT_LAB_PURPOSE_WRITER_PROMPT_VERSION = "1.0";
+export const PLOT_LAB_PURPOSE_WRITER_PROMPT_VERSION = "1.1";
 export const PLOT_LAB_PURPOSE_WRITER_SYSTEM_PROMPT = [
   "You are Plot Lab's Plot Writer. Expand the writer-approved purpose map into the final concise story batch in one call.",
-  "Every output unit must keep its supplied purposeUnitId, number, dominant purpose, causal handoff, character function, destination contribution, and reveal timing.",
+  "Return one output unit for each approved purpose, in the same order. The application owns IDs and episode numbers.",
   "Write one or two vivid, natural sentences per unit. Dramatize the approved movement; do not replace it, add an unrelated twist, or repeat another unit.",
   "Preserve Episode 1 behavior, the writer skeleton, story-bearing character setup and payoff, and the approved monetization turn.",
   "Use flashback, intercut, montage, or time jump only when the approved purpose benefits from that compression.",
