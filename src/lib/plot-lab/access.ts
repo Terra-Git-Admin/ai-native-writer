@@ -18,6 +18,7 @@ export type PlotLabAccessReason =
 export interface PlotLabAccess {
   canUsePlotLab: boolean;
   canUsePlotLabTesterTools: boolean;
+  usePlotLabV2: boolean;
   reason: PlotLabAccessReason;
 }
 
@@ -43,6 +44,10 @@ export function isPlotLabPrivateReleaseEnabled(): boolean {
 
 export function isPlotLabStage2Enabled(): boolean {
   return process.env.PLOT_LAB_STAGE2_ENABLED === "true";
+}
+
+export function isPlotLabV2Enabled(): boolean {
+  return process.env.PLOT_LAB_V2_ENABLED === "true";
 }
 
 export function isPlotLabMode(mode: string): boolean {
@@ -100,6 +105,7 @@ export async function getPlotLabAccess(
   return {
     canUsePlotLab: true,
     canUsePlotLabTesterTools: true,
+    usePlotLabV2: isPlotLabV2Enabled(),
     reason: isAdmin ? "admin" : "user_enabled",
   };
 }
@@ -108,6 +114,7 @@ function blocked(reason: PlotLabAccessReason): PlotLabAccess {
   return {
     canUsePlotLab: false,
     canUsePlotLabTesterTools: false,
+    usePlotLabV2: false,
     reason,
   };
 }

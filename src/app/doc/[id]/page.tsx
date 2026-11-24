@@ -21,7 +21,9 @@ import TextToSpeechButton from "@/components/editor/TextToSpeechButton";
 import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
+import AdLabWorkspace from "@/components/labs/AdLabWorkspace";
 import PlotLabWorkspace from "@/components/labs/PlotLabWorkspace";
+import PlotLabV2Workspace from "@/components/labs/PlotLabV2Workspace";
 import { useJob } from "@/lib/ai/useJob";
 import { tiptapJsonToTagged } from "@/lib/ai/context-engine";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -29,6 +31,7 @@ import { taggedTextToTiptapDoc } from "@/lib/editor/tagged-parser";
 import { clientTrace } from "@/lib/clientTrace";
 import { OrientationBadge } from "@/components/documents/OrientationControl";
 import type { DocumentOrientation } from "@/lib/document-orientation";
+import { isAdLabEnabledForClient } from "@/lib/ad-lab-flags";
 
 export type ApplyToTabResult = {
   ok: boolean;
@@ -71,6 +74,7 @@ interface HandoffExportResult {
   preview: {
     hasTitle: boolean;
     episodes: number;
+    ads?: number;
     hasSummary: boolean;
     hasLogline: boolean;
     payloadBytes: number;
@@ -109,6 +113,7 @@ interface ExportEpisodeOption {
 interface PlotLabAccessState {
   canUsePlotLab: boolean;
   canUsePlotLabTesterTools: boolean;
+  usePlotLabV2: boolean;
   reason: string;
 }
 
@@ -139,6 +144,7 @@ export default function DocumentPage() {
   const searchParams = useSearchParams();
   const { data: session } = useSession();
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "admin";
+  const adLabEnabled = isAdLabEnabledForClient();
   const editorRef = useRef<EditorHandle>(null);
   const [doc, setDoc] = useState<DocumentData | null>(null);
   const [tabs, setTabs] = useState<TabRow[]>([]);
@@ -154,6 +160,7 @@ export default function DocumentPage() {
   const [plotLabAccess, setPlotLabAccess] = useState<PlotLabAccessState>({
     canUsePlotLab: false,
     canUsePlotLabTesterTools: false,
+    usePlotLabV2: false,
     reason: "loading",
   });
   const [pipelineBranch, setPipelineBranch] = useState<PipelineBranch>("monetization");
@@ -172,6 +179,7 @@ export default function DocumentPage() {
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [predefinedLabOpen, setPredefinedLabOpen] = useState(false);
   const [predefinedLabMounted, setPredefinedLabMounted] = useState(false);
+  const [labKind, setLabKind] = useState<"predefined" | "ad">("predefined");
   const [sourcePaneCollapsed, setSourcePaneCollapsed] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityPanelRequest, setQualityPanelRequest] = useState<{
@@ -203,6 +211,7 @@ export default function DocumentPage() {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [exportFromEpisode, setExportFromEpisode] = useState("1");
   const [exportToEpisode, setExportToEpisode] = useState("");
+  const [exportScope, setExportScope] = useState<"series" | "ads" | null>(null);
 
   // Live headings of the active tab — fed by the editor on every transaction
   // and consumed by the rail for the active tab's nested outline, so a newly
@@ -254,6 +263,7 @@ export default function DocumentPage() {
       setPlotLabAccess({
         canUsePlotLab: false,
         canUsePlotLabTesterTools: false,
+        usePlotLabV2: false,
         reason: "unauthenticated",
       });
       setPlotLabActive(false);
@@ -276,6 +286,7 @@ export default function DocumentPage() {
         setPlotLabAccess({
           canUsePlotLab: false,
           canUsePlotLabTesterTools: false,
+          usePlotLabV2: false,
           reason: "error",
         });
         setPlotLabActive(false);
@@ -552,6 +563,10 @@ export default function DocumentPage() {
       throw new Error("Could not refresh tabs before opening Predefined Lab.");
     }
 
+    setLabKind("predefined");
+    if (selectedModelId === "local-sample") {
+      setSelectedModelId(aiModels.find((model) => !model.thinking)?.id ?? "");
+    }
     setPredefinedLabMounted(true);
     setPredefinedLabOpen(true);
     setPlotLabActive(false);
@@ -564,6 +579,22 @@ export default function DocumentPage() {
     setQualityPanelRequest(null);
     setNarrativeScanOpen(false);
     setPlotScanOpen(false);
+  }, [aiModels, handlePredefinedLabRefreshTabs, selectedModelId]);
+
+  const handleOpenAdLab = useCallback(async (): Promise<void> => {
+    const refreshedTabs = await handlePredefinedLabRefreshTabs();
+    if (!refreshedTabs.some((tab) => tab.type === "ads")) {
+      throw new Error("Could not find the Series Ads tab.");
+    }
+    setLabKind("ad");
+    setSelectedModelId("local-sample");
+    setPredefinedLabMounted(true);
+    setPredefinedLabOpen(true);
+    setPlotLabActive(false);
+    setAiSidebarOpen(false);
+    setCommentSidebarOpen(false);
+    setVersionHistoryOpen(false);
+    setPromptsOpen(false);
   }, [handlePredefinedLabRefreshTabs]);
 
   const handlePredefinedLabSaveSource = useCallback(async (): Promise<boolean> => {
@@ -815,16 +846,16 @@ export default function DocumentPage() {
   const handleCreateHandoffExport = useCallback(async () => {
     const from = Number(exportFromEpisode);
     const to = Number(exportToEpisode);
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1) {
+    if (exportScope !== "ads" && (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < 1)) {
       setExportError("Choose a valid episode range.");
       return;
     }
-    if (from > to) {
+    if (exportScope !== "ads" && from > to) {
       setExportError("Start episode must be before end episode.");
       return;
     }
 
-    const episodeRange = { from, to };
+    const episodeRange = exportScope === "ads" ? null : { from, to };
     setExportLoading(true);
     setExportError(null);
     setCopyStatus("idle");
@@ -852,7 +883,7 @@ export default function DocumentPage() {
       const res = await fetch(`/api/documents/${params.id}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ episodeRange }),
+        body: JSON.stringify(exportScope === "ads" ? { scope: "ads" } : { scope: "series", episodeRange }),
       });
       const data = await res.json().catch(() => null);
       clientTrace("export.client.response", {
@@ -869,7 +900,7 @@ export default function DocumentPage() {
       }
       setHandoffExport(data as HandoffExportResult);
       setFirstPassReport(null);
-      if (isAdmin) void loadFirstPassReport(data.exportId);
+      if (isAdmin && exportScope !== "ads") void loadFirstPassReport(data.exportId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Export failed";
       clientTrace("export.client.fail", {
@@ -883,7 +914,7 @@ export default function DocumentPage() {
     } finally {
       setExportLoading(false);
     }
-  }, [exportFromEpisode, exportToEpisode, isAdmin, loadFirstPassReport, params.id]);
+  }, [exportFromEpisode, exportScope, exportToEpisode, isAdmin, loadFirstPassReport, params.id]);
 
   const handleCopyExportUrl = useCallback(async () => {
     if (!handoffExport?.exportUrl) return;
@@ -980,13 +1011,16 @@ export default function DocumentPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {doc.isOwner && aiModels.length > 0 && (
+          {doc.isOwner && (aiModels.length > 0 || (predefinedLabOpen && labKind === "ad")) && (
             <>
               <select
                 value={selectedModelId}
                 onChange={(e) => setSelectedModelId(e.target.value)}
                 className="rounded-lg border border-border bg-muted px-2 py-1.5 text-xs text-foreground focus:border-indigo-300 focus:outline-none"
               >
+                {predefinedLabOpen && labKind === "ad" && (
+                  <option value="local-sample">Local sample (no AI)</option>
+                )}
                 {aiModels
                   .filter((m) => !m.thinking)
                   .map((m) => (
@@ -1070,7 +1104,7 @@ export default function DocumentPage() {
                   type="button"
                   onClick={async (event) => {
                     event.currentTarget.closest("details")?.removeAttribute("open");
-                    const nextOpen = !predefinedLabOpen;
+                    const nextOpen = !predefinedLabOpen || labKind !== "predefined";
                     if (nextOpen) {
                       try {
                         await handleOpenPredefinedLab();
@@ -1099,6 +1133,22 @@ export default function DocumentPage() {
                 >
                   Predefined
                 </button>
+                {adLabEnabled && (
+                  <button
+                    type="button"
+                    onClick={async (event) => {
+                      event.currentTarget.closest("details")?.removeAttribute("open");
+                      try { await handleOpenAdLab(); } catch { /* leave the current workspace visible */ }
+                    }}
+                    className={`w-full rounded px-3 py-2 text-left text-sm transition-colors ${
+                      predefinedLabOpen && labKind === "ad"
+                        ? "bg-pink-50 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    Ad Lab
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled
@@ -1142,6 +1192,7 @@ export default function DocumentPage() {
                 setExportError(null);
                 setHandoffExport(null);
                 setCopyStatus("idle");
+                setExportScope(null);
               }}
               disabled={exportLoading}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -1406,39 +1457,63 @@ export default function DocumentPage() {
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
-            <PredefinedLabStageWorkspace
-              documentId={doc.id}
-              orientation={doc.orientation}
-              tabs={tabs}
-              modelId={selectedModelId}
-              thinking={thinkingEnabled}
-              onRefreshTabs={handlePredefinedLabRefreshTabs}
-              onCheckSourceDirty={() => editorRef.current?.hasUnsavedChanges?.() ?? false}
-              onSaveSource={handlePredefinedLabSaveSource}
-            />
+            {labKind === "predefined" ? (
+              <PredefinedLabStageWorkspace
+                documentId={doc.id}
+                orientation={doc.orientation}
+                tabs={tabs}
+                modelId={selectedModelId}
+                thinking={thinkingEnabled}
+                onRefreshTabs={handlePredefinedLabRefreshTabs}
+                onCheckSourceDirty={() => editorRef.current?.hasUnsavedChanges?.() ?? false}
+                onSaveSource={handlePredefinedLabSaveSource}
+              />
+            ) : (
+              <AdLabWorkspace
+                documentId={doc.id}
+                tabs={tabs}
+                modelId={selectedModelId}
+                thinking={thinkingEnabled}
+                onRefreshTabs={handlePredefinedLabRefreshTabs}
+                onSaved={async (tabId) => {
+                  await handleForceTabRefresh(tabId);
+                  await handleTabSwitch(tabId);
+                }}
+              />
+            )}
           </div>
         )}
 
         {!predefinedLabOpen && aiSidebarOpen && plotLabActive && plotLabAccess.canUsePlotLab && activeTab && (
-          <PlotLabWorkspace
-            documentId={doc.id}
-            tabs={tabs}
-            activeTab={activeTab}
-            editorRef={editorRef}
-            modelId={selectedModelId}
-            thinking={thinkingEnabled}
-            isAdmin={isAdmin}
-            canUseTesterTools={plotLabAccess.canUsePlotLabTesterTools}
-            onFlushPendingSave={async () => {
-              await editorRef.current?.flushPendingSave?.();
-            }}
-            onTabsChange={handleTabsChange}
-            onOpenTab={handleTabSwitch}
-            onClose={() => {
-              setAiSidebarOpen(false);
-              setPlotLabActive(false);
-            }}
-          />
+          plotLabAccess.usePlotLabV2 ? (
+            <PlotLabV2Workspace
+              documentId={doc.id}
+              onClose={() => {
+                setAiSidebarOpen(false);
+                setPlotLabActive(false);
+              }}
+            />
+          ) : (
+            <PlotLabWorkspace
+              documentId={doc.id}
+              tabs={tabs}
+              activeTab={activeTab}
+              editorRef={editorRef}
+              modelId={selectedModelId}
+              thinking={thinkingEnabled}
+              isAdmin={isAdmin}
+              canUseTesterTools={plotLabAccess.canUsePlotLabTesterTools}
+              onFlushPendingSave={async () => {
+                await editorRef.current?.flushPendingSave?.();
+              }}
+              onTabsChange={handleTabsChange}
+              onOpenTab={handleTabSwitch}
+              onClose={() => {
+                setAiSidebarOpen(false);
+                setPlotLabActive(false);
+              }}
+            />
+          )
         )}
 
         {commentSidebarOpen && !predefinedLabOpen && !plotLabActive && (
@@ -1662,7 +1737,20 @@ export default function DocumentPage() {
               </button>
             )}
 
-            {!handoffExport && (
+            {!handoffExport && !exportScope && (
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button" onClick={() => setExportScope("series")} className="rounded-lg border border-border p-4 text-left hover:border-indigo-400 hover:bg-muted/50">
+                  <span className="block text-sm font-semibold">Export Series</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Use the existing episode export flow.</span>
+                </button>
+                <button type="button" onClick={() => setExportScope("ads")} className="rounded-lg border border-border p-4 text-left hover:border-pink-400 hover:bg-muted/50">
+                  <span className="block text-sm font-semibold">Export Ads</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">Export every entry in the Ads tab.</span>
+                </button>
+              </div>
+            )}
+
+            {!handoffExport && exportScope === "series" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
@@ -1729,17 +1817,27 @@ export default function DocumentPage() {
               </div>
             )}
 
+            {!handoffExport && exportScope === "ads" && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">All saved entries in the Series Ads tab will be included in the same four-hour handoff link used by Writer exports.</p>
+                <button onClick={handleCreateHandoffExport} disabled={exportLoading} className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 dark:bg-slate-100 dark:text-slate-950">
+                  {exportLoading ? "Creating export..." : "Generate Ads export link"}
+                </button>
+                <button type="button" onClick={() => setExportScope(null)} className="text-xs font-medium text-muted-foreground hover:text-foreground">Back</button>
+              </div>
+            )}
+
             {handoffExport && !exportLoading && (
               <div className="space-y-4">
                 <div className="rounded-md border border-border bg-muted px-3 py-2">
                   <div className="text-lg font-semibold text-foreground">
-                    {handoffExport.preview.episodes}
+                    {exportScope === "ads" ? handoffExport.preview.ads ?? 0 : handoffExport.preview.episodes}
                   </div>
-                  <div className="text-xs text-muted-foreground">Episodes</div>
+                  <div className="text-xs text-muted-foreground">{exportScope === "ads" ? "Ads" : "Episodes"}</div>
                 </div>
 
                 <div className="rounded-md border border-border bg-muted/70 px-3 py-2 text-sm text-muted-foreground">
-                  {selectedRangeLabel} from the last saved Writer snapshot. Link active for 4 hours.
+                  {exportScope === "ads" ? "All Ads" : selectedRangeLabel} from the last saved Writer snapshot. Link active for 4 hours.
                 </div>
 
                 <div>
@@ -1779,7 +1877,7 @@ export default function DocumentPage() {
                   }}
                   className="text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Choose a different range
+                  {exportScope === "ads" ? "Create another export" : "Choose a different range"}
                 </button>
               </div>
             )}

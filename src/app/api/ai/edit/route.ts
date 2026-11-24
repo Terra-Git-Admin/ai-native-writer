@@ -24,6 +24,11 @@ import {
   PREDEFINED_LAB_DIALOGUE_DESIGN_PROMPT,
   PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
   PREDEFINED_LAB_ITERATE_PROMPT,
+  AD_LAB_BEATS_PROMPT,
+  AD_LAB_DIALOGUE_DESIGN_PROMPT,
+  AD_LAB_DRAFT_PROMPT,
+  AD_LAB_ITERATE_PROMPT,
+  AD_LAB_DIALOGUE_PASS_PROMPT,
   PLOT_LAB_CHAT_SYSTEM_PROMPT,
   PLOT_LAB_CHARACTER_ANALYST_SYSTEM_PROMPT,
   PLOT_LAB_CONTINUITY_AUDIT_SYSTEM_PROMPT,
@@ -49,12 +54,14 @@ import {
   CONTENT_PROFILE_CONTRACT_VERSION,
 } from "@/lib/ai/content-profile";
 import { parseDocumentOrientation } from "@/lib/document-orientation";
+import { isAdLabEnabled } from "@/lib/ad-lab-flags";
 
 type Mode =
   | "edit" | "draft" | "feedback" | "format" | "chat"
   | "pipe_world_state" | "pipe_beat_gen" | "pipe_causality" | "pipe_plot_synth"
   | "pipe_continuation_state" | "pipe_continuation_beats" | "pipe_continuation_logic" | "pipe_continuation_synth"
   | "predef_lab_beats" | "predef_lab_dialogue_design" | "predef_lab_draft" | "predef_lab_iterate" | "predef_lab_dialogue_pass"
+  | "ad_lab_beats" | "ad_lab_dialogue_design" | "ad_lab_draft" | "ad_lab_iterate" | "ad_lab_dialogue_pass"
   | "plot_lab_chat" | "plot_lab_source_soul_scan" | "plot_lab_character_analyst" | "plot_lab_continuity_audit"
   | "plot_lab_paywall_architect" | "plot_lab_premise_bridge" | "plot_lab_universe_builder" | "plot_lab_runway_sketch"
   | "plot_lab_save_preview" | "plot_lab_final_plot";
@@ -78,6 +85,11 @@ const FALLBACK_PROMPTS: Record<Mode, string> = {
   predef_lab_draft: PREDEFINED_LAB_DRAFT_PROMPT,
   predef_lab_iterate: PREDEFINED_LAB_ITERATE_PROMPT,
   predef_lab_dialogue_pass: PREDEFINED_LAB_DIALOGUE_PASS_PROMPT,
+  ad_lab_beats: AD_LAB_BEATS_PROMPT,
+  ad_lab_dialogue_design: AD_LAB_DIALOGUE_DESIGN_PROMPT,
+  ad_lab_draft: AD_LAB_DRAFT_PROMPT,
+  ad_lab_iterate: AD_LAB_ITERATE_PROMPT,
+  ad_lab_dialogue_pass: AD_LAB_DIALOGUE_PASS_PROMPT,
   plot_lab_chat: PLOT_LAB_CHAT_SYSTEM_PROMPT,
   plot_lab_source_soul_scan: PLOT_LAB_SOURCE_SOUL_SCAN_SYSTEM_PROMPT,
   plot_lab_character_analyst: PLOT_LAB_CHARACTER_ANALYST_SYSTEM_PROMPT,
@@ -108,6 +120,11 @@ const VALID_MODES: ReadonlySet<string> = new Set<Mode>([
   "predef_lab_draft",
   "predef_lab_iterate",
   "predef_lab_dialogue_pass",
+  "ad_lab_beats",
+  "ad_lab_dialogue_design",
+  "ad_lab_draft",
+  "ad_lab_iterate",
+  "ad_lab_dialogue_pass",
   "plot_lab_chat",
   "plot_lab_source_soul_scan",
   "plot_lab_character_analyst",
@@ -142,12 +159,15 @@ const PLOT_LAB_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "plot_lab_save_preview",
   "plot_lab_final_plot",
 ]);
+const AD_LAB_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "ad_lab_beats", "ad_lab_dialogue_design", "ad_lab_draft", "ad_lab_iterate", "ad_lab_dialogue_pass",
+]);
 
 async function getSystemPrompt(mode: Mode): Promise<string> {
   const row = await db.query.prompts.findFirst({
     where: eq(prompts.id, mode),
   });
-  const useCodePrompt = PLOT_LAB_MODES.has(mode) && process.env.NODE_ENV !== "production";
+  const useCodePrompt = (PLOT_LAB_MODES.has(mode) || AD_LAB_MODES.has(mode)) && process.env.NODE_ENV !== "production";
   const dbDiffersFromCode = Boolean(row?.content && row.content !== FALLBACK_PROMPTS[mode]);
   const source = useCodePrompt ? "code_dev" : row?.content ? "db" : "fallback";
   logTrace("ai.edit.prompt_resolved", { mode, source });
@@ -210,6 +230,24 @@ export async function POST(req: Request) {
     }
     const plotLabAccess = await getPlotLabAccess(session, { documentId });
     if (!plotLabAccess.canUsePlotLab) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+    }
+  }
+  if (AD_LAB_MODES.has(safeMode)) {
+    if (!isAdLabEnabled()) {
+      return new Response(JSON.stringify({ error: "Ad Lab is not enabled" }), { status: 404 });
+    }
+    if (!documentId) {
+      return new Response(JSON.stringify({ error: "documentId is required" }), { status: 400 });
+    }
+    const sourceDocument = await db.query.documents.findFirst({
+      where: eq(documents.id, documentId),
+      columns: { ownerId: true },
+    });
+    if (!sourceDocument) {
+      return new Response(JSON.stringify({ error: "Series not found" }), { status: 404 });
+    }
+    if (sourceDocument.ownerId !== session.user.id && !isAdmin) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
     }
   }

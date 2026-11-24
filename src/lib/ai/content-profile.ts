@@ -85,6 +85,7 @@ export function composePromptForOrientation(
   promptId: string,
   orientation: DocumentOrientation
 ): string {
+  if (promptId.startsWith("ad_lab_")) return basePrompt;
   if (orientation === "portrait") return basePrompt;
   const families = FAMILY_BY_PROMPT.get(promptId) ?? ["unit_semantics", "script_output"];
   return `${basePrompt}\n\n# DOCUMENT CONTENT PROFILE (highest-priority format contract)\nProfile: landscape\nContract version: ${CONTENT_PROFILE_CONTRACT_VERSION}\nThe rules below override conflicting portrait or microdrama pacing rules earlier in this prompt. Preserve all non-conflicting story, canon, safety, and output-format requirements.\n\n${families

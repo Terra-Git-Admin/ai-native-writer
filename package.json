@@ -13,10 +13,16 @@
     "eval:first-pass:trend": "node scripts/first-pass-eval-trend.cjs",
     "test:first-pass": "node scripts/first-pass-eval.test.cjs && node scripts/first-pass-eval-db.test.cjs",
     "test:plot-lab": "node --experimental-strip-types scripts/plot-lab-regression.test.mjs",
+    "test:plot-lab-v2": "node --experimental-strip-types scripts/plot-lab-v2-state-machine.test.mjs",
+    "test:plot-lab-v2:api": "node scripts/plot-lab-v2-api.test.mjs",
+    "test:plot-lab-v2:real-ai": "node scripts/plot-lab-v2-real-ai.test.mjs",
+    "test:plot-lab-v2:corrective": "node --experimental-strip-types scripts/plot-lab-v2-corrective.regression-1.test.mjs",
+    "test:plot-lab-v2:migration": "node scripts/plot-lab-v2-migration.test.mjs",
     "test:pitch-lab": "node --experimental-strip-types scripts/pitch-lab-regression.test.mjs",
     "test:ai-assistant": "node scripts/ai-assistant-regression.test.mjs",
     "test:content-profile": "node --experimental-strip-types scripts/content-profile-regression.test.mjs",
-    "test:document-organization": "node --experimental-strip-types scripts/document-organization.test.mjs"
+    "test:document-organization": "node --experimental-strip-types scripts/document-organization.test.mjs",
+    "test:ad-lab": "node --experimental-strip-types scripts/ad-lab-regression.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.66",
