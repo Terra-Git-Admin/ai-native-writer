@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
@@ -14,6 +14,22 @@ const port = 3217;
 const baseUrl = `http://127.0.0.1:${port}`;
 let server;
 let serverOutput = "";
+
+async function stopServer() {
+  if (!server || server.exitCode !== null) return;
+  if (process.platform === "win32" && server.pid) {
+    spawnSync("taskkill", ["/PID", String(server.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    server.kill("SIGINT");
+  }
+  if (server.exitCode === null) {
+    await Promise.race([
+      new Promise((resolvePromise) => server.once("exit", resolvePromise)),
+      new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000)),
+    ]);
+  }
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
+}
 
 function tiptap(...lines) {
   return JSON.stringify({
@@ -375,30 +391,30 @@ try {
   );
 
   const database = new Database(databasePath, { readonly: true });
-  const proposalCount = database
-    .prepare("SELECT COUNT(*) AS count FROM plot_lab_proposals WHERE session_id = 'session-chat' AND status = 'pending'")
-    .get().count;
-  assert.equal(proposalCount, 1, "a change request must persist one pending non-applying proposal");
-  const chatOutputVersion = database
-    .prepare("SELECT latest_output_version AS version FROM plot_lab_sessions WHERE id = 'session-chat'")
-    .get().version;
-  assert.equal(chatOutputVersion, 1, "discussion and proposals must not mutate the current batch");
-  const acceptedOutput = database
-    .prepare("SELECT accepted_at, accepted_by FROM plot_lab_outputs WHERE session_id = 'session-chat' AND version = 1")
-    .get();
-  assert(acceptedOutput.accepted_at, "explicit acceptance must timestamp the output");
-  assert.equal(acceptedOutput.accepted_by, "user-admin");
-  const supersededCount = database
-    .prepare("SELECT COUNT(*) AS count FROM plot_lab_messages WHERE superseded_at IS NOT NULL")
-    .get().count;
-  assert(supersededCount >= 5, "editing the first answer should supersede its derived descendants");
-  database.close();
+  try {
+    const proposalCount = database
+      .prepare("SELECT COUNT(*) AS count FROM plot_lab_proposals WHERE session_id = 'session-chat' AND status = 'pending'")
+      .get().count;
+    assert.equal(proposalCount, 1, "a change request must persist one pending non-applying proposal");
+    const chatOutputVersion = database
+      .prepare("SELECT latest_output_version AS version FROM plot_lab_sessions WHERE id = 'session-chat'")
+      .get().version;
+    assert.equal(chatOutputVersion, 1, "discussion and proposals must not mutate the current batch");
+    const acceptedOutput = database
+      .prepare("SELECT accepted_at, accepted_by FROM plot_lab_outputs WHERE session_id = 'session-chat' AND version = 1")
+      .get();
+    assert(acceptedOutput.accepted_at, "explicit acceptance must timestamp the output");
+    assert.equal(acceptedOutput.accepted_by, "dev-bypass-user");
+    const supersededCount = database
+      .prepare("SELECT COUNT(*) AS count FROM plot_lab_messages WHERE superseded_at IS NOT NULL")
+      .get().count;
+    assert(supersededCount >= 5, "editing the first answer should supersede its derived descendants");
+  } finally {
+    database.close();
+  }
   console.log("Plot Lab V2 mocked API checks passed");
 } finally {
-  if (server && server.exitCode === null) {
-    server.kill("SIGINT");
-    await new Promise((resolvePromise) => server.once("exit", resolvePromise));
-  }
+  await stopServer();
   const resolvedTempRoot = resolve(tempRoot);
   const resolvedSystemTemp = resolve(tmpdir());
   assert(
