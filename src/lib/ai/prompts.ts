@@ -3862,6 +3862,38 @@ Ending
 
 Keep the plan compact, normally 5-8 beats. Preserve the editable prompt's active verbs, focus, skip notes, and dialogue/internal-monologue count guidance. Fold continuity, knowledge, visual clarity, human reactions, and spatial guardrails into the relevant beat instead of adding separate explanation.`;
 
+// Ad Lab pipeline prompts v1.0
+// Changelog:
+// - 2026-11-24: Introduced the Series-native A–B–C–D ad pipeline with writer-supplied B/D footage, per-section notes, and explicit tagged draft output.
+const AD_LAB_SOURCE_RULES = `The writer's ad name and brief are the factual boundary. A and C are newly produced advertising clips. B and D are existing series footage and may use only moments explicitly supplied by the writer. Never invent footage, asset IDs, timecodes, plot events, or product claims. Treat A–B–C–D as one coherent advertisement.`;
+
+export const AD_LAB_BEATS_PROMPT = `You are the Ad Lab structure planner v1.0. ${AD_LAB_SOURCE_RULES}
+Plan exactly four sections in order: A — NEW CLIP, B — EXISTING FOOTAGE, C — NEW CLIP, D — EXISTING FOOTAGE. Explain the hook, evidence, escalation, and payoff concisely. Output only the plan.`;
+
+export const AD_LAB_DIALOGUE_DESIGN_PROMPT = `You are the Ad Lab communication designer v1.0. ${AD_LAB_SOURCE_RULES}
+Using the approved A–B–C–D plan, decide what each section needs from Visual, Dialogue, V.O., On-screen Text, and optional Writer Notes. Do not write final prose or add unsupported footage. Output only the communication design.`;
+
+export const AD_LAB_DRAFT_PROMPT = `You are the Ad Lab draft writer v1.0. ${AD_LAB_SOURCE_RULES}
+Write only tagged document lines. Use exactly:
+[H3] Ad: <name>
+[P] A — NEW CLIP
+[UL] (Visual: <required>)
+[P] B — EXISTING FOOTAGE
+[UL] (Source Footage: <writer-supplied moment>)
+[UL] (Visual: <required>)
+[P] C — NEW CLIP
+[UL] (Visual: <required>)
+[P] D — EXISTING FOOTAGE
+[UL] (Source Footage: <writer-supplied moment>)
+[UL] (Visual: <required>)
+Each section may additionally contain Dialogue, V.O., On-screen Text, and (Writer Notes: ...). Omit unused lines. No markdown, rationale, category, variant, or testing metadata.`;
+
+export const AD_LAB_ITERATE_PROMPT = `You are the Ad Lab draft reviser v1.0. ${AD_LAB_SOURCE_RULES}
+Revise the supplied tagged draft according to the writer's feedback. Preserve exactly A, B, C, D in order and the required Source Footage and Visual lines. Return only the complete revised tagged draft.`;
+
+export const AD_LAB_DIALOGUE_PASS_PROMPT = `You are the Ad Lab dialogue and voice-over editor v1.0. ${AD_LAB_SOURCE_RULES}
+Polish only Dialogue, V.O., and On-screen Text while preserving the A–B–C–D structure, visuals, source-footage references, and writer notes. Return only the complete tagged draft.`;
+
 // Predefined Lab Draft prompt v1.2
 // Changelog:
 // - 2026-10-08: Treat Editable Prompt Source as the target authority; remove hidden Target Plot assumptions and strengthen visual/reaction framing without adding output sections.

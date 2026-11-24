@@ -410,7 +410,8 @@ export async function PUT(
   // saves — comment-mark and forced snapshots are deliberate writes and are
   // exempt. tab.updatedAt is seconds-precision; compare as epoch seconds.
   const baseUpdatedAt = typeof body.baseUpdatedAt === "string" ? body.baseUpdatedAt : null;
-  if (isOwner && !commentMarkOnly && !forceVersion && baseUpdatedAt && tab.updatedAt) {
+  const enforceOptimisticLock = !forceVersion || versionReason === "ad-lab-save";
+  if (isOwner && !commentMarkOnly && enforceOptimisticLock && baseUpdatedAt && tab.updatedAt) {
     const baseSec = Math.floor(new Date(baseUpdatedAt).getTime() / 1000);
     const storedSec = Math.floor(new Date(tab.updatedAt).getTime() / 1000);
     if (storedSec > baseSec) {

@@ -40,6 +40,7 @@ export interface SectionTab {
     | "series_skeleton"
     | "microdrama_plots"
     | "predefined_episodes"
+    | "ads"
     | "episode_sketches"
     | "plot_lab_decisions"
     | "workbook"

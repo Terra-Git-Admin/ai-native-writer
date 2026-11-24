@@ -55,6 +55,7 @@ function classify(row: TabRow): CanonicalTabType | "research_legacy" | "archive"
   if (t === "series_skeleton") return "series_skeleton";
   if (t === "microdrama_plots" || t === "episode_plot") return "microdrama_plots";
   if (t === "predefined_episodes" || t === "reference_episode") return "predefined_episodes";
+  if (t === "ads") return "ads";
   if (t === "workbook") return "workbook";
   if (t === "world_state") return "world_state";
   if (t === "beat_sequence") return "beat_sequence";

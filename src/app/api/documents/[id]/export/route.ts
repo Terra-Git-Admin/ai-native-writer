@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { buildExport } from "@/lib/export/writer-export";
+import { buildAdsExport } from "@/lib/export/ads-export";
 import { logEvent } from "@/lib/saveTrace";
 
 function getPublicBaseUrl(req: Request): string {
@@ -67,6 +68,7 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({}));
+  const scope = (body as { scope?: unknown }).scope === "ads" ? "ads" : "series";
   const rangeResult = parseEpisodeRange(body);
   if (rangeResult.error) {
     return NextResponse.json({ error: rangeResult.error }, { status: 400 });
@@ -81,6 +83,22 @@ export async function POST(
   });
 
   try {
+    if (scope === "ads") {
+      const result = await buildAdsExport(id, doc.title, session.user.id, getPublicBaseUrl(req));
+      return NextResponse.json({
+        exportId: result.exportId,
+        exportUrl: result.exportUrl,
+        preview: {
+          hasTitle: doc.title.trim().length > 0,
+          episodes: 0,
+          ads: (result.export.ads.contentTagged.match(/^\[H3\]\s+Ad:/gm) ?? []).length,
+          hasSummary: false,
+          hasLogline: false,
+          episodeRange: null,
+          payloadBytes: JSON.stringify(result.export).length,
+        },
+      });
+    }
     const result = await buildExport(
       id,
       doc.title,

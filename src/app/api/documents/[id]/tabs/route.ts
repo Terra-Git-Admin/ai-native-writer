@@ -20,6 +20,7 @@ const VALID_TYPES: readonly string[] = [
   "research",
   "microdrama_plots",
   "predefined_episodes",
+  "ads",
   "workbook",
   "world_state",
   "beat_sequence",

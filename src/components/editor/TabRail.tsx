@@ -10,6 +10,7 @@ export type TabType =
   | "series_skeleton"
   | "microdrama_plots"
   | "predefined_episodes"
+  | "ads"
   | "workbook"
   // Multi-Step Episode Pipeline tabs (pipeline positions 7–9).
   | "world_state"
@@ -56,6 +57,10 @@ const TYPE_BADGES: Record<TabType, { label: string; className: string }> = {
   predefined_episodes: {
     label: "Predefined Episodes",
     className: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
+  },
+  ads: {
+    label: "Ads",
+    className: "bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300",
   },
   workbook: { label: "Workbook", className: "bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300" },
   world_state: { label: "World State", className: "bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300" },
