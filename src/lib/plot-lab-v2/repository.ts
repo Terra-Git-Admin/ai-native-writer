@@ -84,6 +84,7 @@ function toSession(row: SessionRow): PlotLabSessionState {
     }),
     confirmedRetcons: parseJson(row.retconsJson, []),
     latestOutputVersion: row.latestOutputVersion ?? undefined,
+    latestAcceptedOutputVersion: row.latestAcceptedOutputVersion ?? undefined,
     activeJobId: row.activeJobId ?? undefined,
     pendingSyncActionId: row.pendingSyncActionId ?? undefined,
     failedStage: row.failedStage ?? undefined,
@@ -151,6 +152,7 @@ function sessionInsertValues(state: PlotLabSessionState, now: Date) {
     interviewCheckpointJson: JSON.stringify(state.interviewCheckpoint),
     retconsJson: JSON.stringify(state.confirmedRetcons),
     latestOutputVersion: state.latestOutputVersion ?? null,
+    latestAcceptedOutputVersion: state.latestAcceptedOutputVersion ?? null,
     activeJobId: state.activeJobId ?? null,
     pendingSyncActionId: state.pendingSyncActionId ?? null,
     failedStage: state.failedStage ?? null,
@@ -176,6 +178,7 @@ function mutableSessionValues(state: PlotLabSessionState, now: Date) {
     interviewCheckpointJson: JSON.stringify(state.interviewCheckpoint),
     retconsJson: JSON.stringify(state.confirmedRetcons),
     latestOutputVersion: state.latestOutputVersion ?? null,
+    latestAcceptedOutputVersion: state.latestAcceptedOutputVersion ?? null,
     activeJobId: state.activeJobId ?? null,
     pendingSyncActionId: state.pendingSyncActionId ?? null,
     failedStage: state.failedStage ?? null,
@@ -577,6 +580,23 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
         actionId: input.actionId,
       });
       const now = new Date();
+      if (action.actionKind === "accept_output") {
+        const outputVersion = (parseJson<PlotLabActionEnvelope>(action.requestJson, { actionId: action.actionId, expectedRevision: action.baseRevision, action: { kind: "restart" } }).action as { kind: "accept_output"; outputVersion: number }).outputVersion;
+        const accepted = tx.update(plotLabOutputs).set({ acceptedAt: now, acceptedBy: action.createdBy })
+          .where(and(eq(plotLabOutputs.sessionId, state.sessionId), eq(plotLabOutputs.version, outputVersion), eq(plotLabOutputs.status, "current"))).run();
+        if (accepted.changes !== 1) {
+          throw new PlotLabRepositoryError("SESSION_STALE", "Only the current Plot Lab output can be accepted.");
+        }
+      }
+      if (action.actionKind === "confirm_proposal") {
+        const proposalAction = parseJson<PlotLabActionEnvelope>(action.requestJson, { actionId: action.actionId, expectedRevision: action.baseRevision, action: { kind: "restart" } }).action as { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
+        const resolved = tx.update(plotLabProposals).set({
+          status: proposalAction.downstreamChoice === "keep" ? "rejected" : "confirmed",
+          confirmedChoice: proposalAction.downstreamChoice ?? "keep",
+          resolvedAt: now,
+        }).where(and(eq(plotLabProposals.id, proposalAction.proposalId), eq(plotLabProposals.sessionId, state.sessionId), eq(plotLabProposals.status, "pending"))).run();
+        if (resolved.changes !== 1) throw new PlotLabRepositoryError("SESSION_STALE", "That change proposal is no longer pending.");
+      }
       if (input.supersedeFromMessageId) {
         supersedeDerivedMessageGraph(tx, state.sessionId, input.supersedeFromMessageId, now);
       }
@@ -591,6 +611,7 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
           targetUnitsJson: JSON.stringify(input.proposal.targetUnitNumbers),
           downstreamUnitsJson: JSON.stringify(input.proposal.downstreamUnitNumbers),
           explanation: input.proposal.explanation,
+          repairScope: input.proposal.repairScope,
           status: input.proposal.status,
           confirmedChoice: input.proposal.confirmedChoice ?? null,
           createdAt: now,
@@ -697,7 +718,7 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
     userId: string;
     isAdmin?: boolean;
     envelope: PlotLabActionEnvelope & {
-      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string };
+      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
     };
     requestHash: string;
     jobId: string;
@@ -724,6 +745,15 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
       const now = new Date();
       const response = { kind: "generation_queued", jobId: input.jobId, revision: queued.revision };
 
+      if (input.envelope.action.kind === "confirm_proposal") {
+        const proposal = tx.select().from(plotLabProposals).where(eq(plotLabProposals.id, input.envelope.action.proposalId)).get();
+        if (!proposal || proposal.sessionId !== state.sessionId || proposal.status !== "pending" || proposal.baseOutputVersion !== state.latestOutputVersion) {
+          throw new PlotLabRepositoryError("SESSION_STALE", "That change proposal is stale or unavailable.");
+        }
+        tx.update(plotLabProposals).set({ status: "confirmed", confirmedChoice: "update", resolvedAt: now })
+          .where(eq(plotLabProposals.id, proposal.id)).run();
+      }
+
       tx.insert(aiJobs).values({
         id: input.jobId,
         documentId: input.documentId,
@@ -739,8 +769,8 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
         concurrencyKey: "plot_lab:" + state.sessionId,
         sessionRevision: queued.revision,
         inputSnapshotJson: JSON.stringify(input.inputSnapshot),
-        currentStage: "creative",
-        stageAttemptsJson: JSON.stringify({ creative: 0, connecting: 0 }),
+        currentStage: "source_truth",
+        stageAttemptsJson: JSON.stringify({ source_truth: 0, endpoint_exploration: 0, route_exploration: 0, specialist_planning: 0, creative_authoring: 0, holistic_qa: 0, targeted_repair: 0, connecting: 0 }),
       }).run();
       tx.insert(plotLabActions).values({
         id: input.envelope.actionId,
@@ -836,7 +866,22 @@ export class DrizzlePlotLabRepository implements PlotLabRepository {
         parentVersion: state.latestOutputVersion ?? null,
         jobId: input.jobId,
         status: "current",
-        mutationKind: "initial_generation",
+        mutationKind: (() => {
+          try {
+            const snapshot = JSON.parse(job.inputSnapshotJson ?? "{}") as { mutationKind?: string };
+            return snapshot.mutationKind ?? "initial_generation";
+          } catch {
+            return "initial_generation";
+          }
+        })(),
+        proposalId: (() => {
+          try {
+            const snapshot = JSON.parse(job.inputSnapshotJson ?? "{}") as { proposalId?: string };
+            return snapshot.proposalId ?? null;
+          } catch {
+            return null;
+          }
+        })(),
         batchJson: JSON.stringify(input.batch),
         createdAt: now,
       }).run();

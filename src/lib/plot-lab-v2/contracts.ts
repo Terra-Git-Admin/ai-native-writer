@@ -6,14 +6,23 @@ export type PlotLabSessionPhase =
   | "intake"
   | "interview"
   | "queued"
+  | "orchestrating"
   | "creative"
+  | "reviewing"
   | "connecting"
   | "complete"
   | "recoverable_error";
 
 export type PlotLabGenerationStage =
-  | "creative"
+  | "source_truth"
+  | "endpoint_exploration"
+  | "route_exploration"
+  | "specialist_planning"
+  | "creative_authoring"
+  | "holistic_qa"
+  | "targeted_repair"
   | "connecting"
+  | "creative"
   | "unit_creative"
   | "continuity";
 
@@ -80,6 +89,7 @@ export interface PlotLabSessionState {
   interviewCheckpoint: PlotLabInterviewCheckpoint;
   confirmedRetcons: Array<{ conflictId: string; statement: string }>;
   latestOutputVersion?: number;
+  latestAcceptedOutputVersion?: number;
   activeJobId?: string;
   pendingSyncActionId?: string;
   failedStage?: PlotLabGenerationStage;
@@ -95,6 +105,7 @@ export type PlotLabAction =
   | { kind: "edit_answer"; answerMessageId: string; text: string }
   | { kind: "add_context"; text: string }
   | { kind: "request_generation" }
+  | { kind: "accept_output"; outputVersion: number }
   | { kind: "chat"; text: string }
   | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" }
   | { kind: "regenerate_all"; instruction: string }
@@ -138,8 +149,80 @@ export interface PlotLabMutationProposal {
   targetUnitNumbers: number[] | "all";
   downstreamUnitNumbers: number[];
   explanation: string;
+  repairScope: "connector" | "unit" | "route" | "destination";
   status: "pending" | "confirmed" | "rejected" | "stale";
   confirmedChoice?: "update" | "keep";
+}
+
+export interface PlotLabSourceTruthBrief {
+  episode1Soul: PlotLabStorySoul;
+  canonFacts: string[];
+  requiredSkeletonElements: string[];
+  monetizationPoint: string;
+  characterFidelity: string[];
+  unresolvedQuestions: string[];
+}
+
+export interface PlotLabEndpointCandidate {
+  id: string;
+  finalTurn: string;
+  visual: string;
+  emotionalCost: string;
+  causalRequirements: string[];
+}
+
+export interface PlotLabRouteCandidate {
+  id: string;
+  thesis: string;
+  endpointCandidateId: string;
+  unitSpine: Array<{
+    number: number;
+    purpose: string;
+    cause: string;
+    choice: string;
+    changedState: string;
+    outgoingPressure: string;
+  }>;
+}
+
+export interface PlotLabOrchestratorDecision {
+  selectedRouteId: string;
+  rationale: string;
+  qualityDefinition: string[];
+  specialistNeeds: {
+    characterRelationship: { needed: boolean; reason: string };
+    oppositionPressure: { needed: boolean; reason: string };
+    timeLocationWorld: { needed: boolean; reason: string };
+  };
+}
+
+export interface PlotLabSpecialistBrief {
+  role: "character_relationship" | "opposition_pressure" | "time_location_world";
+  guidance: string[];
+  risks: string[];
+}
+
+export interface PlotLabQAResult {
+  verdict: "strong" | "repair_recommended";
+  strengths: string[];
+  primaryIssue: string;
+  repairInstruction: string;
+  owner: "creative_author" | "connector";
+  affectedUnitNumbers: number[];
+}
+
+export interface PlotLabOrchestrationArtifacts {
+  sourceTruth?: PlotLabSourceTruthBrief;
+  endpointCandidates?: PlotLabEndpointCandidate[];
+  routeCandidates?: PlotLabRouteCandidate[];
+  decision?: PlotLabOrchestratorDecision;
+  specialistBriefs?: PlotLabSpecialistBrief[];
+  creativeRoute?: unknown;
+  qa?: PlotLabQAResult;
+  repairAttempted?: boolean;
+  repairSucceeded?: boolean;
+  preRepairRoute?: unknown;
+  finalBatch?: PlotLabConnectedBatch;
 }
 
 export interface PlotLabConnectedUnit {

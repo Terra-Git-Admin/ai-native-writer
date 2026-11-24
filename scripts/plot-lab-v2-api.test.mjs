@@ -99,6 +99,11 @@ try {
     now,
     now
   );
+  sqlite.prepare(`
+    INSERT INTO plot_lab_outputs (
+      id, session_id, version, status, mutation_kind, batch_json, created_at
+    ) VALUES ('session-chat:output:1', 'session-chat', 1, 'current', 'initial_generation', '{}', ?)
+  `).run(now);
   const insertTab = sqlite.prepare(
     "INSERT INTO tabs (id, document_id, title, type, content, position, is_protected, created_at, updated_at) VALUES (?, 'doc-admin-target', ?, ?, ?, ?, 1, ?, ?)"
   );
@@ -175,6 +180,15 @@ try {
   assert.equal(proposalBody.kind, "mutation_proposal");
   assert.equal(proposalBody.messages.at(-1).kind, "mutation_proposal");
   assert.equal(proposalBody.messages.at(-1).payload.applied, false);
+
+  const accepted = await postAction(uuid(92), proposalBody.session.revision, {
+    kind: "accept_output",
+    outputVersion: 1,
+  }, "doc-chat");
+  assert.equal(accepted.status, 200);
+  const acceptedBody = await accepted.json();
+  assert.equal(acceptedBody.kind, "output_accepted");
+  assert.equal(acceptedBody.session.latestAcceptedOutputVersion, 1);
 
   const empty = await fetch(`${baseUrl}/api/documents/doc-admin-target/plot-lab/session`);
   assert.equal(empty.status, 200, "an admin should access a document they do not own");
@@ -369,6 +383,11 @@ try {
     .prepare("SELECT latest_output_version AS version FROM plot_lab_sessions WHERE id = 'session-chat'")
     .get().version;
   assert.equal(chatOutputVersion, 1, "discussion and proposals must not mutate the current batch");
+  const acceptedOutput = database
+    .prepare("SELECT accepted_at, accepted_by FROM plot_lab_outputs WHERE session_id = 'session-chat' AND version = 1")
+    .get();
+  assert(acceptedOutput.accepted_at, "explicit acceptance must timestamp the output");
+  assert.equal(acceptedOutput.accepted_by, "user-admin");
   const supersededCount = database
     .prepare("SELECT COUNT(*) AS count FROM plot_lab_messages WHERE superseded_at IS NOT NULL")
     .get().count;
@@ -377,7 +396,7 @@ try {
   console.log("Plot Lab V2 mocked API checks passed");
 } finally {
   if (server && server.exitCode === null) {
-    server.kill();
+    server.kill("SIGINT");
     await new Promise((resolvePromise) => server.once("exit", resolvePromise));
   }
   const resolvedTempRoot = resolve(tempRoot);

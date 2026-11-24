@@ -88,7 +88,7 @@ function phaseLabel(session: PlotLabSessionState | null): string {
       ? "Ready to generate"
       : "Understanding your story";
   }
-  if (session.phase === "queued" || session.phase === "creative" || session.phase === "connecting") {
+  if (["queued", "orchestrating", "creative", "reviewing", "connecting"].includes(session.phase)) {
     return "Creating your first batch";
   }
   if (session.phase === "complete") return "Your latest story route";
@@ -739,18 +739,30 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                           {batch.format === "portrait" ? "Episodes 2–8" : "Chapter 1"} · Version {batch.version}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(formatBatchForCopy(batch));
-                          setCopiedMessageId(message.id + ":all");
-                          window.setTimeout(() => setCopiedMessageId(null), 1500);
-                        }}
-                        className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                      >
-                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                        {copiedMessageId === message.id + ":all" ? "Copied" : "Copy all"}
-                      </button>
+                      <div className="flex shrink-0 flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await navigator.clipboard.writeText(formatBatchForCopy(batch));
+                            setCopiedMessageId(message.id + ":all");
+                            window.setTimeout(() => setCopiedMessageId(null), 1500);
+                          }}
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                        >
+                          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                          {copiedMessageId === message.id + ":all" ? "Copied" : "Copy all"}
+                        </button>
+                        {!archivedThread && batch.version === thread.session?.latestOutputVersion ? (
+                          <button
+                            type="button"
+                            onClick={() => void sendAction({ kind: "accept_output", outputVersion: batch.version })}
+                            disabled={mutating || thread.session.latestAcceptedOutputVersion === batch.version}
+                            className="min-h-9 rounded-md bg-emerald-700 px-2.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:cursor-default disabled:opacity-70"
+                          >
+                            {thread.session.latestAcceptedOutputVersion === batch.version ? "Accepted" : "Accept final"}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-3 space-y-2">
                       {batch.units.map((unit) => {
@@ -814,6 +826,26 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                             <p className="font-semibold">Proposal only — your current batch has not changed.</p>
                             {typeof message.payload?.explanation === "string" ? (
                               <p className="mt-1 opacity-80">{message.payload.explanation}</p>
+                            ) : null}
+                            {!archivedThread && typeof message.payload?.proposalId === "string" ? (
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void sendAction({ kind: "confirm_proposal", proposalId: String(message.payload?.proposalId), downstreamChoice: "update" })}
+                                  disabled={mutating}
+                                  className="min-h-9 rounded-md bg-violet-700 px-3 font-semibold text-white hover:bg-violet-600 disabled:opacity-50"
+                                >
+                                  Apply change
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void sendAction({ kind: "confirm_proposal", proposalId: String(message.payload?.proposalId), downstreamChoice: "keep" })}
+                                  disabled={mutating}
+                                  className="min-h-9 rounded-md border border-violet-300 bg-background px-3 font-semibold hover:bg-violet-100 disabled:opacity-50 dark:border-violet-800 dark:hover:bg-violet-950"
+                                >
+                                  Keep current
+                                </button>
+                              </div>
                             ) : null}
                           </div>
                         ) : null}
@@ -894,7 +926,7 @@ export default function PlotLabV2Workspace({ documentId, onClose }: PlotLabV2Wor
                 ))}
               </div>
             ) : null}
-            {mutating || ["queued", "creative", "connecting"].includes(thread.session?.phase ?? "") ? (
+            {mutating || ["queued", "orchestrating", "creative", "reviewing", "connecting"].includes(thread.session?.phase ?? "") ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 {thread.session?.activeJobId ? "Levi is creating the connected batch…" : "Levi is updating the session…"}

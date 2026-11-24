@@ -29,10 +29,13 @@ const ALLOWED_ACTIONS: Record<PlotLabSessionPhase, ReadonlySet<PlotLabAction["ki
     "restart",
   ]),
   queued: new Set(["restart"]),
+  orchestrating: new Set(["restart"]),
   creative: new Set(["restart"]),
+  reviewing: new Set(["restart"]),
   connecting: new Set(["restart"]),
   complete: new Set([
     "chat",
+    "accept_output",
     "confirm_proposal",
     "regenerate_all",
     "regenerate_unit",

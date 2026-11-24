@@ -125,7 +125,7 @@ export interface PlotLabRepository {
     userId: string;
     isAdmin?: boolean;
     envelope: PlotLabActionEnvelope & {
-      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string };
+      action: { kind: "request_generation" } | { kind: "retry_failed_stage"; jobId: string } | { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" };
     };
     requestHash: string;
     jobId: string;

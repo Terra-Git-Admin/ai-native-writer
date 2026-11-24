@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
 import type {
@@ -133,11 +133,23 @@ export function parsePlotLabActionEnvelope(value: unknown): PlotLabActionEnvelop
     case "request_generation":
       action = { kind: "request_generation" };
       break;
+    case "accept_output":
+      if (!Number.isInteger(raw.outputVersion) || Number(raw.outputVersion) < 1) {
+        throw new PlotLabActionServiceError("INVALID_ACTION", "Accept requires a valid output version.");
+      }
+      action = { kind: "accept_output", outputVersion: Number(raw.outputVersion) };
+      break;
     case "chat":
       if (!nonEmptyString(raw.text, 4_000)) {
         throw new PlotLabActionServiceError("INVALID_ACTION", "Follow-up chat text is required.");
       }
       action = { kind: "chat", text: raw.text };
+      break;
+    case "confirm_proposal":
+      if (!nonEmptyString(raw.proposalId, 200) || (raw.downstreamChoice !== "update" && raw.downstreamChoice !== "keep")) {
+        throw new PlotLabActionServiceError("INVALID_ACTION", "Confirm proposal requires a proposal and update or keep choice.");
+      }
+      action = { kind: "confirm_proposal", proposalId: raw.proposalId, downstreamChoice: raw.downstreamChoice };
       break;
     case "retry_failed_stage":
       if (!nonEmptyString(raw.jobId, 200)) {
@@ -398,6 +410,7 @@ async function createRealConversationMessages(input: {
         targetUnitNumbers: turn.targetUnitNumbers,
         downstreamUnitNumbers: turn.downstreamUnitNumbers,
         explanation: turn.explanation,
+        repairScope: turn.repairScope,
         status: "pending" as const,
       }
     : undefined;
@@ -536,6 +549,51 @@ export async function executeMockPlotLabAction(input: {
       "Start Plot Lab before sending interview actions."
     );
   }
+  if (envelope.action.kind === "accept_output") {
+    if (session.latestOutputVersion !== envelope.action.outputVersion) {
+      throw new PlotLabActionServiceError("INVALID_ACTION", "Only the current Plot Lab output can be accepted.", 409);
+    }
+    const reserved = await repository.reserveSynchronousAction({
+      documentId,
+      userId,
+      isAdmin,
+      requestHash,
+      envelope,
+    });
+    await repository.finalizeSynchronousAction({
+      actionId: envelope.actionId,
+      reservedRevision: reserved.session.revision,
+      leviMessages: [{
+        id: `${envelope.actionId}:accepted`,
+        sessionId: session.sessionId,
+        role: "levi",
+        kind: "output_accepted",
+        content: `Accepted output version ${envelope.action.outputVersion} as the current quality baseline.`,
+        actionId: envelope.actionId,
+        dependencyIds: [],
+        replayScope: "session",
+      }],
+      sessionPatch: { latestAcceptedOutputVersion: envelope.action.outputVersion },
+      response: { kind: "output_accepted", outputVersion: envelope.action.outputVersion },
+    });
+    const canonical = await repository.getSessionThread({ documentId, userId, isAdmin });
+    return { replayed: false, kind: "output_accepted", outputVersion: envelope.action.outputVersion, ...canonical };
+  }
+  if (envelope.action.kind === "confirm_proposal" && envelope.action.downstreamChoice === "keep") {
+    const reserved = await repository.reserveSynchronousAction({ documentId, userId, isAdmin, requestHash, envelope });
+    await repository.finalizeSynchronousAction({
+      actionId: envelope.actionId,
+      reservedRevision: reserved.session.revision,
+      leviMessages: [{
+        id: `${envelope.actionId}:proposal-kept`, sessionId: session.sessionId, role: "levi", kind: "proposal_resolved",
+        content: "Kept the current batch. No generation was triggered.", actionId: envelope.actionId, dependencyIds: [], replayScope: "session",
+      }],
+      sessionPatch: {},
+      response: { kind: "proposal_rejected", proposalId: envelope.action.proposalId },
+    });
+    const canonical = await repository.getSessionThread({ documentId, userId, isAdmin });
+    return { replayed: false, kind: "proposal_rejected", ...canonical };
+  }
   if (realAI && !resolvedModel) {
     resolvedModel =
       sessionModelChoice(
@@ -555,6 +613,48 @@ export async function executeMockPlotLabAction(input: {
         );
       }
     }
+  }
+
+  if (realAI && envelope.action.kind === "confirm_proposal" && envelope.action.downstreamChoice === "update") {
+    const proposal = await input.database.query.plotLabProposals.findFirst({ where: eq(schema.plotLabProposals.id, envelope.action.proposalId) });
+    if (!proposal || proposal.sessionId !== session.sessionId || proposal.status !== "pending" || proposal.baseOutputVersion !== session.latestOutputVersion) {
+      throw new PlotLabActionServiceError("INVALID_ACTION", "That change proposal is stale or unavailable.", 409);
+    }
+    const output = await input.database.query.plotLabOutputs.findFirst({
+      where: and(eq(schema.plotLabOutputs.sessionId, session.sessionId), eq(schema.plotLabOutputs.version, proposal.baseOutputVersion)),
+    });
+    const baseJob = output?.jobId
+      ? await input.database.query.aiJobs.findFirst({ where: eq(schema.aiJobs.id, output.jobId) })
+      : null;
+    let artifacts: Record<string, unknown> = {};
+    try {
+      const checkpoint = baseJob?.stageCheckpointJson ? JSON.parse(baseJob.stageCheckpointJson) as { artifacts?: Record<string, unknown> } : {};
+      artifacts = checkpoint.artifacts ?? {};
+    } catch {
+      throw new PlotLabActionServiceError("INVALID_ACTION", "The accepted planning artifacts could not be read.", 409);
+    }
+    const resumeStage = proposal.repairScope === "connector"
+      ? "connecting"
+      : proposal.repairScope === "unit"
+        ? "creative_authoring"
+        : proposal.repairScope === "destination"
+          ? "endpoint_exploration"
+          : "route_exploration";
+    const thread = await repository.getSessionThread({ documentId, userId, isAdmin, includeSuperseded: false, limit: 100 });
+    const jobId = randomUUID();
+    const queued = await repository.queueGeneration({
+      documentId, userId, isAdmin,
+      envelope: envelope as PlotLabActionEnvelope & { action: { kind: "confirm_proposal"; proposalId: string; downstreamChoice?: "update" | "keep" } },
+      requestHash, jobId, modelId: resolvedModel!.modelId, thinking: resolvedModel!.thinking,
+      inputSnapshot: {
+        session, messages: thread.messages, model: resolvedModel, promptVersions: PLOT_LAB_PROMPT_VERSIONS,
+        resumeStage, artifacts, mutationKind: `confirmed_${proposal.repairScope}_change`, proposalId: proposal.id,
+        confirmedInstruction: proposal.instruction,
+      },
+    });
+    startPlotLabGenerationJob(jobId);
+    const canonical = await repository.getSessionThread({ documentId, userId, isAdmin });
+    return { replayed: false, kind: "generation_queued", jobId, revision: queued.session.revision, ...canonical };
   }
 
   if (realAI && envelope.action.kind === "retry_failed_stage") {
@@ -591,15 +691,11 @@ export async function executeMockPlotLabAction(input: {
       );
     }
 
-    const resumeConnecting = session.failedStage === "connecting";
-    if (
-      resumeConnecting &&
-      (!checkpoint.creativeRoute || typeof checkpoint.creativeRoute !== "object") &&
-      !Array.isArray(checkpoint.creativeUnits)
-    ) {
+    const artifacts = checkpoint.artifacts;
+    if (session.failedStage !== "source_truth" && (!artifacts || typeof artifacts !== "object")) {
       throw new PlotLabActionServiceError(
         "INVALID_ACTION",
-        "The saved creative checkpoint is unavailable. Restart with Levi to try again.",
+        "The saved orchestration checkpoint is unavailable. Restart with Levi to try again.",
         409
       );
     }
@@ -620,15 +716,8 @@ export async function executeMockPlotLabAction(input: {
         ...previousInput,
         session,
         model: { modelId: failedJob.modelId, thinking: failedJob.thinking },
-        resumeStage: resumeConnecting ? "connecting" : "creative",
-        ...(resumeConnecting
-          ? {
-              ...(checkpoint.creativeRoute ? { creativeRoute: checkpoint.creativeRoute } : {}),
-              ...(Array.isArray(checkpoint.creativeUnits)
-                ? { creativeUnits: checkpoint.creativeUnits }
-                : {}),
-            }
-          : {}),
+        resumeStage: session.failedStage,
+        ...(artifacts && typeof artifacts === "object" ? { artifacts } : {}),
       },
     });
     startPlotLabGenerationJob(jobId);

@@ -39,6 +39,7 @@ function expectCode(code, fn) {
   assert.equal(isPlotLabActionAllowed("intake", "start"), true);
   assert.equal(isPlotLabActionAllowed("interview", "request_generation"), true);
   assert.equal(isPlotLabActionAllowed("complete", "chat"), true);
+  assert.equal(isPlotLabActionAllowed("complete", "accept_output"), true);
   assert.equal(isPlotLabActionAllowed("complete", "answer"), false);
   expectCode("INVALID_PHASE", () => assertPlotLabActionAllowed(
     intake({ phase: "complete" }),
@@ -112,8 +113,14 @@ function expectCode(code, fn) {
   let state = intake({ phase: "interview", revision: 2 });
   state = transitionPlotLabSession(state, { type: "generation_queued", jobId: "job-1" });
   assert.equal(state.phase, "queued");
-  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "creative" });
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "source_truth" });
+  assert.equal(state.phase, "orchestrating");
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "endpoint_exploration" });
+  assert.equal(state.phase, "orchestrating");
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "creative_authoring" });
   assert.equal(state.phase, "creative");
+  state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "holistic_qa" });
+  assert.equal(state.phase, "reviewing");
   state = transitionPlotLabSession(state, { type: "job_stage_started", jobId: "job-1", stage: "connecting" });
   assert.equal(state.phase, "connecting");
   state = transitionPlotLabSession(state, { type: "job_completed", jobId: "job-1", outputVersion: 1 });

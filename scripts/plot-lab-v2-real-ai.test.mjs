@@ -17,6 +17,10 @@ const workspaceSource = await readFile(
   new URL("../src/components/labs/PlotLabV2Workspace.tsx", import.meta.url),
   "utf8"
 );
+const promptSource = await readFile(
+  new URL("../src/lib/plot-lab-v2/prompts.ts", import.meta.url),
+  "utf8"
+);
 const creativeSchemaSource = source.slice(
   source.indexOf("const creativeOutput"),
   source.indexOf("const connectedOutput")
@@ -95,14 +99,24 @@ assert.match(
 assert.match(actionSource, /case "retry_failed_stage"/, "Retry actions must be accepted by the API parser.");
 assert.match(
   actionSource,
-  /creativeUnits: checkpoint\.creativeUnits/,
-  "A connector retry must reuse the saved creative checkpoint."
+  /resumeStage: session\.failedStage/,
+  "A retry must resume the failed orchestrated stage."
 );
 assert.match(
   runnerSource,
-  /input\.resumeStage !== "connecting"/,
-  "A connector retry must skip creative generation."
+  /const artifacts: PlotLabOrchestrationArtifacts = \{ \.\.\.\(input\.artifacts \?\? \{\}\) \}/,
+  "A retry must reuse persisted orchestration artifacts."
 );
+assert.match(runnerSource, /"source_truth"[\s\S]*?"endpoint_exploration"[\s\S]*?"route_exploration"[\s\S]*?"specialist_planning"[\s\S]*?"creative_authoring"[\s\S]*?"holistic_qa"[\s\S]*?"targeted_repair"[\s\S]*?"connecting"/, "The runner must declare the full orchestrated hierarchy in order.");
+assert.match(runnerSource, /artifacts\.repairAttempted = true[\s\S]*?catch \(repairError\)[\s\S]*?creativeRoute = artifacts\.preRepairRoute/, "A failed semantic repair must fall back to the readable pre-repair route.");
+assert.match(runnerSource, /catch \(qaError\)[\s\S]*?verdict: "strong"[\s\S]*?readable authored route was preserved/, "Unavailable holistic QA must never block a readable authored route.");
+assert.match(runnerSource, /catch \(specialistError\)[\s\S]*?specialist_degraded/, "Optional specialist failure must degrade gracefully.");
+assert.match(promptSource, /exactly two distinct[\s\S]*?exactly two compact hidden route candidates/i, "Endpoint and route exploration must each create two candidates.");
+assert.match(promptSource, /Trigger specialists only when their expertise can materially improve/i, "Levi must conditionally trigger specialists.");
+assert.match(promptSource, /two or three natural, vivid sentences/i, "The connector must produce compact natural writer-facing plots.");
+assert.doesNotMatch(promptSource.slice(promptSource.indexOf("PLOT LAB STORY SPINE CONNECTOR v1.6")), /begins with the literal word Because/, "The active connector must not force literal Because/Then wording.");
+assert.match(actionSource, /case "accept_output"/, "Explicit acceptance must be accepted by the API parser.");
+assert.match(workspaceSource, /Accept final/, "The latest batch must expose explicit acceptance.");
 assert.match(workspaceSource, /Retry generation/, "Recoverable errors must expose a retry control.");
 
 console.log("Plot Lab V2 real-AI contract checks passed");

@@ -189,6 +189,7 @@ export function createMockPlotLabTurn(input: {
           targetUnitNumbers: [2],
           downstreamUnitNumbers: [3],
           explanation: "Episode 3 may need a new incoming pressure if Episode 2 changes.",
+          repairScope: "route",
           status: "pending",
         },
       };

@@ -83,6 +83,12 @@ try {
   ]) {
     assert(aiJobColumns.has(column), `missing ai_jobs.${column}`);
   }
+  const sessionColumns = new Set(sqlite.pragma("table_info(plot_lab_sessions)").map((column) => column.name));
+  const proposalColumns = new Set(sqlite.pragma("table_info(plot_lab_proposals)").map((column) => column.name));
+  const outputColumns = new Set(sqlite.pragma("table_info(plot_lab_outputs)").map((column) => column.name));
+  assert(sessionColumns.has("latest_accepted_output_version"), "missing explicit accepted-output lineage marker");
+  assert(proposalColumns.has("repair_scope"), "missing targeted proposal repair scope");
+  assert(outputColumns.has("accepted_at") && outputColumns.has("accepted_by"), "missing output acceptance audit fields");
   assert.equal(
     sqlite.prepare("SELECT status FROM ai_jobs WHERE id = ?").get("legacy-job").status,
     "completed",
@@ -125,6 +131,9 @@ try {
     ) VALUES (?, 'session-1', ?, ?, 'initial', '{}', ?)
   `);
   outputInsert.run("output-1", 1, "current", now);
+  sqlite.prepare("UPDATE plot_lab_outputs SET accepted_at = ?, accepted_by = ? WHERE id = ?").run(now, "user-1", "output-1");
+  sqlite.prepare("UPDATE plot_lab_sessions SET latest_accepted_output_version = 1 WHERE id = 'session-1'").run();
+  assert.equal(sqlite.prepare("SELECT latest_accepted_output_version AS version FROM plot_lab_sessions WHERE id = 'session-1'").get().version, 1);
   expectConstraint(
     () => outputInsert.run("output-2", 2, "current", now),
     "only one current output may exist per session"

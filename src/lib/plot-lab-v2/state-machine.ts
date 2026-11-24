@@ -42,7 +42,9 @@ export type PlotLabStateEvent =
 
 const GENERATION_PHASES = new Set<PlotLabSessionPhase>([
   "queued",
+  "orchestrating",
   "creative",
+  "reviewing",
   "connecting",
   "recoverable_error",
 ]);
@@ -202,15 +204,19 @@ export function transitionPlotLabSession(
 
     case "job_stage_started": {
       assertJob(state, event.jobId);
-      const allowedPhases: PlotLabSessionPhase[] =
-        event.stage === "creative" || event.stage === "unit_creative"
-          ? ["queued", "recoverable_error"]
-          : ["creative", "recoverable_error"];
+      const firstStage = event.stage === "source_truth" || event.stage === "creative" || event.stage === "unit_creative";
+      const allowedPhases: PlotLabSessionPhase[] = firstStage
+        ? ["queued", "recoverable_error"]
+        : ["orchestrating", "creative", "reviewing", "connecting", "recoverable_error"];
       assertPhase(state, allowedPhases, event.type);
       const phase: PlotLabSessionPhase =
-        event.stage === "creative" || event.stage === "unit_creative"
-          ? "creative"
-          : "connecting";
+        ["source_truth", "endpoint_exploration", "route_exploration", "specialist_planning"].includes(event.stage)
+          ? "orchestrating"
+          : ["creative", "creative_authoring", "unit_creative"].includes(event.stage)
+            ? "creative"
+            : ["holistic_qa", "targeted_repair", "continuity"].includes(event.stage)
+              ? "reviewing"
+              : "connecting";
       return {
         ...state,
         phase,

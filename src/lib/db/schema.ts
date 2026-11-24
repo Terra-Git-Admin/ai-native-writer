@@ -276,7 +276,9 @@ export const plotLabSessions = sqliteTable(
         "intake",
         "interview",
         "queued",
+        "orchestrating",
         "creative",
+        "reviewing",
         "connecting",
         "complete",
         "recoverable_error",
@@ -293,10 +295,11 @@ export const plotLabSessions = sqliteTable(
     interviewCheckpointJson: text("interview_checkpoint_json").notNull(),
     retconsJson: text("retcons_json").notNull().default("[]"),
     latestOutputVersion: integer("latest_output_version"),
+    latestAcceptedOutputVersion: integer("latest_accepted_output_version"),
     activeJobId: text("active_job_id"),
     pendingSyncActionId: text("pending_sync_action_id"),
     failedStage: text("failed_stage", {
-      enum: ["creative", "connecting", "unit_creative", "continuity"],
+      enum: ["source_truth", "endpoint_exploration", "route_exploration", "specialist_planning", "creative_authoring", "holistic_qa", "targeted_repair", "connecting", "creative", "unit_creative", "continuity"],
     }),
     promptVersionsJson: text("prompt_versions_json").notNull().default("{}"),
     modelAssignmentsJson: text("model_assignments_json").notNull().default("{}"),
@@ -488,6 +491,9 @@ export const plotLabProposals = sqliteTable(
     targetUnitsJson: text("target_units_json").notNull(),
     downstreamUnitsJson: text("downstream_units_json").notNull().default("[]"),
     explanation: text("explanation").notNull(),
+    repairScope: text("repair_scope", { enum: ["connector", "unit", "route", "destination"] })
+      .notNull()
+      .default("route"),
     status: text("status", {
       enum: ["pending", "confirmed", "rejected", "stale"],
     })
@@ -528,6 +534,8 @@ export const plotLabOutputs = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     supersededAt: integer("superseded_at", { mode: "timestamp" }),
+    acceptedAt: integer("accepted_at", { mode: "timestamp" }),
+    acceptedBy: text("accepted_by").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => [
     uniqueIndex("idx_plot_lab_outputs_session_version").on(table.sessionId, table.version),

@@ -2,8 +2,14 @@ import { generateText, jsonSchema, Output } from "ai";
 import { getAIModel, getConfiguredProviders } from "@/lib/ai/providers";
 import type {
   PlotLabConnectedBatch,
+  PlotLabEndpointCandidate,
   PlotLabMessage,
+  PlotLabOrchestratorDecision,
+  PlotLabQAResult,
+  PlotLabRouteCandidate,
   PlotLabSessionState,
+  PlotLabSourceTruthBrief,
+  PlotLabSpecialistBrief,
   PlotLabStoryBrief,
   PlotLabStorySoul,
 } from "@/lib/plot-lab-v2/contracts";
@@ -12,6 +18,14 @@ import {
   PLOT_LAB_CONNECTOR_SYSTEM_PROMPT,
   PLOT_LAB_CONVERSATION_PROMPT_VERSION,
   PLOT_LAB_CONVERSATION_SYSTEM_PROMPT,
+  PLOT_LAB_ENDPOINT_EXPLORER_SYSTEM_PROMPT,
+  PLOT_LAB_HARNESS_PROMPT_VERSION,
+  PLOT_LAB_HOLISTIC_QA_SYSTEM_PROMPT,
+  PLOT_LAB_ORCHESTRATOR_SYSTEM_PROMPT,
+  PLOT_LAB_ROUTE_EXPLORER_SYSTEM_PROMPT,
+  PLOT_LAB_SOURCE_TRUTH_SYSTEM_PROMPT,
+  PLOT_LAB_SPECIALIST_SYSTEM_PROMPTS,
+  PLOT_LAB_TARGETED_REPAIR_SYSTEM_PROMPT,
   PLOT_LAB_CREATIVE_PROMPT_VERSION,
   PLOT_LAB_CREATIVE_SYSTEM_PROMPT,
   PLOT_LAB_INTERVIEWER_PROMPT_VERSION,
@@ -58,7 +72,95 @@ export interface PlotLabConversationTurn {
   targetUnitNumbers: number[];
   downstreamUnitNumbers: number[];
   explanation: string;
+  repairScope: "connector" | "unit" | "route" | "destination";
 }
+
+const storySoulSchema = {
+  type: "object" as const,
+  additionalProperties: false,
+  required: ["premise", "characterEngine", "centralRelationship", "emotionalPromise", "tone", "unresolvedPressure"],
+  properties: {
+    premise: { type: "string" as const }, characterEngine: { type: "string" as const }, centralRelationship: { type: "string" as const },
+    emotionalPromise: { type: "string" as const }, tone: { type: "string" as const }, unresolvedPressure: { type: "string" as const },
+  },
+};
+
+const sourceTruthOutput = Output.object({
+  name: "plot_lab_source_truth",
+  description: "Immutable source truth for an orchestrated Plot Lab run.",
+  schema: jsonSchema<PlotLabSourceTruthBrief>({
+    type: "object", additionalProperties: false,
+    required: ["episode1Soul", "canonFacts", "requiredSkeletonElements", "monetizationPoint", "characterFidelity", "unresolvedQuestions"],
+    properties: {
+      episode1Soul: storySoulSchema,
+      canonFacts: { type: "array", items: { type: "string" } },
+      requiredSkeletonElements: { type: "array", minItems: 1, items: { type: "string" } },
+      monetizationPoint: { type: "string" },
+      characterFidelity: { type: "array", items: { type: "string" } },
+      unresolvedQuestions: { type: "array", items: { type: "string" } },
+    },
+  }),
+});
+
+const endpointOutput = Output.object({
+  name: "plot_lab_endpoint_candidates",
+  description: "Exactly two final-turn candidates.",
+  schema: jsonSchema<{ candidates: PlotLabEndpointCandidate[] }>({
+    type: "object", additionalProperties: false, required: ["candidates"],
+    properties: { candidates: { type: "array", minItems: 2, maxItems: 2, items: {
+      type: "object", additionalProperties: false, required: ["id", "finalTurn", "visual", "emotionalCost", "causalRequirements"],
+      properties: { id: { type: "string" }, finalTurn: { type: "string" }, visual: { type: "string" }, emotionalCost: { type: "string" }, causalRequirements: { type: "array", items: { type: "string" } } },
+    } } },
+  }),
+});
+
+const routeOutput = Output.object({
+  name: "plot_lab_route_candidates",
+  description: "Exactly two compact causal route candidates.",
+  schema: jsonSchema<{ candidates: PlotLabRouteCandidate[] }>({
+    type: "object", additionalProperties: false, required: ["candidates"],
+    properties: { candidates: { type: "array", minItems: 2, maxItems: 2, items: {
+      type: "object", additionalProperties: false, required: ["id", "thesis", "endpointCandidateId", "unitSpine"],
+      properties: { id: { type: "string" }, thesis: { type: "string" }, endpointCandidateId: { type: "string" }, unitSpine: { type: "array", minItems: 4, maxItems: 7, items: {
+        type: "object", additionalProperties: false, required: ["number", "purpose", "cause", "choice", "changedState", "outgoingPressure"],
+        properties: { number: { type: "integer" }, purpose: { type: "string" }, cause: { type: "string" }, choice: { type: "string" }, changedState: { type: "string" }, outgoingPressure: { type: "string" } },
+      } } },
+    } } },
+  }),
+});
+
+const decisionOutput = Output.object({
+  name: "plot_lab_orchestrator_decision",
+  description: "Levi's route selection and conditional specialist plan.",
+  schema: jsonSchema<PlotLabOrchestratorDecision>({
+    type: "object", additionalProperties: false, required: ["selectedRouteId", "rationale", "qualityDefinition", "specialistNeeds"],
+    properties: {
+      selectedRouteId: { type: "string" }, rationale: { type: "string" }, qualityDefinition: { type: "array", items: { type: "string" } },
+      specialistNeeds: { type: "object", additionalProperties: false, required: ["characterRelationship", "oppositionPressure", "timeLocationWorld"], properties: {
+        characterRelationship: { type: "object", additionalProperties: false, required: ["needed", "reason"], properties: { needed: { type: "boolean" }, reason: { type: "string" } } },
+        oppositionPressure: { type: "object", additionalProperties: false, required: ["needed", "reason"], properties: { needed: { type: "boolean" }, reason: { type: "string" } } },
+        timeLocationWorld: { type: "object", additionalProperties: false, required: ["needed", "reason"], properties: { needed: { type: "boolean" }, reason: { type: "string" } } },
+      } },
+    },
+  }),
+});
+
+const specialistOutput = Output.object({
+  name: "plot_lab_specialist_brief", description: "A concise optional specialist brief.",
+  schema: jsonSchema<PlotLabSpecialistBrief>({ type: "object", additionalProperties: false, required: ["role", "guidance", "risks"], properties: {
+    role: { type: "string", enum: ["character_relationship", "opposition_pressure", "time_location_world"] },
+    guidance: { type: "array", items: { type: "string" } }, risks: { type: "array", items: { type: "string" } },
+  } }),
+});
+
+const qaOutput = Output.object({
+  name: "plot_lab_holistic_qa", description: "One non-blocking holistic quality judgment.",
+  schema: jsonSchema<PlotLabQAResult>({ type: "object", additionalProperties: false, required: ["verdict", "strengths", "primaryIssue", "repairInstruction", "owner", "affectedUnitNumbers"], properties: {
+    verdict: { type: "string", enum: ["strong", "repair_recommended"] }, strengths: { type: "array", items: { type: "string" } },
+    primaryIssue: { type: "string" }, repairInstruction: { type: "string" }, owner: { type: "string", enum: ["creative_author", "connector"] },
+    affectedUnitNumbers: { type: "array", items: { type: "integer" } },
+  } }),
+});
 
 const interviewOutput = Output.object({
   name: "plot_lab_interview_turn",
@@ -292,6 +394,7 @@ const conversationOutput = Output.object({
       "targetUnitNumbers",
       "downstreamUnitNumbers",
       "explanation",
+      "repairScope",
     ],
     properties: {
       kind: { type: "string", enum: ["discussion", "mutation_proposal"] },
@@ -300,6 +403,7 @@ const conversationOutput = Output.object({
       targetUnitNumbers: { type: "array", items: { type: "integer" } },
       downstreamUnitNumbers: { type: "array", items: { type: "integer" } },
       explanation: { type: "string" },
+      repairScope: { type: "string", enum: ["connector", "unit", "route", "destination"] },
     },
   }),
 });
@@ -582,16 +686,110 @@ export function parsePlotLabConnectedResponse(
   return { format: orientation, version, units, seedCoverage, warnings };
 }
 
+async function structuredCall<T>(input: {
+  model: PlotLabModelChoice;
+  system: string;
+  prompt: unknown;
+  output: Parameters<typeof generateText>[0]["output"];
+}): Promise<T> {
+  const model = await getAIModel(input.model.modelId, input.model.thinking);
+  const result = await generateText({
+    model,
+    system: input.system,
+    prompt: typeof input.prompt === "string" ? input.prompt : JSON.stringify(input.prompt),
+    output: input.output,
+  });
+  return result.output as T;
+}
+
+export async function generateSourceTruth(input: {
+  session: PlotLabSessionState; messages: PlotLabMessage[]; model: PlotLabModelChoice;
+}): Promise<PlotLabSourceTruthBrief> {
+  return structuredCall({ model: input.model, system: PLOT_LAB_SOURCE_TRUTH_SYSTEM_PROMPT, prompt: contextPacket(input.session, input.messages), output: sourceTruthOutput });
+}
+
+export async function exploreEndpoints(input: {
+  sourceTruth: PlotLabSourceTruthBrief; orientation: PlotLabSessionState["orientation"]; model: PlotLabModelChoice;
+  revisionInstruction?: string;
+}): Promise<PlotLabEndpointCandidate[]> {
+  const result = await structuredCall<{ candidates: PlotLabEndpointCandidate[] }>({ model: input.model, system: PLOT_LAB_ENDPOINT_EXPLORER_SYSTEM_PROMPT, prompt: input, output: endpointOutput });
+  if (result.candidates.length !== 2) throw new Error("Endpoint exploration did not return two candidates.");
+  return result.candidates;
+}
+
+export async function exploreRoutes(input: {
+  sourceTruth: PlotLabSourceTruthBrief; endpointCandidates: PlotLabEndpointCandidate[]; orientation: PlotLabSessionState["orientation"]; model: PlotLabModelChoice;
+  revisionInstruction?: string;
+}): Promise<PlotLabRouteCandidate[]> {
+  const result = await structuredCall<{ candidates: PlotLabRouteCandidate[] }>({ model: input.model, system: PLOT_LAB_ROUTE_EXPLORER_SYSTEM_PROMPT, prompt: input, output: routeOutput });
+  if (result.candidates.length !== 2) throw new Error("Route exploration did not return two candidates.");
+  for (const route of result.candidates) {
+    const numbers = expectedNumbers(input.orientation, route.unitSpine.length);
+    if (!validLength(input.orientation, route.unitSpine.length) || route.unitSpine.some((unit, index) => unit.number !== numbers[index])) {
+      throw new Error("Route exploration did not match the required story range.");
+    }
+  }
+  return result.candidates;
+}
+
+export async function selectRouteAndSpecialists(input: {
+  sourceTruth: PlotLabSourceTruthBrief; endpointCandidates: PlotLabEndpointCandidate[]; routeCandidates: PlotLabRouteCandidate[]; model: PlotLabModelChoice;
+  revisionInstruction?: string;
+}): Promise<PlotLabOrchestratorDecision> {
+  const decision = await structuredCall<PlotLabOrchestratorDecision>({ model: input.model, system: PLOT_LAB_ORCHESTRATOR_SYSTEM_PROMPT, prompt: input, output: decisionOutput });
+  if (!input.routeCandidates.some((route) => route.id === decision.selectedRouteId)) throw new Error("Levi selected an unknown route candidate.");
+  return decision;
+}
+
+export async function generateSpecialistBrief(input: {
+  role: PlotLabSpecialistBrief["role"];
+  sourceTruth: PlotLabSourceTruthBrief;
+  selectedRoute: PlotLabRouteCandidate;
+  reason: string;
+  model: PlotLabModelChoice;
+}): Promise<PlotLabSpecialistBrief> {
+  const result = await structuredCall<PlotLabSpecialistBrief>({ model: input.model, system: PLOT_LAB_SPECIALIST_SYSTEM_PROMPTS[input.role], prompt: input, output: specialistOutput });
+  return { ...result, role: input.role };
+}
+
+export async function runHolisticQA(input: {
+  sourceTruth: PlotLabSourceTruthBrief;
+  selectedRoute: PlotLabRouteCandidate;
+  creativeRoute: CreativeRoute;
+  model: PlotLabModelChoice;
+}): Promise<PlotLabQAResult> {
+  return structuredCall({ model: input.model, system: PLOT_LAB_HOLISTIC_QA_SYSTEM_PROMPT, prompt: input, output: qaOutput });
+}
+
+export async function repairCreativeRoute(input: {
+  session: PlotLabSessionState;
+  sourceTruth: PlotLabSourceTruthBrief;
+  creativeRoute: CreativeRoute;
+  qa: PlotLabQAResult;
+  model: PlotLabModelChoice;
+}): Promise<CreativeRoute> {
+  const result = await structuredCall<CreativeRoute>({ model: input.model, system: PLOT_LAB_TARGETED_REPAIR_SYSTEM_PROMPT, prompt: input, output: creativeOutput });
+  return parsePlotLabCreativeResponse(JSON.stringify(result), input.session.orientation);
+}
+
 export async function generateCreativeRoute(input: {
   session: PlotLabSessionState;
   messages: PlotLabMessage[];
   model: PlotLabModelChoice;
+  orchestration?: {
+    sourceTruth: PlotLabSourceTruthBrief;
+    endpointCandidates: PlotLabEndpointCandidate[];
+    routeCandidates: PlotLabRouteCandidate[];
+    decision: PlotLabOrchestratorDecision;
+    specialistBriefs: PlotLabSpecialistBrief[];
+    revisionInstruction?: string;
+  };
 }): Promise<CreativeRoute> {
   const model = await getAIModel(input.model.modelId, input.model.thinking);
   const result = await generateText({
     model,
     system: PLOT_LAB_CREATIVE_SYSTEM_PROMPT,
-    prompt: contextPacket(input.session, input.messages),
+    prompt: JSON.stringify({ packet: JSON.parse(contextPacket(input.session, input.messages)), orchestration: input.orchestration ?? null }),
     output: creativeOutput,
   });
   return parsePlotLabCreativeResponse(
@@ -606,6 +804,7 @@ export async function connectCreativeRoute(input: {
   creativeRoute: CreativeRoute;
   model: PlotLabModelChoice;
   version: number;
+  revisionInstruction?: string;
 }): Promise<PlotLabConnectedBatch> {
   const model = await getAIModel(input.model.modelId, input.model.thinking);
   const request = {
@@ -614,6 +813,7 @@ export async function connectCreativeRoute(input: {
     prompt: JSON.stringify({
       packet: JSON.parse(contextPacket(input.session, input.messages)),
       creativeRoute: input.creativeRoute,
+      revisionInstruction: input.revisionInstruction ?? null,
     }),
     output: connectedOutput,
   } as const;
@@ -637,8 +837,8 @@ export async function connectCreativeRoute(input: {
         `Keep the supplied skeleton coverage intact: ${JSON.stringify(input.creativeRoute.requiredSkeletonElements)}.`,
         "Every unit must include number, cause, soulConnection, episodeFunction, timePhase, locationFunction, characterChoice, consequence, nextPressure, emotionalChange, endingTurn, cliffhangerType, relationshipChange, antagonistPressure, fidelityProof, skeletonElementsUsed, revelationPurpose, and visiblePlot.",
         input.session.orientation === "portrait"
-          ? "Preserve each existing visiblePlot. If one is missing, reconstruct it as two short sentences: Because states the causal episode purpose; Then shows the immediate on-screen cliffhanger already in motion."
-          : "Every visiblePlot must be one or two concise sentences.",
+          ? "Preserve each existing visiblePlot. If one is missing, reconstruct it as two or three natural sentences that retain the causal episode purpose and the immediate outgoing turn; do not force literal Because/Then wording."
+          : "Every visiblePlot must be two or three concise natural sentences.",
         "Keep titles when present. Return only the repaired structured object.",
       ].join("\n"),
       prompt: JSON.stringify(result.output),
@@ -685,6 +885,10 @@ export async function generateRealConversationTurn(input: {
       ? parsed.downstreamUnitNumbers.map(Number).filter(Number.isInteger)
       : [],
     explanation: stringValue(parsed.explanation, 2_000),
+    repairScope:
+      parsed.repairScope === "connector" || parsed.repairScope === "unit" || parsed.repairScope === "destination"
+        ? parsed.repairScope
+        : "route",
   };
   if (!turn.message) throw new Error("Levi's follow-up response was incomplete.");
   if (
@@ -701,4 +905,5 @@ export const PLOT_LAB_PROMPT_VERSIONS = {
   creative: PLOT_LAB_CREATIVE_PROMPT_VERSION,
   connector: PLOT_LAB_CONNECTOR_PROMPT_VERSION,
   conversation: PLOT_LAB_CONVERSATION_PROMPT_VERSION,
+  harness: PLOT_LAB_HARNESS_PROMPT_VERSION,
 };
