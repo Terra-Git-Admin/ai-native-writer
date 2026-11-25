@@ -132,6 +132,7 @@ export interface EditorHandle {
   removeHighlight: (from: number, to: number) => void;
   scrollToHeading: (pos: number) => void;
   scrollToHeadingByText: (text: string) => boolean;
+  scrollToHeadingByUid: (sectionUid: string) => boolean;
   // Synchronously clears the pending debounced save and awaits a fresh PUT of
   // the current editor content. Parent calls this before switching tabs so
   // in-progress work is never eaten by the unmount. Resolves regardless of
@@ -520,6 +521,26 @@ const Editor = forwardRef<EditorHandle, EditorProps>(function Editor(
             hit = true;
             return false;
           }
+        }
+      });
+      return hit;
+    },
+    scrollToHeadingByUid(sectionUid: string): boolean {
+      if (!editor || !sectionUid) return false;
+      let hit = false;
+      editor.state.doc.descendants((node, pos) => {
+        if (hit) return false;
+        if (node.type.name === "heading" && node.attrs.anwSectionUid === sectionUid) {
+          try {
+            const domNode = editor.view.domAtPos(pos + 1).node as HTMLElement;
+            let el: Node | null = domNode;
+            while (el && !(el instanceof HTMLElement)) el = el.parentNode;
+            (el as HTMLElement | null)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+          } catch {
+            /* ignore */
+          }
+          hit = true;
+          return false;
         }
       });
       return hit;

@@ -10,6 +10,7 @@ import {
   capturePredefinedTiptapSnapshots,
   ensureEpisodeSectionUids,
 } from "@/lib/lineage/content-lineage";
+import { ensureAdSectionUids } from "@/lib/ads-catalog";
 import {
   logEvent,
   logTrace,
@@ -459,6 +460,9 @@ export async function PUT(
   } else if (isOwner && !commentMarkOnly && body.content && tab.type === "predefined_episodes") {
     const prepared = ensureEpisodeSectionUids(body.content);
     contentToSave = prepared.contentJson ?? body.content;
+    } else if (isOwner && !commentMarkOnly && body.content && tab.type === "ads") {
+      const prepared = ensureAdSectionUids(body.content);
+      contentToSave = prepared.contentJson ?? body.content;
   }
 
   const now = new Date(Math.floor(Date.now() / 1000) * 1000);

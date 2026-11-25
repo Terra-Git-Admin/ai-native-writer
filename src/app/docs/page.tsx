@@ -34,6 +34,8 @@ import {
   type DocumentOrientation,
 } from "@/lib/document-orientation";
 import { isPitchLabEnabledForClient } from "@/lib/pitch-lab-flags";
+import { isAdsLibraryEnabledForClient } from "@/lib/ads-library-flags";
+import LibraryModeSwitch from "@/components/documents/LibraryModeSwitch";
 
 interface WriterDocument {
   id: string;
@@ -91,6 +93,7 @@ export default function DocumentsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const pitchLabEnabled = isPitchLabEnabledForClient();
+  const adsLibraryEnabled = isAdsLibraryEnabledForClient();
   const [docs, setDocs] = useState<WriterDocument[]>([]);
   const [folders, setFolders] = useState<WriterFolder[]>([]);
   const [view, setView] = useState<LibraryView>({ kind: "all" });
@@ -403,6 +406,15 @@ export default function DocumentsPage() {
       )}
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        {session?.user?.role === "admin" && adsLibraryEnabled && (
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-indigo-600">Library</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">Scripts</h1>
+            </div>
+            <LibraryModeSwitch active="scripts" />
+          </div>
+        )}
         <section className="mb-10">
           <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold">Your Documents</h2>
