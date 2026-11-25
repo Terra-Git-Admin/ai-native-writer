@@ -26,6 +26,25 @@ export function selectAdLabModelId(models: AdLabModelOption[], currentModelId: s
   return available[0]?.id ?? "local-sample";
 }
 
+export function shouldConfirmNewAd({
+  running,
+  hasInput,
+  hasDraft,
+  hasFeedback,
+  savedCurrentDraft,
+}: {
+  running: boolean;
+  hasInput: boolean;
+  hasDraft: boolean;
+  hasFeedback: boolean;
+  savedCurrentDraft: boolean;
+}): boolean {
+  if (running) return true;
+  if (hasFeedback) return true;
+  if (!hasInput && !hasDraft && !hasFeedback) return false;
+  return !savedCurrentDraft;
+}
+
 export function validateAdDraft(tagged: string): { ok: boolean; error?: string } {
   const sections = [...tagged.matchAll(SECTION_PATTERN)];
   if (!/^\[H3\]\s+Ad:\s+\S+/m.test(tagged)) return { ok: false, error: "Add an [H3] Ad name before saving." };

@@ -6,11 +6,12 @@ Ad Lab lives inside each Series. The home page remains Series-first and every Se
 
 1. Open a Series and choose **Labs → Ad Lab**.
 2. Enter an **Ad name** and a freeform brief. The brief must describe any existing footage available for B and D.
-3. Run the pipeline: **Inputs → A–B–C–D Structure → Communication Design → Draft**. As in Predefined Lab, writers can review each stage or select **Auto-run to Draft**.
-4. Review, edit, revise, or run a dialogue pass. Generated work remains in the Lab.
+3. Choose **Generate Draft**. Ad Lab moves directly from the inputs to a complete A–B–C–D draft.
+4. Revise through the feedback composer. Each response becomes the latest version while earlier versions remain available in a collapsed history for the current ad.
 5. Choose **Save to Ads**. The latest valid draft is appended as a new H3 entry in the Series Ads tab.
-6. Edit saved ads directly in the normal Writer editor.
-7. Choose **Export → Export Ads** to create the same four-hour handoff link used by the existing Series export.
+6. Choose **New Ad** at any time to clear the current Ad Lab session. Unsaved work requires confirmation; saved Ads content is never removed.
+7. Edit saved ads directly in the normal Writer editor.
+8. Choose **Export → Export Ads** to create the same four-hour handoff link used by the existing Series export.
 
 ## A–B–C–D contract
 
@@ -20,6 +21,8 @@ Ad Lab lives inside each Series. The home page remains Series-first and every Se
 - D — Existing footage: completes the sell using a writer-described payoff, reveal, or CTA moment.
 
 Every section requires a Visual. B and D also require Source Footage. Dialogue, V.O., On-screen Text, and Writer Notes are optional and may be used in any section. The pipeline never invents footage identifiers or timecodes.
+
+Within that fixed contract, the draft writer may use creative devices distilled from approved samples: listicle/reveal, cast reaction or behind-the-scenes, creator tutorial/demo, actor or character skit, screenlife/text-message, and trailer-style escalation. The device shapes the execution but never changes the A–B–C–D section order or appears as process commentary in the saved ad.
 
 Local sample mode supports the complete build, review, save, edit, and export flow without calling a paid AI provider.
 
