@@ -44,6 +44,7 @@ try {
       ads: [
         { uid: "ad_everyone_furious", title: "Everyone Is Furious at Episode 4", hook: "Open on escalating viewer comments.", footage: "Use the backstage betrayal from Episode 4.", turn: "A creator reacts to the reveal in disbelief.", payoff: "Freeze on the antagonist smiling at camera." },
         { uid: "ad_three_betrayals", title: "Three Betrayals in 20 Seconds", hook: "Count down three betrayals.", footage: "Use three short performance and backstage reveals.", turn: "Each reveal implicates someone closer to the heroine.", payoff: "The final betrayal comes from her only ally." },
+        { uid: "ad_ruined_audition", title: "I Ruined Her Audition", hook: "The antagonist confesses directly to camera with no regret.", footage: "Use the sabotaged audition and the heroine's stunned reaction.", turn: "She reveals the sabotage was only the first step.", payoff: "End on her taking the heroine's place under the spotlight." },
       ],
     },
     {
@@ -51,6 +52,7 @@ try {
       ads: [
         { uid: "ad_killed_husband", title: "Who Killed Her Husband?", hook: "Present three suspects as an interactive choice.", footage: "Use one suspicious glance from each suspect.", turn: "Reveal that all three had a motive.", payoff: "Ask viewers to choose before the cabin door opens." },
         { uid: "ad_ship_trailer", title: "No One Can Leave the Ship", hook: "A 20-second mystery trailer begins with the locked port.", footage: "Use the ballroom, engine room, and storm-deck sequences.", turn: "The murder weapon disappears during the blackout.", payoff: "End on a wet footprint inside a locked cabin." },
+        { uid: "ad_knew_the_killer", title: "I Knew Who the Killer Was", hook: "A witness confesses that she recognized the killer immediately.", footage: "Use her silence during the original interrogation.", turn: "She explains why telling the truth would expose her own secret.", payoff: "End as the detective realizes she has been lying all season." },
       ],
     },
     {
@@ -75,7 +77,9 @@ try {
   ];
   const subtypes = [
     ["subtype-genre-trailer", "family-trailer", "Genre trailer"],
-    ["subtype-direct-confession", "family-confession", "Direct-to-camera secret"],
+    ["subtype-revenge-confession", "family-confession", "Revenge confession"],
+    ["subtype-villain-confession", "family-confession", "Villain confession"],
+    ["subtype-secret-confession", "family-confession", "Secret-knowledge confession"],
     ["subtype-reveal-reaction", "family-reaction", "Reveal reaction"],
     ["subtype-countdown", "family-listicle", "Countdown"],
   ];
@@ -85,13 +89,15 @@ try {
   subtypes.forEach((row) => insertSubtype.run(row[0], row[1], row[2], row[2].toLowerCase(), "Local example subtype", now, now));
   const insertClassification = sqlite.prepare("INSERT INTO ad_classifications (document_id,section_uid,family_id,subtype_id,updated_by,updated_at) VALUES (?,?,?,?,?,?)");
   [
-    ["signed-into-love-demo", "ad_married_revenge", "family-confession", "subtype-direct-confession"],
+    ["signed-into-love-demo", "ad_married_revenge", "family-confession", "subtype-revenge-confession"],
     ["revenge-in-heels-demo", "ad_everyone_furious", "family-reaction", "subtype-reveal-reaction"],
     ["revenge-in-heels-demo", "ad_three_betrayals", "family-listicle", "subtype-countdown"],
+    ["revenge-in-heels-demo", "ad_ruined_audition", "family-confession", "subtype-villain-confession"],
     ["secrets-at-sea-demo", "ad_ship_trailer", "family-trailer", "subtype-genre-trailer"],
+    ["secrets-at-sea-demo", "ad_knew_the_killer", "family-confession", "subtype-secret-confession"],
   ].forEach((row) => insertClassification.run(row[0], row[1], row[2], row[3], userId, now));
 
-  console.log(JSON.stringify({ databasePath, url: "http://localhost:3010/docs/ads", activeSeries: 3, activeAds: 6, unclassifiedAds: 2, archivedAds: 1 }, null, 2));
+  console.log(JSON.stringify({ databasePath, url: "http://localhost:3010/docs/ads", activeSeries: 3, activeAds: 8, characterConfessionSubtypes: 3, unclassifiedAds: 2, archivedAds: 1 }, null, 2));
 } finally {
   sqlite.close();
 }
