@@ -210,6 +210,7 @@ export default function DocumentPage() {
   const [firstPassReportLoading, setFirstPassReportLoading] = useState(false);
   const [firstPassReportError, setFirstPassReportError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [adLinkNotice, setAdLinkNotice] = useState<string | null>(null);
   const [exportFromEpisode, setExportFromEpisode] = useState("1");
   const [exportToEpisode, setExportToEpisode] = useState("");
   const [exportScope, setExportScope] = useState<"series" | "ads" | null>(null);
@@ -939,6 +940,23 @@ export default function DocumentPage() {
       current || String(exportEpisodeOptions[exportEpisodeOptions.length - 1].episodeNumber)
     );
   }, [exportEpisodeOptions]);
+
+  useEffect(() => {
+    const sectionUid = searchParams.get("section");
+    if (loading || !activeTabId || !sectionUid) return;
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      if (editorRef.current?.scrollToHeadingByUid(sectionUid)) {
+        window.clearInterval(interval);
+        setAdLinkNotice(null);
+      } else if (attempts >= 12) {
+        window.clearInterval(interval);
+        setAdLinkNotice("This ad no longer exists in the Series Ads tab.");
+      }
+    }, 200);
+    return () => window.clearInterval(interval);
+  }, [activeTabId, loading, searchParams]);
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -976,6 +994,11 @@ export default function DocumentPage() {
 
   return (
     <div className="flex h-screen flex-col">
+      {adLinkNotice && (
+        <div role="status" className="absolute left-1/2 top-14 z-[70] -translate-x-1/2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-lg dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
+          {adLinkNotice}
+        </div>
+      )}
       <header className="flex items-center justify-between border-b border-border bg-card px-4 py-2">
         <div className="flex items-center gap-3">
           <button

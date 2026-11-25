@@ -82,6 +82,41 @@ export const folders = sqliteTable(
   ]
 );
 
+export const adFamilies = sqliteTable(
+  "ad_families",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    description: text("description").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("idx_ad_families_normalized_name").on(table.normalizedName),
+    index("idx_ad_families_position").on(table.position),
+  ]
+);
+
+export const adSubtypes = sqliteTable(
+  "ad_subtypes",
+  {
+    id: text("id").primaryKey(),
+    familyId: text("family_id").notNull().references(() => adFamilies.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    normalizedName: text("normalized_name").notNull(),
+    description: text("description").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("idx_ad_subtypes_family_normalized_name").on(table.familyId, table.normalizedName),
+    index("idx_ad_subtypes_family_position").on(table.familyId, table.position),
+  ]
+);
+
 export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
   title: text("title").notNull().default("Untitled"),
@@ -171,6 +206,23 @@ export const tabs = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (table) => [index("idx_tabs_doc_pos").on(table.documentId, table.position)]
+);
+
+export const adClassifications = sqliteTable(
+  "ad_classifications",
+  {
+    documentId: text("document_id").notNull().references(() => documents.id, { onDelete: "cascade" }),
+    sectionUid: text("section_uid").notNull(),
+    familyId: text("family_id").notNull().references(() => adFamilies.id, { onDelete: "restrict" }),
+    subtypeId: text("subtype_id").notNull().references(() => adSubtypes.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by").notNull().references(() => users.id, { onDelete: "restrict" }),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+  },
+  (table) => [
+    primaryKey({ columns: [table.documentId, table.sectionUid] }),
+    index("idx_ad_classifications_family").on(table.familyId),
+    index("idx_ad_classifications_subtype").on(table.subtypeId),
+  ]
 );
 
 export const comments = sqliteTable(
