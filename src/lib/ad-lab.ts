@@ -7,6 +7,11 @@ export type TiptapNode = {
 
 export type TiptapDocument = TiptapNode & { type: "doc" };
 
+type AdLabModelOption = {
+  id: string;
+  thinking?: boolean;
+};
+
 const SECTION_PATTERN = /^\[P\]\s+([ABCD])\s+—\s+(NEW CLIP|EXISTING FOOTAGE)\s*$/gm;
 const EXPECTED = [
   ["A", "NEW CLIP"],
@@ -14,6 +19,12 @@ const EXPECTED = [
   ["C", "NEW CLIP"],
   ["D", "EXISTING FOOTAGE"],
 ] as const;
+
+export function selectAdLabModelId(models: AdLabModelOption[], currentModelId: string): string {
+  const available = models.filter((model) => !model.thinking);
+  if (available.some((model) => model.id === currentModelId)) return currentModelId;
+  return available[0]?.id ?? "local-sample";
+}
 
 export function validateAdDraft(tagged: string): { ok: boolean; error?: string } {
   const sections = [...tagged.matchAll(SECTION_PATTERN)];

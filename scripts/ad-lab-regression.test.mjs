@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildLocalAdDraft, validateAdDraft } from "../src/lib/ad-lab.ts";
+import { buildLocalAdDraft, selectAdLabModelId, validateAdDraft } from "../src/lib/ad-lab.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
@@ -12,6 +12,10 @@ assert.equal(validateAdDraft(sample).ok, true);
 assert.equal(validateAdDraft(sample.replace("B — EXISTING FOOTAGE", "B — NEW CLIP")).ok, false);
 assert.match(sample, /\[P\] A — NEW CLIP[\s\S]*\[P\] B — EXISTING FOOTAGE[\s\S]*\[P\] C — NEW CLIP[\s\S]*\[P\] D — EXISTING FOOTAGE/);
 assert.equal((sample.match(/\(Source Footage:/g) ?? []).length, 2);
+assert.equal(selectAdLabModelId([{ id: "gpt-5.2" }], "local-sample"), "gpt-5.2");
+assert.equal(selectAdLabModelId([{ id: "gpt-5.2" }, { id: "gemini-3.1-pro-preview" }], "gemini-3.1-pro-preview"), "gemini-3.1-pro-preview");
+assert.equal(selectAdLabModelId([{ id: "gemini-thinking", thinking: true }], ""), "local-sample");
+assert.equal(selectAdLabModelId([], ""), "local-sample");
 
 const canonical = read("src/lib/canonical-tabs.ts");
 assert.match(canonical, /CURRENT_CANONICAL_TABS_VERSION = 4/);
@@ -22,6 +26,7 @@ assert.doesNotMatch(schema, /adDocuments|ad_projects|ad_artifacts/);
 assert.equal(fs.existsSync(path.join(root, "src/app/ad-lab/page.tsx")), false);
 
 const workspace = read("src/components/labs/AdLabWorkspace.tsx");
+const documentPage = read("src/app/doc/[id]/page.tsx");
 assert.match(workspace, /A–B–C–D Structure/);
 assert.match(workspace, /Communication Design/);
 assert.match(workspace, /Save to Ads/);
@@ -34,6 +39,11 @@ assert.match(workspace, /Rerun/);
 assert.match(workspace, /Pipeline/);
 assert.match(workspace, /versionReason: "ad-lab-save"/);
 assert.match(workspace, /response\.status === 409/);
+assert.match(
+  documentPage,
+  /setSelectedModelId\(selectAdLabModelId\(aiModels, selectedModelId\)\)/,
+  "Ad Lab must use a configured non-thinking model before falling back to local sample mode."
+);
 assert.match(read("src/app/api/documents/[id]/tabs/[tabId]/content/route.ts"), /versionReason === "ad-lab-save"/);
 
 const prompts = read("src/lib/ai/prompts.ts");
