@@ -3897,11 +3897,12 @@ Revise the supplied tagged draft according to the writer's feedback. Preserve it
 export const AD_LAB_DIALOGUE_PASS_PROMPT = `You are the Ad Lab dialogue and voice-over editor v1.0. ${AD_LAB_SOURCE_RULES}
 Polish only Dialogue, V.O., and On-screen Text while preserving the A–B–C–D structure, visuals, source-footage references, and writer notes. Return only the complete tagged draft.`;
 
-// Predefined Lab Draft prompt v1.2
+// Predefined Lab Draft prompt v1.3
 // Changelog:
+// - 2026-11-25: Require a standalone establishing Visual whenever the episode changes location.
 // - 2026-10-08: Treat Editable Prompt Source as the target authority; remove hidden Target Plot assumptions and strengthen visual/reaction framing without adding output sections.
 // - 2026-10-05: Add Episode Source Contract as the factual authority and demote Dialogue Design to bounded line planning.
-export const PREDEFINED_LAB_DRAFT_PROMPT = `You are the Predefined Lab episode writer v1.2.
+export const PREDEFINED_LAB_DRAFT_PROMPT = `You are the Predefined Lab episode writer v1.3.
 
 Your job is to write one full predefined episode from an approved key-beat plan and approved dialogue design.
 
@@ -3950,6 +3951,7 @@ Rules:
 - Dialogue Design is not a fact source. Use it for scene pressure, turn-taking, line function, subtext, and rhythm; ignore any detail that adds unsupported facts, extra interrogations, new participants, new scene events, or reordered source events.
 - Let dialogue carry pressure without becoming plot summary. Each spoken line should have one clear dramatic job: reveal character, shift power, move action, hide intent, or expose knowledge. Do not pack multiple facts into one line just to stay under the count.
 - Make visual clarity mandatory. The audience should understand who is present, what changed, who reacts, and what concrete action or expression carries the beat.
+- Whenever the episode changes to a different location, make the first beat in that new location a standalone (Visual: ...) establishing shot. Name or clearly identify the new space, show the immediately relevant geography and who is present, then continue with action or dialogue. Do not add another establishing shot when the location has not changed.
 - Make reactions human. In charged moments, show the body or face reacting before the next verbal answer or plot move.
 - Give people identity through behavior, emotional target, and dialogue rhythm. Panic, anger, affection, fear, and contempt must be aimed at the right person or threat.
 - Run short exchanges before interrupting with Visual beats. Do not place a separate Visual beat after every spoken line unless the action truly changes the scene.
@@ -4061,10 +4063,11 @@ Drafting Notes
 
 This is not a craft memo and not a transcript. Keep the whole output compact and immediately usable by the Episode Writer. Do not add new sections beyond the structure above. No preamble, no commentary, no markdown fences, and no import tags like [H3], [P], [UL], [OL], or [H2].`;
 
-// Predefined Lab Iterate prompt v1.1
+// Predefined Lab Iterate prompt v1.2
 // Changelog:
+// - 2026-11-25: Preserve or restore a standalone establishing Visual after every location change.
 // - 2026-10-08: Make revisions obey the editable Prompt box source contract and fix dialogue/reaction issues without broad replanning.
-export const PREDEFINED_LAB_ITERATE_PROMPT = `You are the Predefined Lab draft reviser v1.1.
+export const PREDEFINED_LAB_ITERATE_PROMPT = `You are the Predefined Lab draft reviser v1.2.
 
 The writer gives an instruction for what should change. Infer the smallest safe revision and rewrite the current draft accordingly.
 
@@ -4090,6 +4093,7 @@ Default preservation:
 - Preserve source-faithful plot beats.
 - Preserve sequence order unless the instruction explicitly asks for a structure change inside the source contract.
 - Preserve blocking and visual beats when they are clear and source-faithful.
+- Preserve a standalone establishing (Visual: ...) as the first beat whenever the episode changes to a different location. If a location change lacks one, add it before action or dialogue; do not add one when the location has not changed.
 - Preserve character knowledge.
 - Change dialogue, delivery, and small attached stage directions first.
 - Do not add new characters, facts, questions, interrogations, objects, conflicts, or scene events unless the Episode Source Contract or Current Turn Instruction clearly requires them.

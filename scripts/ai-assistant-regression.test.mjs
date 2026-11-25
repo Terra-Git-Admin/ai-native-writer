@@ -57,6 +57,10 @@ includes(promptsRoute, "!RETIRED_PROMPT_IDS.has(row.id)", "Retired prompts shoul
 includes(promptsRoute, "status: 410", "Retired prompts should not be updateable.");
 excludes(seedPrompts, 'id: "prepare_character_questionnaire"', "Retired questionnaire prompt should not be seeded.");
 includes(seedPrompts, 'label: "Chat Mode v1.1"', "The revised chat prompt should carry a new version label.");
+includes(seedPrompts, 'label: "Predefined Lab: Write Episode Draft v1.3"', "The predefined draft prompt should carry the establishing-shot version.");
+includes(seedPrompts, 'label: "Predefined Lab: Iterate Draft v1.2"', "The predefined revision prompt should carry the establishing-shot version.");
+includes(prompts, "Whenever the episode changes to a different location", "Predefined drafts should establish every actual location change visually.");
+includes(prompts, "If a location change lacks one, add it before action or dialogue", "Predefined revisions should restore missing location-establishing visuals.");
 
 includes(prompts, "Chat Mode prompt v1.1", "Chat prompt should document its version.");
 includes(prompts, "2026-11-11", "Chat prompt should include the dated changelog entry.");
