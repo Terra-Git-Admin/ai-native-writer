@@ -32,6 +32,7 @@ import { clientTrace } from "@/lib/clientTrace";
 import { OrientationBadge } from "@/components/documents/OrientationControl";
 import type { DocumentOrientation } from "@/lib/document-orientation";
 import { isAdLabEnabledForClient } from "@/lib/ad-lab-flags";
+import { selectAdLabModelId } from "@/lib/ad-lab";
 
 export type ApplyToTabResult = {
   ok: boolean;
@@ -587,7 +588,7 @@ export default function DocumentPage() {
       throw new Error("Could not find the Series Ads tab.");
     }
     setLabKind("ad");
-    setSelectedModelId("local-sample");
+    setSelectedModelId(selectAdLabModelId(aiModels, selectedModelId));
     setPredefinedLabMounted(true);
     setPredefinedLabOpen(true);
     setPlotLabActive(false);
@@ -595,7 +596,7 @@ export default function DocumentPage() {
     setCommentSidebarOpen(false);
     setVersionHistoryOpen(false);
     setPromptsOpen(false);
-  }, [handlePredefinedLabRefreshTabs]);
+  }, [aiModels, handlePredefinedLabRefreshTabs, selectedModelId]);
 
   const handlePredefinedLabSaveSource = useCallback(async (): Promise<boolean> => {
     try {
