@@ -24,7 +24,8 @@
     "test:document-organization": "node --experimental-strip-types scripts/document-organization.test.mjs",
     "test:ad-lab": "node --experimental-strip-types scripts/ad-lab-regression.test.mjs",
     "test:ads-library": "node --experimental-strip-types scripts/ads-library.test.mjs",
-    "backfill:ads-library": "node --experimental-strip-types scripts/backfill-ad-section-uids.mjs"
+    "backfill:ads-library": "node --experimental-strip-types scripts/backfill-ad-section-uids.mjs",
+    "fixture:ads-library": "node scripts/ads-library-local-fixture.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.66",

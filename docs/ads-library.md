@@ -19,6 +19,12 @@ npm run lint
 npm run build
 ```
 
+For an isolated local demo with several Series, classified ads, unclassified ads, and one archived Series:
+
+```powershell
+npm run fixture:ads-library -- .tmp/ads-library-demo.db
+```
+
 ## Controlled rollout
 
 Production stays hidden unless both flags are enabled:
