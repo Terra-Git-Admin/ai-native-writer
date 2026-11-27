@@ -21,6 +21,7 @@ import TextToSpeechButton from "@/components/editor/TextToSpeechButton";
 import PromptEditor from "@/components/settings/PromptEditor";
 import PipelinePlayground from "@/components/playground/PipelinePlayground";
 import PredefinedLabStageWorkspace from "@/components/labs/PredefinedLabStageWorkspace";
+import type { PredefinedBulkRunSummary } from "@/components/labs/PredefinedBulkWorkspace";
 import AdLabWorkspace from "@/components/labs/AdLabWorkspace";
 import PlotLabWorkspace from "@/components/labs/PlotLabWorkspace";
 import PlotLabV2Workspace from "@/components/labs/PlotLabV2Workspace";
@@ -181,6 +182,7 @@ export default function DocumentPage() {
   const [predefinedLabOpen, setPredefinedLabOpen] = useState(false);
   const [predefinedLabMounted, setPredefinedLabMounted] = useState(false);
   const [labKind, setLabKind] = useState<"predefined" | "ad">("predefined");
+  const [predefinedBulkRun, setPredefinedBulkRun] = useState<PredefinedBulkRunSummary | null>(null);
   const [sourcePaneCollapsed, setSourcePaneCollapsed] = useState(false);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [qualityPanelRequest, setQualityPanelRequest] = useState<{
@@ -609,6 +611,31 @@ export default function DocumentPage() {
     }
   }, [fetchTabs]);
 
+  const handlePredefinedBulkStateChange = useCallback((run: PredefinedBulkRunSummary | null) => {
+    setPredefinedBulkRun(run);
+  }, []);
+
+  const handleReviewPredefinedEpisodes = useCallback(() => {
+    const target = tabs.find((tab) => tab.type === "predefined_episodes");
+    if (!target) return;
+    setPredefinedBulkRun(null);
+    setPredefinedLabOpen(false);
+    void handleTabSwitch(target.id);
+  }, [handleTabSwitch, tabs]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/documents/${params.id}/predefined-bulk-runs`, { cache: "no-store" })
+      .then(async (response) => response.ok ? response.json() : null)
+      .then((body: { run?: PredefinedBulkRunSummary | null } | null) => {
+        if (cancelled) return;
+        const run = body?.run ?? null;
+        if (run && ["pending", "running", "paused"].includes(run.status)) setPredefinedBulkRun(run);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [params.id]);
+
   const handleAIJobApplied = useCallback(
     async (landedTabId: string) => {
       const list = await fetchTabs();
@@ -969,6 +996,8 @@ export default function DocumentPage() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeTabContent = activeTab?.content ?? null;
+  const bulkRunActive = predefinedBulkRun != null && ["pending", "running", "paused"].includes(predefinedBulkRun.status);
+  const bulkSourceLocked = bulkRunActive && (activeTab?.type === "microdrama_plots" || activeTab?.type === "predefined_episodes");
   const predefinedLabActive = predefinedLabOpen && predefinedLabMounted;
   const sourcePaneHidden = predefinedLabActive && sourcePaneCollapsed;
   const labPaneWidth = sourcePaneHidden ? "calc(100% - 0px)" : `${Math.round(labPaneRatio * 1000) / 10}%`;
@@ -1209,6 +1238,25 @@ export default function DocumentPage() {
               </div>
             </details>
           )}
+          {doc.isOwner && predefinedBulkRun && (bulkRunActive || predefinedBulkRun.status === "completed") && (
+            <button
+              type="button"
+              onClick={() => void handleOpenPredefinedLab()}
+              className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                predefinedBulkRun.status === "paused"
+                  ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+                  : predefinedBulkRun.status === "completed"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+                    : "border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-200"
+              }`}
+            >
+              {predefinedBulkRun.status === "paused"
+                ? `Bulk paused · Ep ${predefinedBulkRun.currentEpisode ?? "—"}`
+                : predefinedBulkRun.status === "completed"
+                  ? `${predefinedBulkRun.completedItems} episodes saved`
+                  : `Bulk ${predefinedBulkRun.completedItems + predefinedBulkRun.skippedItems}/${predefinedBulkRun.totalItems}`}
+            </button>
+          )}
           {canExport && (
             <button
               onClick={() => {
@@ -1434,21 +1482,28 @@ export default function DocumentPage() {
                 />
               )
             ) : (
-              <Editor
-                key={`${activeTabId}-${editorContentKey}`}
-                ref={editorRef}
-                documentId={doc.id}
-                tabId={activeTabId}
-                tabType={activeTab?.type}
-                initialContent={activeTabContent}
-                initialUpdatedAt={activeTab?.updatedAt ? new Date(activeTab.updatedAt).toISOString() : null}
-                isOwner={doc.isOwner}
-                activeCommentId={predefinedLabActive ? null : activeCommentId}
-                onAddComment={predefinedLabActive ? undefined : handleAddComment}
-                onCommentMarkClick={predefinedLabActive ? undefined : handleCommentMarkClick}
-                onHeadingsChange={setActiveTabHeadings}
-                onCommentMarkPositions={setCommentMarkPositions}
-              />
+              <>
+                {bulkSourceLocked && (
+                  <div role="status" className="border-b border-cyan-200 bg-cyan-50 px-4 py-2 text-sm text-cyan-900 dark:border-cyan-900 dark:bg-cyan-950/30 dark:text-cyan-100">
+                    Bulk Generate is using this tab. Editing is paused until the run finishes or stops.
+                  </div>
+                )}
+                <Editor
+                  key={`${activeTabId}-${editorContentKey}-${bulkSourceLocked ? "locked" : "editable"}`}
+                  ref={editorRef}
+                  documentId={doc.id}
+                  tabId={activeTabId}
+                  tabType={activeTab?.type}
+                  initialContent={activeTabContent}
+                  initialUpdatedAt={activeTab?.updatedAt ? new Date(activeTab.updatedAt).toISOString() : null}
+                  isOwner={doc.isOwner && !bulkSourceLocked}
+                  activeCommentId={predefinedLabActive ? null : activeCommentId}
+                  onAddComment={predefinedLabActive ? undefined : handleAddComment}
+                  onCommentMarkClick={predefinedLabActive ? undefined : handleCommentMarkClick}
+                  onHeadingsChange={setActiveTabHeadings}
+                  onCommentMarkPositions={setCommentMarkPositions}
+                />
+              </>
             )}
           </div>
         )}
@@ -1491,6 +1546,9 @@ export default function DocumentPage() {
                 onRefreshTabs={handlePredefinedLabRefreshTabs}
                 onCheckSourceDirty={() => editorRef.current?.hasUnsavedChanges?.() ?? false}
                 onSaveSource={handlePredefinedLabSaveSource}
+                initialBulkRunSummary={predefinedBulkRun}
+                onBulkRunStateChange={handlePredefinedBulkStateChange}
+                onReviewPredefinedEpisodes={handleReviewPredefinedEpisodes}
               />
             ) : (
               <AdLabWorkspace

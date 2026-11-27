@@ -809,6 +809,98 @@ export const generationRuns = sqliteTable(
   ]
 );
 
+export const predefinedBulkRuns = sqliteTable(
+  "predefined_bulk_runs",
+  {
+    id: text("id").primaryKey(),
+    documentId: text("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    plotTabId: text("plot_tab_id")
+      .notNull()
+      .references(() => tabs.id, { onDelete: "cascade" }),
+    predefinedTabId: text("predefined_tab_id")
+      .notNull()
+      .references(() => tabs.id, { onDelete: "cascade" }),
+    status: text("status", {
+      enum: ["pending", "running", "paused", "completed", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+    modelId: text("model_id").notNull(),
+    thinking: integer("thinking", { mode: "boolean" }).notNull().default(true),
+    planHash: text("plan_hash").notNull(),
+    totalItems: integer("total_items").notNull(),
+    completedItems: integer("completed_items").notNull().default(0),
+    skippedItems: integer("skipped_items").notNull().default(0),
+    currentEpisode: integer("current_episode"),
+    failureReason: text("failure_reason"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    startedAt: integer("started_at", { mode: "timestamp" }),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("idx_predefined_bulk_runs_active_document")
+      .on(table.documentId)
+      .where(sql`${table.status} IN ('pending', 'running', 'paused')`),
+    index("idx_predefined_bulk_runs_doc_created").on(table.documentId, table.createdAt),
+  ]
+);
+
+export const predefinedBulkRunItems = sqliteTable(
+  "predefined_bulk_run_items",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => predefinedBulkRuns.id, { onDelete: "cascade" }),
+    episodeNumber: integer("episode_number").notNull(),
+    episodeTitle: text("episode_title").notNull(),
+    positionIndex: integer("position_index").notNull(),
+    plotSectionUid: text("plot_section_uid"),
+    plotText: text("plot_text").notNull(),
+    plotHash: text("plot_hash").notNull(),
+    promptText: text("prompt_text").notNull(),
+    status: text("status", {
+      enum: ["pending", "running", "completed", "failed", "skipped", "cancelled"],
+    })
+      .notNull()
+      .default("pending"),
+    currentStage: text("current_stage", {
+      enum: ["pending", "beats", "dialogue", "draft", "save", "complete"],
+    })
+      .notNull()
+      .default("pending"),
+    beatsOutput: text("beats_output"),
+    dialogueOutput: text("dialogue_output"),
+    draftOutput: text("draft_output"),
+    generationRunId: text("generation_run_id").references(() => generationRuns.id, { onDelete: "set null" }),
+    savedSectionUid: text("saved_section_uid"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    failureReason: text("failure_reason"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("idx_predefined_bulk_items_run_episode").on(table.runId, table.episodeNumber),
+    index("idx_predefined_bulk_items_run_position").on(table.runId, table.positionIndex),
+    index("idx_predefined_bulk_items_generation_run").on(table.generationRunId),
+  ]
+);
+
 export const contentTextSnapshots = sqliteTable(
   "content_text_snapshots",
   {

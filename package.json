@@ -25,6 +25,7 @@
     "test:ad-lab": "node --experimental-strip-types scripts/ad-lab-regression.test.mjs",
     "test:ads-library": "node --experimental-strip-types scripts/ads-library.test.mjs",
     "test:predefined-lab-prompts": "node scripts/predefined-lab-prompt-regression.test.mjs",
+    "test:predefined-bulk": "node --experimental-strip-types scripts/predefined-bulk-regression.test.mjs",
     "backfill:ads-library": "node --experimental-strip-types scripts/backfill-ad-section-uids.mjs",
     "fixture:ads-library": "node scripts/ads-library-local-fixture.mjs"
   },

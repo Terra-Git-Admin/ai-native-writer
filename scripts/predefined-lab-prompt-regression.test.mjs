@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const prompts = await readFile(new URL("../src/lib/ai/prompts.ts", import.meta.url), "utf8");
 const seeds = await readFile(new URL("../src/lib/ai/seed-prompts.ts", import.meta.url), "utf8");
 const workspace = await readFile(new URL("../src/components/labs/PredefinedLabStageWorkspace.tsx", import.meta.url), "utf8");
+const runtime = await readFile(new URL("../src/lib/ai/predefined-lab-runtime.ts", import.meta.url), "utf8");
 const route = await readFile(new URL("../src/app/api/ai/edit/route.ts", import.meta.url), "utf8");
 const guide = await readFile(new URL("../src/lib/ai/predefined-lab-dialogue-guide.ts", import.meta.url), "utf8");
 
@@ -64,13 +65,14 @@ assert.match(dialoguePass, /dialogue editor v1\.3/);
 assert.match(dialoguePass, /No character waits neutrally/);
 assert.match(dialoguePass, /listener reveal something visible/);
 
-assert.match(workspace, /Locked Plot Intent:/);
-assert.match(workspace, /Permitted Dramatization:/);
-assert.match(workspace, /Begin every scene already in motion/);
-assert.match(workspace, /Dialogue count is secondary/);
-assert.match(workspace, /Do not name an unnamed character/);
-assert.match(workspace, /silent gesture or nonverbal response stays nonverbal/);
-assert.match(workspace, /Preserve specificity boundaries/);
+assert.match(runtime, /Locked Plot Intent:/);
+assert.match(runtime, /Permitted Dramatization:/);
+assert.match(runtime, /Begin every scene already in motion/);
+assert.match(runtime, /Dialogue count is secondary/);
+assert.match(runtime, /Do not name an unnamed character/);
+assert.match(runtime, /silent gesture or nonverbal response stays nonverbal/);
+assert.match(runtime, /Preserve specificity boundaries/);
+assert.match(workspace, /buildPredefinedLabContext/);
 
 assert.match(guide, /Dialogue Quality Guide v1\.1/);
 assert.match(guide, /56 paired first-generation and editor-final episodes/);

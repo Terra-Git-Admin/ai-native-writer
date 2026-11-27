@@ -1,8 +1,8 @@
 import { streamText } from "ai";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { documents, prompts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { documents, predefinedBulkRuns, prompts } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
 import { getAIModel } from "@/lib/ai/providers";
 import { logTrace } from "@/lib/saveTrace";
 import {
@@ -224,6 +224,21 @@ export async function POST(req: Request) {
   }
   const safeMode = resolvedMode as Mode;
   const isAdmin = (session.user as { role?: string } | undefined)?.role === "admin";
+  if (documentId && safeMode.startsWith("predef_lab_")) {
+    const activeBulkRun = await db.query.predefinedBulkRuns.findFirst({
+      where: and(
+        eq(predefinedBulkRuns.documentId, documentId),
+        inArray(predefinedBulkRuns.status, ["pending", "running", "paused"])
+      ),
+    });
+    if (activeBulkRun) {
+      return new Response(JSON.stringify({
+        error: "Bulk generation is active for this document.",
+        code: "PREDEFINED_BULK_ACTIVE",
+        runId: activeBulkRun.id,
+      }), { status: 409 });
+    }
+  }
   if (ADMIN_ONLY_MODES.has(safeMode) && !isAdmin) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
