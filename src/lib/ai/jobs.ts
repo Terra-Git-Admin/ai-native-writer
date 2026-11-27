@@ -26,7 +26,7 @@ import { nanoid } from "nanoid";
 import { streamText } from "ai";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { db, getDb } from "@/lib/db";
-import { aiJobs } from "@/lib/db/schema";
+import { aiJobs, predefinedBulkRuns } from "@/lib/db/schema";
 import { getAIModel } from "@/lib/ai/providers";
 import { getAction, resolveSystemPrompt } from "@/lib/ai/actions";
 import { CONTENT_PROFILE_CONTRACT_VERSION } from "@/lib/ai/content-profile";
@@ -186,6 +186,15 @@ export async function createJob(opts: CreateJobOpts): Promise<{ id: string }> {
   });
   if (existing) {
     throw new JobBlockedError(existing.id);
+  }
+  const bulkRun = await db.query.predefinedBulkRuns.findFirst({
+    where: and(
+      eq(predefinedBulkRuns.documentId, opts.documentId),
+      inArray(predefinedBulkRuns.status, ["pending", "running", "paused"])
+    ),
+  });
+  if (bulkRun) {
+    throw new JobBlockedError(bulkRun.id);
   }
 
   const id = nanoid(12);

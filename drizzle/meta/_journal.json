@@ -127,6 +127,13 @@
       "when": 1795564800000,
       "tag": "0017_admin_ads_library",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1795784135507,
+      "tag": "0018_glorious_king_cobra",
+      "breakpoints": true
     }
   ]
 }

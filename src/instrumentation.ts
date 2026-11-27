@@ -14,13 +14,18 @@ export async function register(): Promise<void> {
   // Lazy import to avoid pulling DB code into edge bundles. Top-level imports
   // would crash the edge runtime where better-sqlite3 is unavailable.
   const { recoverOrphanJobs } = await import("@/lib/ai/jobs");
+  const { recoverInterruptedPredefinedBulkRuns } = await import("@/lib/predefined-bulk/service");
   const { logEvent } = await import("@/lib/saveTrace");
   const { seedPromptsFromCode } = await import("@/lib/ai/seed-prompts");
 
   try {
-    const recovered = await recoverOrphanJobs();
+    const [recovered, recoveredBulkRuns] = await Promise.all([
+      recoverOrphanJobs(),
+      recoverInterruptedPredefinedBulkRuns(),
+    ]);
     logEvent("instrumentation.boot.ok", {
       orphanJobsRecovered: recovered,
+      predefinedBulkRunsPaused: recoveredBulkRuns,
     });
   } catch (err) {
     logEvent("instrumentation.boot.fail", {
