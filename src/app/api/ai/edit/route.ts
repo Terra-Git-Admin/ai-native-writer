@@ -147,6 +147,12 @@ const PREDEFINED_LAB_DIALOGUE_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "predef_lab_dialogue_design",
   "predef_lab_dialogue_pass",
 ]);
+const PREDEFINED_LAB_PERFORMANCE_GUIDE_MODES: ReadonlySet<Mode> = new Set<Mode>([
+  "predef_lab_dialogue_design",
+  "predef_lab_draft",
+  "predef_lab_iterate",
+  "predef_lab_dialogue_pass",
+]);
 const PLOT_LAB_MODES: ReadonlySet<Mode> = new Set<Mode>([
   "plot_lab_chat",
   "plot_lab_source_soul_scan",
@@ -261,7 +267,7 @@ export async function POST(req: Request) {
     orientation
   );
   const dialogueGuide =
-    PREDEFINED_LAB_DIALOGUE_MODES.has(safeMode)
+    PREDEFINED_LAB_PERFORMANCE_GUIDE_MODES.has(safeMode)
       ? await getActivePredefinedLabDialogueGuide()
       : "";
   const dialogueReferencePack =
@@ -273,6 +279,8 @@ export async function POST(req: Request) {
       ? baseSystemPrompt
       : safeMode === "predef_lab_dialogue_pass"
       ? `${baseSystemPrompt}\n\n## Dialogue Quality Guide\n${dialogueGuide}`
+      : safeMode === "predef_lab_draft" || safeMode === "predef_lab_iterate"
+      ? `${baseSystemPrompt}\n\n## Final-Export Performance Guide\n${dialogueGuide}`
       : baseSystemPrompt;
   const preparedMessages =
     safeMode === "predef_lab_dialogue_design"

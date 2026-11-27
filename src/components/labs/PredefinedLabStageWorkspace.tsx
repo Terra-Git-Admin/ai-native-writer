@@ -225,7 +225,7 @@ function countDialogueLines(text: string): number {
 }
 
 const PORTRAIT_PROMPT_BOX_INSTRUCTION =
-  "Write Episode in the same microdrama format (about 1 min long episode). Follow the given outline for the plot above. Have approx 12 lines of dialogue (or internal monologues) in the episode. Dialogues and internal monologues should escalate.";
+  "Convert the selected plot into an approximately 1-1.5 minute playable microdrama episode. Preserve its causal events, character knowledge, relationships, order, and ending. Begin every scene already in motion. Use clear location geography, active character business, expressive blocking, setting-native props, stimulus-linked microexpressions, and emotionally responsive dialogue. Dialogue count is secondary to natural rhythm and complete emotional beats; the episode may extend slightly when a meaningful reaction or exchange needs room.";
 
 const LANDSCAPE_PROMPT_BOX_INSTRUCTION =
   "Write this approximately 2-minute story milestone in the established landscape format. Follow the selected plot faithfully and move the chapter forward through cinematic action, spatially clear staging, environment, dialogue, and internal voice where useful. Escalate toward the chapter's eventual monetization cliffhanger without forcing this milestone to end on its own cliffhanger.";
@@ -282,13 +282,25 @@ export function buildEpisodeSourceContract({
   beatPlan: string;
 }): string {
   return `Authority:
-- This contract is the factual boundary for Dialogue Design and Draft.
+- This contract separates locked plot intent from permitted dramatization for Dialogue Design and Draft.
 - The editable Prompt box is source truth. It contains the target episode outline plus any writer edits, emphasis, skips, or focus notes for this Lab run.
 - Do not use the saved Microdrama Plot text as a hidden override. The selected dropdown episode is provenance only after the Prompt box is populated.
-- Prompt facts, participants, event order, explicit line order, objects, and ending state are source truth.
-- Approved Key Beats may compress or clarify the Prompt box, but they do not authorize new characters, new conflicts, new questions, or new scene events unless the Prompt already implies them.
-- Dialogue Design may plan pressure, turn-taking, interruption, silence, subtext, and line jobs only inside this boundary.
-- Draft must ignore any Dialogue Design detail that adds unsupported facts, extra interrogations, new participants, or reordered source events.
+
+Locked Plot Intent:
+- Preserve participants, relationships, causal events, revelations, character knowledge, explicit event or line order, writer emphasis or exclusions, and the ending outcome.
+- Preserve names, role labels, and emotional targets. Do not name an unnamed character or turn confusion, concern, fear, care, or anger toward a different person.
+- Preserve explicit modality and continuity: a silent gesture or nonverbal response stays nonverbal; established location, time of day, injuries, possessions, and entrances persist unless the source changes them.
+- Preserve specificity boundaries: do not invent a name, number, currency, amount, date, deadline, appointment, address, message, or written label when the source leaves it vague.
+- Approved Key Beats may compress or clarify the Prompt box but may not create a new causal event, conflict, revelation, ability, relationship, future obligation, or character.
+- Dialogue Design and Draft must reject details that contradict or reorder the locked plot intent.
+
+Permitted Dramatization:
+- You may add active character business, setting-native props, entrances and exits, spatial positioning, eye lines, microexpressions, reaction beats, sensory details, and non-causal connective actions that make the locked plot playable.
+- You may add or reshape natural dialogue turns inside an interaction already carried through speech. Do not convert an explicitly silent or action-only beat into dialogue.
+- Added dialogue must change a tactic, relationship, decision, or required action; do not add generic self-talk or commentary that merely narrates visible behavior.
+- A staging prop may externalize an existing fact, emotion, decision, or relationship. It may not introduce new evidence, powers, relationships, causal events, revelations, or future obligations.
+- Text visible on a phone, calendar, note, sign, document, or screen must come from the source or selected continuity; a prop cannot smuggle in a new factual event.
+- Every scene begins already in motion. No character waits neutrally for another character, line, or plot event. Physical stillness must be an active emotional or tactical response.
 
 Editable Prompt:
 ${promptText.trim() || "(none)"}
